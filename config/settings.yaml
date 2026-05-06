@@ -1,0 +1,41 @@
+user:
+  default_budget_usd: 200
+  default_power_target: 3
+  default_weights:
+    synergy: 0.35
+    replacement_value: 0.25
+    mana_efficiency: 0.25
+    price_efficiency: 0.15
+
+llm:
+  profile_model: "claude-sonnet-4-6"
+  fit_model: "claude-haiku-4-5"
+  synthesis_model: "claude-sonnet-4-6"
+  refresh_model: "claude-haiku-4-5"
+  max_candidates_for_llm_fit: 50
+  prompt_caching: true
+  monthly_cost_ceiling_usd: 5.0
+
+embeddings:
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+  device: "cpu"
+  cache_dir: "./data/embedding_cache"
+
+pipeline:
+  hard_filter_target: 3000
+  embedding_filter_target: 200
+  structural_filter_target: 50
+  candidates_per_slot: 5
+
+refresh:
+  scryfall_daily: true
+  topdeck_weekly: true
+  decklist_sources_weekly: true
+  edhrec_weekly: true
+  mtgapi_rulings_monthly: true
+  set_refresh_quarterly: true
+
+output:
+  deck_format: "json"
+  include_alternatives: true
+  alternatives_per_slot: 3

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sabermetrics"
+version = "0.1.0"
+description = "Sabermetrics for Magic — Commander/EDH deck optimization using LLM-driven reasoning"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic",
+    "click",
+    "flask",
+    "httpx",
+    "numpy",
+    "pandas",
+    "pydantic>=2.0",
+    "pyyaml",
+    "sentence-transformers",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "mypy",
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+sabermetrics = "sabermetrics.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
