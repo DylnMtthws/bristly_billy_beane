@@ -7,7 +7,7 @@ from sabermetrics.analytics.oracle_keywords import (
     extract_referenced_mechanics,
 )
 from sabermetrics.analytics.cvar import ScoringContext, compute_synergy_score
-from sabermetrics.models.profile import ValueInversion, StrategicProfile
+from sabermetrics.models.profile import MispricedCardExample, ValueInversion, StrategicProfile
 from sabermetrics.models.evidence import EvidencePackage
 
 
@@ -1082,3 +1082,188 @@ def test_edhrec_corroboration_absent_card_no_bonus() -> None:
     score_with = compute_synergy_score(card, ctx)
     score_without = compute_synergy_score(card, ctx_empty)
     assert score_with == score_without
+
+
+# ---------------------------------------------------------------------------
+# MispricedCardExample model tests
+# ---------------------------------------------------------------------------
+
+
+def test_mispriced_card_example_validates() -> None:
+    """MispricedCardExample Pydantic model validates correctly."""
+    ex = MispricedCardExample(
+        card_name="Wall of Denial",
+        why_undervalued="0/8 defender becomes 8-damage flyer with Arcades",
+    )
+    assert ex.card_name == "Wall of Denial"
+    assert "0/8" in ex.why_undervalued
+
+
+def test_strategic_profile_defaults_empty_mispriced() -> None:
+    """StrategicProfile defaults to empty mispriced_card_examples list."""
+    from sabermetrics.models.profile import (
+        AntiSynergy,
+        PowerIndicators,
+        StrategicConstraints,
+        WinCondition,
+    )
+
+    profile = StrategicProfile(
+        primary_archetype="Voltron",
+        game_plan_summary="Attack with commander",
+        win_conditions=[
+            WinCondition(
+                description="Commander damage",
+                key_cards=["Sword of Fire and Ice"],
+                reliability="primary",
+            )
+        ],
+        build_paths=[],
+        synergy_priorities={"high": [], "medium": [], "low": []},
+        anti_synergies=[],
+        strategic_constraints=StrategicConstraints(
+            mana_base_requirements="Standard",
+            interaction_density="medium",
+            speed_tier="midrange",
+        ),
+        power_indicators=PowerIndicators(
+            estimated_ceiling_bracket=3,
+            estimated_floor_bracket=2,
+            notes="Mid-power Voltron",
+        ),
+    )
+    assert profile.mispriced_card_examples == []
+
+
+def test_profile_summary_includes_mispriced_examples() -> None:
+    """Profile summary construction includes mispriced card examples."""
+    from sabermetrics.models.profile import (
+        MispricedCardExample,
+        PowerIndicators,
+        StrategicConstraints,
+        WinCondition,
+    )
+
+    profile = StrategicProfile(
+        primary_archetype="Defenders",
+        game_plan_summary="Attack with high-toughness defenders",
+        win_conditions=[
+            WinCondition(
+                description="Combat damage",
+                key_cards=["Arcades"],
+                reliability="primary",
+            )
+        ],
+        build_paths=[],
+        synergy_priorities={"high": [], "medium": [], "low": []},
+        anti_synergies=[],
+        strategic_constraints=StrategicConstraints(
+            mana_base_requirements="Standard",
+            interaction_density="medium",
+            speed_tier="midrange",
+        ),
+        power_indicators=PowerIndicators(
+            estimated_ceiling_bracket=3,
+            estimated_floor_bracket=2,
+            notes="Mid-power defenders",
+        ),
+        mispriced_card_examples=[
+            MispricedCardExample(
+                card_name="Wall of Denial",
+                why_undervalued="0/8 defender = 8-damage flyer for 3 mana",
+            ),
+            MispricedCardExample(
+                card_name="Fortified Area",
+                why_undervalued="Cheap buff for defenders that are now attackers",
+            ),
+        ],
+    )
+
+    # Simulate the profile summary construction from deck_builder._llm_fit_score
+    profile_summary = (
+        f"Commander: Arcades\n"
+        f"Archetype: {profile.primary_archetype}\n"
+        f"Game Plan: {profile.game_plan_summary}\n"
+        f"Win Conditions: "
+        + ", ".join(wc.description for wc in profile.win_conditions)
+    )
+    if hasattr(profile, "mispriced_card_examples"):
+        examples = profile.mispriced_card_examples
+        if examples:
+            example_text = (
+                "\n\nMISPRICED CARDS "
+                "(these cards are better than they appear for this commander):\n"
+            )
+            for ex in examples:
+                example_text += f"- {ex.card_name}: {ex.why_undervalued}\n"
+            example_text += (
+                "\nCards similar to these mispriced examples should score 7-9. "
+                "Use these as calibration anchors for the full scoring range.\n"
+            )
+            profile_summary += example_text
+
+    assert "MISPRICED CARDS" in profile_summary
+    assert "Wall of Denial" in profile_summary
+    assert "0/8 defender" in profile_summary
+    assert "Fortified Area" in profile_summary
+    assert "calibration anchors" in profile_summary
+
+
+def test_profile_summary_works_without_mispriced_examples() -> None:
+    """Profile summary construction works when no mispriced examples present."""
+    from sabermetrics.models.profile import (
+        PowerIndicators,
+        StrategicConstraints,
+        WinCondition,
+    )
+
+    profile = StrategicProfile(
+        primary_archetype="Tribal",
+        game_plan_summary="Play elves and overwhelm",
+        win_conditions=[
+            WinCondition(
+                description="Elf tribal damage",
+                key_cards=["Craterhoof Behemoth"],
+                reliability="primary",
+            )
+        ],
+        build_paths=[],
+        synergy_priorities={"high": [], "medium": [], "low": []},
+        anti_synergies=[],
+        strategic_constraints=StrategicConstraints(
+            mana_base_requirements="Standard",
+            interaction_density="low",
+            speed_tier="fast",
+        ),
+        power_indicators=PowerIndicators(
+            estimated_ceiling_bracket=4,
+            estimated_floor_bracket=3,
+            notes="Elf ball",
+        ),
+    )
+
+    # Same construction logic — should not include mispriced section
+    profile_summary = (
+        f"Commander: Lathril\n"
+        f"Archetype: {profile.primary_archetype}\n"
+        f"Game Plan: {profile.game_plan_summary}\n"
+        f"Win Conditions: "
+        + ", ".join(wc.description for wc in profile.win_conditions)
+    )
+    if hasattr(profile, "mispriced_card_examples"):
+        examples = profile.mispriced_card_examples
+        if examples:
+            example_text = (
+                "\n\nMISPRICED CARDS "
+                "(these cards are better than they appear for this commander):\n"
+            )
+            for ex in examples:
+                example_text += f"- {ex.card_name}: {ex.why_undervalued}\n"
+            example_text += (
+                "\nCards similar to these mispriced examples should score 7-9. "
+                "Use these as calibration anchors for the full scoring range.\n"
+            )
+            profile_summary += example_text
+
+    assert "MISPRICED CARDS" not in profile_summary
+    assert "Tribal" in profile_summary

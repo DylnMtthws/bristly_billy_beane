@@ -489,6 +489,38 @@ class DeckBuilder:
                     edhrec_promoted,
                 )
 
+        # Mispriced card promotion: ensure profile-identified undervalued
+        # cards make it into the LLM evaluation pool regardless of CVAR rank
+        if profile_result is not None:
+            sp = getattr(
+                getattr(profile_result, "profile", None),
+                "strategic_profile",
+                None,
+            )
+            mispriced_names: set[str] = set()
+            if sp is not None and hasattr(sp, "mispriced_card_examples"):
+                mispriced_names = {
+                    ex.card_name.lower()
+                    for ex in sp.mispriced_card_examples
+                }
+            if mispriced_names:
+                mispriced_promoted = 0
+                for card, _ in scored[keep:]:
+                    if id(card) in top_card_ids:
+                        continue
+                    if "land" in (card.get("type_line") or "").lower():
+                        continue
+                    card_name_lower = (card.get("name") or "").lower()
+                    if card_name_lower in mispriced_names:
+                        top_cards.append(card)
+                        top_card_ids.add(id(card))
+                        mispriced_promoted += 1
+                if mispriced_promoted:
+                    logger.info(
+                        "Promoted %d mispriced cards into LLM pool",
+                        mispriced_promoted,
+                    )
+
         return top_cards
 
     def _llm_fit_score(
@@ -547,6 +579,22 @@ class DeckBuilder:
                         f"{dep.false_synergy_warning}\n"
                     )
                 profile_summary += dep_text
+
+        # Add mispriced card examples if present
+        if hasattr(profile_result.strategic_profile, "mispriced_card_examples"):
+            examples = profile_result.strategic_profile.mispriced_card_examples
+            if examples:
+                example_text = (
+                    "\n\nMISPRICED CARDS "
+                    "(these cards are better than they appear for this commander):\n"
+                )
+                for ex in examples:
+                    example_text += f"- {ex.card_name}: {ex.why_undervalued}\n"
+                example_text += (
+                    "\nCards similar to these mispriced examples should score 7-9. "
+                    "Use these as calibration anchors for the full scoring range.\n"
+                )
+                profile_summary += example_text
 
         # Separate lands (don't LLM-score lands) from non-lands
         non_land_candidates = [

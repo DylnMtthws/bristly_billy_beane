@@ -94,6 +94,13 @@ class EngineDependency(BaseModel):
     false_synergy_warning: str  # e.g. "Lifegain cards that don't interact with Auras..."
 
 
+class MispricedCardExample(BaseModel):
+    """A card undervalued by generic heuristics but excellent for this commander."""
+
+    card_name: str
+    why_undervalued: str
+
+
 class StrategicConstraints(BaseModel):
     """Constraints on how the deck should be built."""
 
@@ -123,6 +130,7 @@ class StrategicProfile(BaseModel):
     power_indicators: PowerIndicators
     value_inversions: List[ValueInversion] = Field(default_factory=list)
     engine_dependencies: List[EngineDependency] = Field(default_factory=list)
+    mispriced_card_examples: List[MispricedCardExample] = Field(default_factory=list)
 
 
 class UserIntent(BaseModel):
