@@ -14,11 +14,16 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from sabermetrics.analytics.components import (
+    analyze_mana_base,
     count_board_wipes,
     count_card_draw,
     count_ramp_spells,
     count_removal,
     count_tutors,
+)
+from sabermetrics.pipeline.mana_base import (
+    KARSTEN_SOURCES_99,
+    compute_color_targets,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +37,15 @@ class ComponentStats(BaseModel):
     min: float = 0.0
     max: float = 0.0
     std_dev: float = 0.0
+
+
+class ManaBaseAnalysis(BaseModel):
+    """Statistical mana base analysis results."""
+
+    quality_scores: ComponentStats = Field(default_factory=ComponentStats)
+    color_source_counts: dict[str, ComponentStats] = Field(default_factory=dict)
+    etb_tapped_ratio: ComponentStats = Field(default_factory=ComponentStats)
+    archetype_targets: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 class DeckbuildingPatterns(BaseModel):
@@ -48,6 +62,7 @@ class DeckbuildingPatterns(BaseModel):
     mana_curve: dict[int, float] = Field(default_factory=dict)
     color_distribution: dict[str, int] = Field(default_factory=dict)
     most_played_cards: list[dict[str, object]] = Field(default_factory=list)
+    mana_base_analysis: ManaBaseAnalysis | None = None
 
 
 def _compute_stats(values: list[float]) -> ComponentStats:
@@ -198,6 +213,9 @@ class GameKnightsAnalyzer:
             if count > 1
         ]
 
+        # Mana base statistical analysis
+        mana_base_analysis = self._analyze_mana_bases(conn, deck_ids)
+
         return DeckbuildingPatterns(
             deck_count=deck_count,
             land_counts=_compute_stats(land_counts),
@@ -210,7 +228,157 @@ class GameKnightsAnalyzer:
             mana_curve=mana_curve,
             color_distribution=dict(color_totals),
             most_played_cards=most_played,
+            mana_base_analysis=mana_base_analysis,
         )
+
+    def _analyze_mana_bases(
+        self, conn: sqlite3.Connection, deck_ids: list[str]
+    ) -> ManaBaseAnalysis:
+        """Analyze mana base quality across decks using Karsten framework.
+
+        Args:
+            conn: Open SQLite connection.
+            deck_ids: List of deck IDs to analyze.
+
+        Returns:
+            ManaBaseAnalysis with quality scores, color sources, ETB ratios,
+            and archetype targets.
+        """
+        import json as _json
+
+        quality_scores: list[float] = []
+        etb_tapped_ratios: list[float] = []
+        color_source_lists: dict[str, list[float]] = {}
+
+        for deck_id in deck_ids:
+            cards = self._load_deck_cards(conn, deck_id)
+            if not cards:
+                continue
+
+            # Get commander colors
+            commander_row = conn.execute(
+                """SELECT c.color_identity FROM decks d
+                   JOIN cards c ON d.commander_id = c.id
+                   WHERE d.id = ?""",
+                (deck_id,),
+            ).fetchone()
+            commander_colors: list[str] = []
+            if commander_row and commander_row["color_identity"]:
+                try:
+                    commander_colors = _json.loads(commander_row["color_identity"])
+                except (_json.JSONDecodeError, TypeError):
+                    pass
+
+            if not commander_colors:
+                continue
+
+            # Run mana base analysis
+            mana_score = analyze_mana_base(cards, commander_colors)
+            quality_scores.append(mana_score.score)
+
+            # ETB-tapped ratio
+            if mana_score.total_lands > 0:
+                lands = [
+                    c for c in cards
+                    if "land" in (c.get("type_line") or "").lower()
+                ]
+                tapped = sum(
+                    1 for c in lands
+                    if "enters the battlefield tapped" in (c.get("oracle_text") or "").lower()
+                )
+                etb_tapped_ratios.append(tapped / mana_score.total_lands)
+
+            # Per-color source counts
+            for color, count in mana_score.color_sources.items():
+                if color not in color_source_lists:
+                    color_source_lists[color] = []
+                color_source_lists[color].append(float(count))
+
+        # Compute per-color stats
+        color_source_stats: dict[str, ComponentStats] = {
+            color: _compute_stats(values)
+            for color, values in color_source_lists.items()
+        }
+
+        # Compute archetype targets
+        archetype_targets = self._compute_archetype_targets()
+
+        return ManaBaseAnalysis(
+            quality_scores=_compute_stats(quality_scores),
+            color_source_counts=color_source_stats,
+            etb_tapped_ratio=_compute_stats(etb_tapped_ratios),
+            archetype_targets=archetype_targets,
+        )
+
+    @staticmethod
+    def _compute_archetype_targets() -> dict[str, dict[str, int]]:
+        """Compute per-archetype color source targets using Karsten math.
+
+        Creates synthetic spell lists reflecting typical pip requirements
+        for each color count, then uses compute_color_targets() to determine
+        how many sources of each color are needed.
+
+        Returns:
+            Dict mapping archetype label to {color: sources_needed}.
+        """
+        total_lands = 36  # Standard Commander land count
+
+        # Synthetic spell lists for representative pip requirements
+        # Each scenario has spells with typical pip distributions
+        archetypes: dict[str, tuple[list[str], list[dict]]] = {
+            "mono_color": (
+                ["W"],
+                [
+                    # Heavy single-color commitment: 2-pip spells at CMC 3-4
+                    {"mana_cost": "{W}{W}{1}", "cmc": 3.0, "type_line": "Creature"},
+                    {"mana_cost": "{W}{W}{2}", "cmc": 4.0, "type_line": "Sorcery"},
+                    {"mana_cost": "{W}{1}", "cmc": 2.0, "type_line": "Instant"},
+                ],
+            ),
+            "two_color": (
+                ["W", "U"],
+                [
+                    {"mana_cost": "{W}{W}{1}", "cmc": 3.0, "type_line": "Creature"},
+                    {"mana_cost": "{U}{U}{1}", "cmc": 3.0, "type_line": "Sorcery"},
+                    {"mana_cost": "{W}{U}{1}", "cmc": 3.0, "type_line": "Instant"},
+                ],
+            ),
+            "three_color": (
+                ["W", "U", "B"],
+                [
+                    {"mana_cost": "{W}{W}{2}", "cmc": 4.0, "type_line": "Creature"},
+                    {"mana_cost": "{U}{1}", "cmc": 2.0, "type_line": "Instant"},
+                    {"mana_cost": "{B}{B}{1}", "cmc": 3.0, "type_line": "Sorcery"},
+                    {"mana_cost": "{W}{U}{B}", "cmc": 3.0, "type_line": "Enchantment"},
+                ],
+            ),
+            "four_color": (
+                ["W", "U", "B", "R"],
+                [
+                    {"mana_cost": "{W}{1}", "cmc": 2.0, "type_line": "Instant"},
+                    {"mana_cost": "{U}{1}", "cmc": 2.0, "type_line": "Instant"},
+                    {"mana_cost": "{B}{1}", "cmc": 2.0, "type_line": "Sorcery"},
+                    {"mana_cost": "{R}{1}", "cmc": 2.0, "type_line": "Creature"},
+                ],
+            ),
+            "five_color": (
+                ["W", "U", "B", "R", "G"],
+                [
+                    {"mana_cost": "{W}{1}", "cmc": 2.0, "type_line": "Instant"},
+                    {"mana_cost": "{U}{1}", "cmc": 2.0, "type_line": "Instant"},
+                    {"mana_cost": "{B}{1}", "cmc": 2.0, "type_line": "Sorcery"},
+                    {"mana_cost": "{R}{1}", "cmc": 2.0, "type_line": "Creature"},
+                    {"mana_cost": "{G}{1}", "cmc": 2.0, "type_line": "Creature"},
+                ],
+            ),
+        }
+
+        result: dict[str, dict[str, int]] = {}
+        for label, (colors, spells) in archetypes.items():
+            targets = compute_color_targets(spells, colors, total_lands)
+            result[label] = targets
+
+        return result
 
     def _load_deck_cards(
         self, conn: sqlite3.Connection, deck_id: str
@@ -274,6 +442,8 @@ class KnowledgeBaseBuilder:
 
         sections.append(self._header_section(patterns))
         sections.append(self._land_count_section(patterns, combined_articles))
+        sections.append(self._mana_base_math_section())
+        sections.append(self._color_source_targets_section(patterns))
         sections.append(self._ramp_section(patterns, combined_articles))
         sections.append(self._card_draw_section(patterns, combined_articles))
         sections.append(self._removal_section(patterns, combined_articles))
@@ -316,7 +486,120 @@ class KnowledgeBaseBuilder:
         lines.append("")
         lines.append(
             "Recommendation: Most Commander decks run 35-38 lands. "
-            "Decks with low average CMC or high ramp counts can go lower."
+            "Decks with low average CMC or high ramp counts can go lower. "
+            "The Karsten hypergeometric model (see Mana Base Mathematics section) "
+            "recommends 34-38 total lands for decks at average CMC 2.5-3.5, "
+            "adjusted by ramp density."
+        )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _mana_base_math_section() -> str:
+        """Generate the Mana Base Mathematics section with Karsten table."""
+        lines = [
+            "## Mana Base Mathematics",
+            "",
+            "This section uses Frank Karsten's hypergeometric probability framework, "
+            "adapted for 99-card Commander decks, to determine optimal color source "
+            "requirements for ~90% on-curve cast probability.",
+            "",
+            "Karsten Source Requirements (99-card deck, ~36 lands):",
+            "| Colored Pips | Cast by Turn | Sources Needed |",
+            "|---|---|---|",
+        ]
+
+        # Format KARSTEN_SOURCES_99 as a readable table
+        pip_labels = {1: "1 pip", 2: "2 pips", 3: "3 pips"}
+        for (pips, turn), sources in sorted(KARSTEN_SOURCES_99.items()):
+            pip_label = pip_labels.get(pips, f"{pips} pips")
+            lines.append(f"| {pip_label} | Turn {turn} | {sources} |")
+
+        lines.append("")
+        lines.append(
+            "How to read: If a spell costs {U}{U}{1} (2 blue pips, CMC 3), "
+            "you want to cast it on turn 3, so look up (2 pips, turn 3) = 23 "
+            "blue sources needed. This means ~23 of your ~36 lands should "
+            "produce blue mana."
+        )
+        lines.append("")
+        lines.append(
+            "Key insight: Colored pip density matters more than total CMC. "
+            "A {U}{U}{U} spell at CMC 5 needs 23 blue sources, while "
+            "a {U}{4} spell at CMC 5 needs only 13. Multicolor decks must "
+            "prioritize dual lands and color fixing over raw land count."
+        )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _color_source_targets_section(patterns: DeckbuildingPatterns) -> str:
+        """Generate the Color Source Requirements section."""
+        lines = [
+            "## Color Source Requirements",
+            "",
+            "Archetype targets (computed from Karsten framework):",
+        ]
+
+        archetype_descriptions = {
+            "mono_color": "Mono-color",
+            "two_color": "Two-color",
+            "three_color": "Three-color",
+            "four_color": "Four-color",
+            "five_color": "Five-color",
+        }
+
+        mba = patterns.mana_base_analysis
+        if mba and mba.archetype_targets:
+            for key, label in archetype_descriptions.items():
+                targets = mba.archetype_targets.get(key)
+                if targets:
+                    source_range = sorted(targets.values())
+                    if len(source_range) == 1:
+                        lines.append(
+                            f"- {label}: {source_range[0]}+ sources of your color "
+                            "(virtually all lands produce it)"
+                        )
+                    else:
+                        lines.append(
+                            f"- {label}: {source_range[0]}-{source_range[-1]} "
+                            f"sources per color"
+                        )
+        else:
+            # Fallback static guidance when no analysis data
+            lines.extend([
+                "- Mono-color: 22+ sources of your color (virtually all lands produce it)",
+                "- Two-color: 17-19 sources of primary, 15-17 of secondary",
+                "- Three-color: 13-17 sources per color (heavy use of duals/tri-lands)",
+                "- Four/five-color: 11-13 per color; requires mana-fixing lands",
+            ])
+
+        # Observed quality from Game Knights data
+        if mba and mba.quality_scores.mean > 0:
+            lines.append("")
+            lines.append("Game Knights observed mana base quality:")
+            lines.append(
+                f"- Mean quality score: {mba.quality_scores.mean} (scale 0-1)"
+            )
+            if mba.color_source_counts:
+                avg_sources = [
+                    s.mean for s in mba.color_source_counts.values() if s.mean > 0
+                ]
+                if avg_sources:
+                    overall_avg = round(
+                        sum(avg_sources) / len(avg_sources), 1
+                    )
+                    lines.append(
+                        f"- Average color sources per commander color: {overall_avg}"
+                    )
+            if mba.etb_tapped_ratio.mean > 0:
+                pct = round(mba.etb_tapped_ratio.mean * 100, 1)
+                lines.append(f"- Average ETB-tapped ratio: {pct}%")
+
+        lines.append("")
+        lines.append(
+            "Guidance: Prioritize untapped dual lands and fetch lands in "
+            "multicolor decks. ETB-tapped lands are acceptable in budget "
+            "builds but should be kept below 30% of the mana base for "
+            "consistent early-game plays."
         )
         return "\n".join(lines)
 

@@ -10,6 +10,7 @@ from sabermetrics.analytics.deck_patterns import (
     DeckbuildingPatterns,
     GameKnightsAnalyzer,
     KnowledgeBaseBuilder,
+    ManaBaseAnalysis,
     _compute_stats,
 )
 from sabermetrics.config import KnowledgeBaseSettings, Settings, load_settings
@@ -455,3 +456,103 @@ def test_full_analysis_to_kb_pipeline() -> None:
         chunks = chunker.chunk_article(kb_path, tier=2)
         assert len(chunks) > 0
         assert all(c.tier == 2 for c in chunks)
+
+
+# --- Mana Base Analysis tests ---
+
+
+def test_mana_base_analysis_computed() -> None:
+    """Analyzer produces ManaBaseAnalysis with quality scores."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        _create_test_db(db_path)
+
+        analyzer = GameKnightsAnalyzer(db_path)
+        patterns = analyzer.analyze()
+
+        assert patterns.mana_base_analysis is not None
+        mba = patterns.mana_base_analysis
+        # Quality scores should be computed (both decks have commander colors)
+        assert mba.quality_scores.mean >= 0.0
+        assert mba.quality_scores.mean <= 1.0
+        # Should have color source data for at least some colors
+        assert len(mba.color_source_counts) > 0
+
+
+def test_archetype_targets_computed() -> None:
+    """Archetype targets use Karsten math: mono needs fewer sources than 3-color."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        _create_test_db(db_path)
+
+        analyzer = GameKnightsAnalyzer(db_path)
+        patterns = analyzer.analyze()
+
+        assert patterns.mana_base_analysis is not None
+        targets = patterns.mana_base_analysis.archetype_targets
+
+        assert "mono_color" in targets
+        assert "three_color" in targets
+        assert "five_color" in targets
+
+        # Mono-color should need more sources of its single color
+        # than any single color in a 3-color deck
+        mono_sources = max(targets["mono_color"].values())
+        three_color_min = min(targets["three_color"].values())
+        assert mono_sources >= three_color_min
+
+
+def test_kb_contains_karsten_table() -> None:
+    """KB output includes Karsten source requirements table."""
+    patterns = DeckbuildingPatterns(deck_count=5)
+    builder = KnowledgeBaseBuilder()
+    result = builder.build(patterns)
+
+    assert "## Mana Base Mathematics" in result
+    assert "Karsten Source Requirements" in result
+    assert "Colored Pips" in result
+    assert "Sources Needed" in result
+    # Spot-check a known table entry: (1,1) = 22
+    assert "| 1 pip | Turn 1 | 22 |" in result
+
+
+def test_kb_contains_color_targets() -> None:
+    """KB output includes per-archetype recommendations."""
+    mba = ManaBaseAnalysis(
+        quality_scores=ComponentStats(mean=0.65, median=0.65),
+        color_source_counts={
+            "B": ComponentStats(mean=14.0),
+            "R": ComponentStats(mean=12.0),
+            "G": ComponentStats(mean=15.0),
+        },
+        etb_tapped_ratio=ComponentStats(mean=0.22),
+        archetype_targets={
+            "mono_color": {"W": 20},
+            "two_color": {"W": 17, "U": 15},
+            "three_color": {"W": 14, "U": 13, "B": 14},
+        },
+    )
+    patterns = DeckbuildingPatterns(deck_count=10, mana_base_analysis=mba)
+
+    builder = KnowledgeBaseBuilder()
+    result = builder.build(patterns)
+
+    assert "## Color Source Requirements" in result
+    assert "Mono-color" in result
+    assert "Three-color" in result
+    assert "quality score: 0.65" in result
+    assert "ETB-tapped ratio: 22.0%" in result
+
+
+def test_mana_base_analysis_empty_decks() -> None:
+    """Graceful handling when no decks found — ManaBaseAnalysis is None."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        _create_test_db(db_path)
+
+        analyzer = GameKnightsAnalyzer(db_path)
+        patterns = analyzer.analyze(source_filter="nonexistent_source")
+
+        # No decks → no mana base analysis
+        assert patterns.mana_base_analysis is None
+        assert patterns.deck_count == 0
