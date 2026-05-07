@@ -233,8 +233,46 @@ def view_deck(deck_id: str):
             if role not in by_role:
                 by_role[role] = []
             by_role[role].append(card)
-
         deck_data["cards_by_role"] = by_role
+
+        # Group cards by card type (default view), aggregating duplicates
+        from collections import Counter
+        name_counts: Counter[str] = Counter()
+        name_info: dict[str, dict] = {}
+        for card in deck_data["cards"]:
+            name = card.get("name", "Unknown")
+            name_counts[name] += 1
+            if name not in name_info:
+                name_info[name] = card
+
+        by_type: dict[str, list] = {}
+        for name, qty in name_counts.items():
+            card = name_info[name]
+            type_line = (card.get("type_line") or "").lower()
+            if "land" in type_line:
+                card_type = "Land"
+            elif "creature" in type_line:
+                card_type = "Creature"
+            elif "instant" in type_line:
+                card_type = "Instant"
+            elif "sorcery" in type_line:
+                card_type = "Sorcery"
+            elif "artifact" in type_line:
+                card_type = "Artifact"
+            elif "enchantment" in type_line:
+                card_type = "Enchantment"
+            elif "planeswalker" in type_line:
+                card_type = "Planeswalker"
+            elif "battle" in type_line:
+                card_type = "Battle"
+            else:
+                card_type = "Other"
+            entry = dict(card)
+            entry["qty"] = qty
+            if card_type not in by_type:
+                by_type[card_type] = []
+            by_type[card_type].append(entry)
+        deck_data["cards_by_type"] = by_type
 
     finally:
         conn.close()

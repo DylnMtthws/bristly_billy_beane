@@ -125,6 +125,48 @@
     <h2>Card List</h2>
     <p><strong>Commander:</strong> {{ deck.commander_name }}</p>
 
+    <div class="view-tabs">
+        <button class="tab-btn active" onclick="switchView('type')">By Type</button>
+        <button class="tab-btn" onclick="switchView('role')">By Role</button>
+    </div>
+
+    <!-- Card Type View (default) -->
+    <div id="view-type" class="card-view">
+    {% set type_order = ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Battle', 'Land'] %}
+
+    {% for card_type in type_order %}
+    {% if deck.cards_by_type.get(card_type) %}
+    {% set type_cards = deck.cards_by_type[card_type] %}
+    {% set total = type_cards|sum(attribute='qty') %}
+    <details open>
+        <summary>{{ card_type }} ({{ total }})</summary>
+        <table class="card-table">
+            <thead>
+                <tr>
+                    <th>Qty</th>
+                    <th>Card</th>
+                    <th>Mana Cost</th>
+                    <th>CMC</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for card in type_cards|sort(attribute='name') %}
+                <tr>
+                    <td>{{ card.qty if card.qty > 1 else '' }}</td>
+                    <td>{{ card.name }}</td>
+                    <td>{{ card.mana_cost or '' }}</td>
+                    <td>{{ card.cmc or '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </details>
+    {% endif %}
+    {% endfor %}
+    </div>
+
+    <!-- Role View -->
+    <div id="view-role" class="card-view" style="display: none;">
     {% set role_order = ['land', 'ramp', 'draw', 'removal', 'wincon', 'utility', 'other'] %}
     {% set role_labels = {'land': 'Lands', 'ramp': 'Ramp', 'draw': 'Card Draw', 'removal': 'Removal', 'wincon': 'Win Conditions', 'utility': 'Utility', 'other': 'Other'} %}
 
@@ -157,6 +199,16 @@
     </details>
     {% endif %}
     {% endfor %}
+    </div>
 </section>
+
+<script>
+function switchView(view) {
+    document.getElementById('view-type').style.display = view === 'type' ? '' : 'none';
+    document.getElementById('view-role').style.display = view === 'role' ? '' : 'none';
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+}
+</script>
 {% endif %}
 {% endblock %}
