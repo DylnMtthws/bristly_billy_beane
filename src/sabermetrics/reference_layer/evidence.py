@@ -76,6 +76,15 @@ class EvidenceAggregator:
             # 6. Reference chunks (rules relevant to commander)
             reference_chunks = self._get_reference_chunks(commander)
 
+            # 7. Extract referenced keywords/mechanics from oracle text
+            from sabermetrics.analytics.oracle_keywords import (
+                extract_referenced_keywords,
+                extract_referenced_mechanics,
+            )
+
+            ref_keywords = extract_referenced_keywords(commander.oracle_text)
+            ref_mechanics = extract_referenced_mechanics(commander.oracle_text)
+
             return EvidencePackage(
                 commander=commander,
                 rulings=rulings,
@@ -85,6 +94,8 @@ class EvidenceAggregator:
                 primer_articles=[],  # Articles deferred
                 reference_chunks=reference_chunks,
                 user_intent=user_intent,
+                referenced_keywords=ref_keywords,
+                referenced_mechanics=ref_mechanics,
             )
 
         finally:
@@ -271,6 +282,15 @@ class EvidenceAggregator:
                 "toughness_matters": "toughness matters combat damage strategy",
                 "artifact_creature": "artifact creature synergy strategy",
                 "enchantment_creature": "enchantment creature synergy strategy",
+                "tap_synergy": "tap untap creatures freeze lock down strategy",
+                "face_down_synergy": "morph manifest disguise face-down creature strategy",
+                "sacrifice_synergy": "sacrifice aristocrats death trigger strategy",
+                "cost_reduction": "cost reduction cheat mana expensive spells strategy",
+                "counters_matter": "plus one counters proliferate strategy",
+                "death_trigger": "death trigger dies aristocrats strategy",
+                "graveyard_synergy": "graveyard recursion flashback unearth strategy",
+                "token_synergy": "token generation populate strategy",
+                "spellslinger": "instant sorcery spellslinger prowess strategy",
             }
             for mech in ref_mechanics:
                 query_text = mechanic_query_map.get(mech)

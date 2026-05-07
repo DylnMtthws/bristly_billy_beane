@@ -440,6 +440,21 @@ class DeckBuilder:
             + ", ".join(wc.description for wc in profile_result.strategic_profile.win_conditions)
         )
 
+        # Add value inversions if present
+        if profile_result.strategic_profile.value_inversions:
+            inversions = profile_result.strategic_profile.value_inversions
+            inversion_text = (
+                "\n\nVALUE INVERSIONS "
+                "(cards with these traits are stronger than they appear):\n"
+            )
+            for vi in inversions:
+                inversion_text += (
+                    f"- {vi.normal_heuristic} → {vi.inverted_value}\n"
+                    f"  Look for: {', '.join(vi.desired_characteristics)}\n"
+                    f"  Evaluation: {vi.evaluation_guidance}\n"
+                )
+            profile_summary += inversion_text
+
         # Separate lands (don't LLM-score lands) from non-lands
         non_land_candidates = [
             c for c in candidates
@@ -468,6 +483,7 @@ class DeckBuilder:
             )
 
             for card, fit_response in results:
+                card["_fit_reasoning"] = fit_response.reasoning
                 scoring = {
                     "cvar_score": card.get("_cvar_score", 0.0),
                     "llm_fit_score": fit_response.fit_score,
@@ -480,6 +496,7 @@ class DeckBuilder:
         except Exception as e:
             logger.warning("LLM fit scoring failed, using CVAR only: %s", e)
             for card in to_score:
+                card["_fit_reasoning"] = "LLM scoring unavailable; CVAR-only ranking."
                 scoring = {
                     "cvar_score": card.get("_cvar_score", 0.0),
                     "llm_fit_score": 5,
@@ -491,6 +508,7 @@ class DeckBuilder:
 
         # Add remaining non-land candidates not LLM-scored
         for card in non_land_candidates[max_llm:]:
+            card["_fit_reasoning"] = "Not LLM-scored; below candidate threshold."
             scoring = {
                 "cvar_score": card.get("_cvar_score", 0.0),
                 "llm_fit_score": 5,
@@ -502,6 +520,7 @@ class DeckBuilder:
 
         # Add lands with high default scores (lands are auto-included)
         for card in land_candidates:
+            card["_fit_reasoning"] = "Land — included for mana base."
             scoring = {
                 "cvar_score": card.get("_cvar_score", 0.0),
                 "llm_fit_score": 7,

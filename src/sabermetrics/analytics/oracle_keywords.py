@@ -108,6 +108,78 @@ _MECHANIC_REFERENCE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         re.compile(r"enchantment\s+creatures?\s+(?:you control|enters?|gets?)", re.IGNORECASE),
         "enchantment_creature",
     ),
+    # --- Tap/untap synergy (Hylda, Derevi, Fallaji Wayfarer) ---
+    (
+        re.compile(
+            r"(?:tap\s+an?\s+untapped\s+creature|becomes?\s+tapped|doesn'?t\s+untap|tap\s+target\s+creature)",
+            re.IGNORECASE,
+        ),
+        "tap_synergy",
+    ),
+    # --- Face-down synergy (Yarus, Kadena, Animar) ---
+    (
+        re.compile(
+            r"(?:face[- ]down\s+creature|turned\s+face\s+up|morph|manifest|disguise|cloak)",
+            re.IGNORECASE,
+        ),
+        "face_down_synergy",
+    ),
+    # --- Sacrifice synergy (Korvold, Prossh, Meren) ---
+    (
+        re.compile(
+            r"(?:whenever\b.*\bsacrifice|sacrifice\s+(?:a|an|another)\s+(?:creature|permanent|artifact|enchantment))",
+            re.IGNORECASE,
+        ),
+        "sacrifice_synergy",
+    ),
+    # --- Cost reduction (Rakdos Lord of Riots, Animar) ---
+    (
+        re.compile(
+            r"(?:costs?\s+\{?\w+\}?\s+less|reduce.*cost)",
+            re.IGNORECASE,
+        ),
+        "cost_reduction",
+    ),
+    # --- Counters matter (Atraxa, Marchesa) ---
+    (
+        re.compile(
+            r"(?:\+1/\+1\s+counter.*(?:on\s+each|on\s+all|on\s+target)|whenever.*counter.*(?:placed|put))",
+            re.IGNORECASE,
+        ),
+        "counters_matter",
+    ),
+    # --- Death trigger (Teysa Karlov, Syr Konrad) ---
+    (
+        re.compile(
+            r"(?:whenever\b.*\bdies\b|whenever\b.*put\s+into\s+(?:a\s+)?graveyard\s+from\s+(?:the\s+)?battlefield)",
+            re.IGNORECASE,
+        ),
+        "death_trigger",
+    ),
+    # --- Graveyard synergy (Muldrotha, Meren) ---
+    (
+        re.compile(
+            r"(?:(?:return|cast)\b.*\b(?:from|in)\b.*\bgraveyard|(?:card|creature)\s+(?:in|from)\s+(?:your|a)\s+graveyard)",
+            re.IGNORECASE,
+        ),
+        "graveyard_synergy",
+    ),
+    # --- Token synergy (Rhys, Adrix and Nev) ---
+    (
+        re.compile(
+            r"(?:whenever\b.*\bcreate\b.*\btoken|(?:each|all)\s+tokens?\s+you\s+control)",
+            re.IGNORECASE,
+        ),
+        "token_synergy",
+    ),
+    # --- Spellslinger (Feather, Kalamax, Veyran) ---
+    (
+        re.compile(
+            r"(?:whenever\s+you\s+cast\b.*?\b(?:instant|sorcery|noncreature))",
+            re.IGNORECASE,
+        ),
+        "spellslinger",
+    ),
 ]
 
 
@@ -230,6 +302,49 @@ def card_matches_referenced_keywords(
                 return True
         elif mech == "enchantment_creature":
             if "enchantment" in type_line and "creature" in type_line:
+                return True
+        elif mech == "tap_synergy":
+            if re.search(
+                r"(?:tap\s+target|tap\s+an?\s+untapped|doesn'?t\s+untap|becomes?\s+tapped)",
+                card_oracle,
+            ):
+                return True
+        elif mech == "face_down_synergy":
+            face_kw = {"morph", "megamorph", "disguise"}
+            if card_keywords & face_kw:
+                return True
+            if re.search(r"(?:face\s+down|face\s+up|manifest|cloak)", card_oracle):
+                return True
+        elif mech == "sacrifice_synergy":
+            if re.search(
+                r"(?:sacrifice\s+(?:a|an|another)|when\s+this\s+creature\s+dies)",
+                card_oracle,
+            ):
+                return True
+        elif mech == "cost_reduction":
+            # High-CMC cards benefit most from cost reduction
+            cmc = float(card.get("cmc", 0))
+            if cmc >= 5:
+                return True
+        elif mech == "counters_matter":
+            if "+1/+1 counter" in card_oracle:
+                return True
+        elif mech == "death_trigger":
+            if re.search(r"(?:when\b.*\bdies\b|whenever\b.*\bdies\b)", card_oracle):
+                return True
+        elif mech == "graveyard_synergy":
+            grave_kw = {"flashback", "unearth", "embalm", "eternalize", "escape", "disturb"}
+            if card_keywords & grave_kw:
+                return True
+            if "from your graveyard" in card_oracle:
+                return True
+        elif mech == "token_synergy":
+            if "create" in card_oracle and "token" in card_oracle:
+                return True
+        elif mech == "spellslinger":
+            if "instant" in type_line or "sorcery" in type_line:
+                return True
+            if re.search(r"(?:instant\s+or\s+sorcery|noncreature\s+spell)", card_oracle):
                 return True
 
     return False

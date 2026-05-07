@@ -7,6 +7,8 @@ from sabermetrics.analytics.oracle_keywords import (
     extract_referenced_mechanics,
 )
 from sabermetrics.analytics.cvar import ScoringContext, compute_synergy_score
+from sabermetrics.models.profile import ValueInversion, StrategicProfile
+from sabermetrics.models.evidence import EvidencePackage
 
 
 def _make_card(
@@ -187,7 +189,7 @@ def _generic_context() -> ScoringContext:
 
 
 def test_synergy_score_boost_for_defender() -> None:
-    """Defender creature scores >= 0.3 higher with Arcades context."""
+    """Defender creature scores >= 0.5 higher with Arcades context (0.6 bonus)."""
     card = _make_card(
         "Wall of Omens",
         oracle_text="When Wall of Omens enters the battlefield, draw a card.",
@@ -197,7 +199,7 @@ def test_synergy_score_boost_for_defender() -> None:
     )
     arcades_score = compute_synergy_score(card, _arcades_context())
     generic_score = compute_synergy_score(card, _generic_context())
-    assert arcades_score >= generic_score + 0.3
+    assert arcades_score >= generic_score + 0.5
 
 
 def test_synergy_score_no_regression_for_korvold() -> None:
@@ -238,3 +240,357 @@ def test_synergy_score_no_regression_for_korvold() -> None:
     score_with = compute_synergy_score(card, korvold_context)
     score_default = compute_synergy_score(card, korvold_default)
     assert score_with == score_default
+
+
+# ---------------------------------------------------------------------------
+# ValueInversion model tests
+# ---------------------------------------------------------------------------
+
+
+def test_value_inversion_model_validates() -> None:
+    """ValueInversion Pydantic model validates correctly."""
+    vi = ValueInversion(
+        normal_heuristic="Defender creatures can't attack",
+        inverted_value="Defender creatures are X/X attackers that draw a card",
+        desired_characteristics=["high toughness", "defender keyword", "low CMC"],
+        evaluation_guidance="Evaluate defenders by toughness, not power",
+    )
+    assert vi.normal_heuristic == "Defender creatures can't attack"
+    assert len(vi.desired_characteristics) == 3
+
+
+def test_strategic_profile_defaults_empty_inversions() -> None:
+    """StrategicProfile defaults to empty value_inversions list."""
+    from sabermetrics.models.profile import (
+        AntiSynergy,
+        PowerIndicators,
+        StrategicConstraints,
+        WinCondition,
+    )
+
+    profile = StrategicProfile(
+        primary_archetype="Voltron",
+        game_plan_summary="Attack with commander",
+        win_conditions=[
+            WinCondition(
+                description="Commander damage",
+                key_cards=["Sword of Fire and Ice"],
+                reliability="primary",
+            )
+        ],
+        build_paths=[],
+        synergy_priorities={"high": [], "medium": [], "low": []},
+        anti_synergies=[],
+        strategic_constraints=StrategicConstraints(
+            mana_base_requirements="Standard",
+            interaction_density="medium",
+            speed_tier="midrange",
+        ),
+        power_indicators=PowerIndicators(
+            estimated_ceiling_bracket=3,
+            estimated_floor_bracket=2,
+            notes="Mid-power Voltron",
+        ),
+    )
+    assert profile.value_inversions == []
+
+
+def test_evidence_package_has_referenced_fields() -> None:
+    """EvidencePackage includes referenced_keywords and referenced_mechanics."""
+    from sabermetrics.models.card import Card
+
+    card = Card(
+        id="test-id",
+        oracle_id="test-oracle",
+        name="Test Commander",
+        cmc=4.0,
+        type_line="Legendary Creature",
+        color_identity=["W"],
+        is_legal_commander=True,
+        is_legal_in_99=True,
+        set_code="TST",
+        rarity="mythic",
+        last_updated="2024-01-01T00:00:00",
+    )
+    pkg = EvidencePackage(
+        commander=card,
+        rulings=[],
+        reddit_threads=[],
+        primer_articles=[],
+        reference_chunks=[],
+        referenced_keywords=["defender"],
+        referenced_mechanics=["toughness_matters"],
+    )
+    assert pkg.referenced_keywords == ["defender"]
+    assert pkg.referenced_mechanics == ["toughness_matters"]
+
+
+def test_evidence_package_defaults_empty_refs() -> None:
+    """EvidencePackage defaults to empty lists for referenced fields."""
+    from sabermetrics.models.card import Card
+
+    card = Card(
+        id="test-id",
+        oracle_id="test-oracle",
+        name="Test Commander",
+        cmc=4.0,
+        type_line="Legendary Creature",
+        color_identity=["W"],
+        is_legal_commander=True,
+        is_legal_in_99=True,
+        set_code="TST",
+        rarity="mythic",
+        last_updated="2024-01-01T00:00:00",
+    )
+    pkg = EvidencePackage(
+        commander=card,
+        rulings=[],
+        reddit_threads=[],
+        primer_articles=[],
+        reference_chunks=[],
+    )
+    assert pkg.referenced_keywords == []
+    assert pkg.referenced_mechanics == []
+
+
+# ---------------------------------------------------------------------------
+# New mechanic extraction tests
+# ---------------------------------------------------------------------------
+
+HYLDA_TEXT = (
+    "Whenever you tap an untapped creature an opponent controls, "
+    "choose one —\n"
+    "• Create a 4/4 white and blue Elemental creature token.\n"
+    "• Put a +1/+1 counter on each creature you control.\n"
+    "• Scry 2, then draw a card."
+)
+
+YARUS_TEXT = (
+    "Whenever a face-down creature you control dies, reveal it and "
+    "exile it. If it's a creature card, it deals damage equal to its "
+    "power to each opponent.\n"
+    "Whenever Yarus attacks, turn target face-down creature you "
+    "control face up."
+)
+
+KORVOLD_TEXT = (
+    "Flying\n"
+    "Whenever Korvold, Fae-Cursed King enters the battlefield or "
+    "attacks, sacrifice another permanent.\n"
+    "Whenever you sacrifice a permanent, put a +1/+1 counter on "
+    "Korvold and draw a card."
+)
+
+VEYRAN_TEXT = (
+    "Magecraft — Whenever you cast or copy an instant or sorcery "
+    "spell, Veyran, Voice of Duality gets +1/+1 until end of turn.\n"
+    "If you casting or copying an instant or sorcery spell causes a "
+    "triggered ability of a permanent you control to trigger, that "
+    "ability triggers an additional time."
+)
+
+MEREN_TEXT = (
+    "Whenever another creature you control dies, you get an "
+    "experience counter.\n"
+    "At the beginning of your end step, choose target creature card "
+    "in your graveyard. If that card's mana value is less than or "
+    "equal to the number of experience counters you have, return it "
+    "to the battlefield. Otherwise, put it into your hand."
+)
+
+ATRAXA_TEXT = (
+    "Flying, vigilance, deathtouch, lifelink\n"
+    "At the beginning of your end step, proliferate. (Choose any "
+    "number of permanents and/or players, then give each another "
+    "counter of each kind already there.)"
+)
+
+RHYS_TEXT = (
+    "Whenever Rhys the Redeemed attacks, create a 1/1 green and "
+    "white Elf Warrior creature token that's tapped and attacking."
+)
+
+
+def test_extract_tap_synergy_from_hylda() -> None:
+    """Hylda's 'tap an untapped creature' extracts tap_synergy."""
+    result = extract_referenced_mechanics(HYLDA_TEXT)
+    assert "tap_synergy" in result
+
+
+def test_extract_face_down_synergy_from_yarus() -> None:
+    """Yarus's 'face-down creature' extracts face_down_synergy."""
+    result = extract_referenced_mechanics(YARUS_TEXT)
+    assert "face_down_synergy" in result
+
+
+def test_extract_sacrifice_synergy_from_korvold() -> None:
+    """Korvold's 'sacrifice another permanent' extracts sacrifice_synergy."""
+    result = extract_referenced_mechanics(KORVOLD_TEXT)
+    assert "sacrifice_synergy" in result
+
+
+def test_extract_spellslinger_from_veyran() -> None:
+    """Veyran's 'cast an instant or sorcery' extracts spellslinger."""
+    result = extract_referenced_mechanics(VEYRAN_TEXT)
+    assert "spellslinger" in result
+
+
+def test_extract_death_trigger_from_meren() -> None:
+    """Meren's 'whenever another creature...dies' extracts death_trigger."""
+    result = extract_referenced_mechanics(MEREN_TEXT)
+    assert "death_trigger" in result
+
+
+def test_extract_graveyard_synergy_from_meren() -> None:
+    """Meren's 'return...from graveyard' extracts graveyard_synergy."""
+    result = extract_referenced_mechanics(MEREN_TEXT)
+    assert "graveyard_synergy" in result
+
+
+def test_extract_token_synergy_from_rhys() -> None:
+    """Rhys's 'create...token' extracts token_synergy."""
+    result = extract_referenced_mechanics(RHYS_TEXT)
+    assert "token_synergy" in result
+
+
+# ---------------------------------------------------------------------------
+# New card matching tests
+# ---------------------------------------------------------------------------
+
+
+def test_tap_card_matches_tap_synergy() -> None:
+    """Card with 'Tap target creature' matches tap_synergy."""
+    card = _make_card(
+        "Frost Lynx",
+        oracle_text="When Frost Lynx enters the battlefield, tap target creature an opponent controls.",
+        type_line="Creature — Elemental Cat",
+    )
+    assert card_matches_referenced_keywords(card, [], ["tap_synergy"]) is True
+
+
+def test_morph_card_matches_face_down_synergy() -> None:
+    """Card with morph keyword matches face_down_synergy."""
+    card = _make_card(
+        "Willbender",
+        oracle_text="Morph {1}{U}\nWhen Willbender is turned face up, change the target of target spell or ability with a single target.",
+        type_line="Creature — Human Wizard",
+        keywords=["Morph"],
+    )
+    assert card_matches_referenced_keywords(card, [], ["face_down_synergy"]) is True
+
+
+def test_sacrifice_card_matches_sacrifice_synergy() -> None:
+    """Card with sacrifice outlet matches sacrifice_synergy."""
+    card = _make_card(
+        "Viscera Seer",
+        oracle_text="Sacrifice a creature: Scry 1.",
+        type_line="Creature — Vampire Wizard",
+    )
+    assert card_matches_referenced_keywords(card, [], ["sacrifice_synergy"]) is True
+
+
+def test_high_cmc_card_matches_cost_reduction() -> None:
+    """Card with CMC >= 5 matches cost_reduction."""
+    card = _make_card("Blightsteel Colossus", type_line="Artifact Creature — Phyrexian Golem")
+    card["cmc"] = 12
+    assert card_matches_referenced_keywords(card, [], ["cost_reduction"]) is True
+
+
+def test_low_cmc_card_does_not_match_cost_reduction() -> None:
+    """Card with CMC < 5 doesn't match cost_reduction."""
+    card = _make_card("Sol Ring", type_line="Artifact")
+    card["cmc"] = 1
+    assert card_matches_referenced_keywords(card, [], ["cost_reduction"]) is False
+
+
+def test_counter_card_matches_counters_matter() -> None:
+    """Card mentioning '+1/+1 counter' matches counters_matter."""
+    card = _make_card(
+        "Hardened Scales",
+        oracle_text="If one or more +1/+1 counters would be placed on a creature you control, that many plus one +1/+1 counters are placed on it instead.",
+        type_line="Enchantment",
+    )
+    assert card_matches_referenced_keywords(card, [], ["counters_matter"]) is True
+
+
+def test_death_card_matches_death_trigger() -> None:
+    """Card with 'when this creature dies' matches death_trigger."""
+    card = _make_card(
+        "Solemn Simulacrum",
+        oracle_text="When Solemn Simulacrum enters the battlefield, search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.\nWhen Solemn Simulacrum dies, draw a card.",
+        type_line="Artifact Creature — Golem",
+    )
+    assert card_matches_referenced_keywords(card, [], ["death_trigger"]) is True
+
+
+def test_flashback_card_matches_graveyard_synergy() -> None:
+    """Card with flashback keyword matches graveyard_synergy."""
+    card = _make_card(
+        "Faithless Looting",
+        oracle_text="Draw two cards, then discard two cards.\nFlashback {2}{R}",
+        type_line="Sorcery",
+        keywords=["Flashback"],
+    )
+    assert card_matches_referenced_keywords(card, [], ["graveyard_synergy"]) is True
+
+
+def test_token_card_matches_token_synergy() -> None:
+    """Card that creates tokens matches token_synergy."""
+    card = _make_card(
+        "Raise the Alarm",
+        oracle_text="Create two 1/1 white Soldier creature tokens.",
+        type_line="Instant",
+    )
+    assert card_matches_referenced_keywords(card, [], ["token_synergy"]) is True
+
+
+def test_instant_matches_spellslinger() -> None:
+    """Instant card matches spellslinger."""
+    card = _make_card(
+        "Lightning Bolt",
+        oracle_text="Lightning Bolt deals 3 damage to any target.",
+        type_line="Instant",
+    )
+    assert card_matches_referenced_keywords(card, [], ["spellslinger"]) is True
+
+
+def test_creature_no_false_positive_spellslinger() -> None:
+    """Non-instant/sorcery creature doesn't match spellslinger."""
+    card = _make_card(
+        "Grizzly Bears",
+        oracle_text="",
+        type_line="Creature — Bear",
+    )
+    assert card_matches_referenced_keywords(card, [], ["spellslinger"]) is False
+
+
+def test_regular_card_no_false_positive_tap_synergy() -> None:
+    """Card without tap effects doesn't match tap_synergy."""
+    card = _make_card(
+        "Lightning Bolt",
+        oracle_text="Lightning Bolt deals 3 damage to any target.",
+        type_line="Instant",
+    )
+    assert card_matches_referenced_keywords(card, [], ["tap_synergy"]) is False
+
+
+def test_cvar_bonus_differentiates_defenders_from_generic() -> None:
+    """With 0.6 bonus and 35% synergy weight, effective diff should be >= 0.21."""
+    defender = _make_card(
+        "Wall of Denial",
+        type_line="Creature — Wall",
+        keywords=["Defender", "Flying", "Shroud"],
+        color_identity=["W", "U"],
+    )
+    generic = _make_card(
+        "Aven Squire",
+        oracle_text="Exalted",
+        type_line="Creature — Bird Soldier",
+        keywords=["Exalted"],
+        color_identity=["W"],
+    )
+    ctx = _arcades_context()
+    defender_score = compute_synergy_score(defender, ctx)
+    generic_score = compute_synergy_score(generic, ctx)
+    # Effective differential in CVAR = 0.35 * (defender - generic) >= 0.21
+    assert (defender_score - generic_score) * 0.35 >= 0.18
