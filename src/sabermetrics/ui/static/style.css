@@ -570,6 +570,319 @@ a:hover {
     min-height: 1.6em;
 }
 
+/* --- View toolbar --- */
+.view-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+}
+
+.view-toolbar .toolbar-spacer {
+    flex: 1;
+}
+
+.view-toolbar .toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    margin: 0 0.5rem;
+}
+
+.view-toolbar .toolbar-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 0.25rem;
+}
+
+.group-select {
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.group-select:focus {
+    outline: 1px solid var(--accent);
+}
+
+/* --- Deck layout with sidebar --- */
+.deck-with-sidebar {
+    display: flex;
+    gap: 1rem;
+}
+
+.deck-main-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* --- Card preview sidebar --- */
+.card-preview-sidebar {
+    position: sticky;
+    top: 1rem;
+    width: 260px;
+    min-width: 260px;
+    max-height: calc(100vh - 2rem);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 10;
+    align-self: flex-start;
+}
+
+.card-preview-sidebar img {
+    max-width: 240px;
+    width: 100%;
+    border-radius: 10px;
+    margin-bottom: 0.5rem;
+}
+
+.card-preview-sidebar .preview-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-align: center;
+    margin-bottom: 0.25rem;
+}
+
+.card-preview-sidebar .preview-price {
+    font-size: 0.85rem;
+    color: var(--accent);
+}
+
+.card-preview-sidebar .preview-placeholder {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.card-preview-sidebar.hidden {
+    display: none;
+}
+
+/* --- Visual Grid --- */
+.visual-grid-section {
+    margin-bottom: 1.5rem;
+}
+
+.visual-grid-header {
+    font-size: 1.05rem;
+    color: var(--text);
+    margin: 0 0 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.visual-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.visual-grid-card {
+    width: 130px;
+    cursor: pointer;
+    position: relative;
+    border-radius: 8px;
+    transition: transform 0.15s ease;
+}
+
+.visual-grid-card img {
+    width: 100%;
+    border-radius: 8px;
+    display: block;
+}
+
+.visual-grid-card:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 8px rgba(233, 69, 96, 0.4);
+}
+
+.visual-grid-card .grid-card-qty {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- Visual Stack --- */
+.visual-stack-columns {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.visual-stack-column {
+    flex: 1 1 200px;
+    min-width: 180px;
+    max-width: 280px;
+}
+
+.visual-stack-header {
+    font-size: 1.05rem;
+    color: var(--text);
+    margin: 0 0 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.visual-stack-card {
+    height: 32px;
+    overflow: hidden;
+    transition: height 0.3s ease, margin-bottom 0.3s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+.visual-stack-card .card-bar {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.visual-stack-card .card-bar .bar-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.visual-stack-card .card-bar .bar-mana {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    margin-left: 6px;
+    flex-shrink: 0;
+}
+
+.visual-stack-card .card-bar:hover {
+    border-color: var(--accent);
+    background: rgba(233, 69, 96, 0.1);
+}
+
+.visual-stack-card.expanded {
+    height: auto;
+    margin-bottom: 8px;
+}
+
+.visual-stack-card .stack-card-image {
+    display: none;
+    padding: 4px 0;
+}
+
+.visual-stack-card.expanded .stack-card-image {
+    display: block;
+}
+
+.visual-stack-card .stack-card-image img {
+    width: 100%;
+    border-radius: 8px;
+}
+
+/* --- Visual Spoiler --- */
+.visual-spoiler-section {
+    margin-bottom: 1.5rem;
+}
+
+.visual-spoiler-header {
+    font-size: 1.05rem;
+    color: var(--text);
+    margin: 0 0 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.visual-spoiler {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.visual-spoiler-card {
+    width: 200px;
+    cursor: pointer;
+    border-radius: 8px;
+    position: relative;
+    transition: transform 0.15s ease;
+}
+
+.visual-spoiler-card img {
+    width: 100%;
+    border-radius: 8px;
+    display: block;
+}
+
+.visual-spoiler-card:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 8px rgba(233, 69, 96, 0.3);
+}
+
+.visual-spoiler-card .spoiler-card-qty {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- Full card overlay (hover expand for grid) --- */
+.card-hover-overlay {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    display: none;
+}
+
+.card-hover-overlay.visible {
+    display: block;
+}
+
+.card-hover-overlay img {
+    max-width: 300px;
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* Widen container on deck page when visual views are active */
+.container.container-wide {
+    max-width: 1400px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .nav {
@@ -590,5 +903,22 @@ a:hover {
     }
     .chart-grid {
         grid-template-columns: 1fr;
+    }
+    .deck-with-sidebar {
+        flex-direction: column;
+    }
+    .card-preview-sidebar {
+        position: static;
+        width: 100%;
+        min-width: 0;
+        max-height: none;
+        flex-direction: row;
+        gap: 1rem;
+    }
+    .card-preview-sidebar img {
+        max-width: 120px;
+    }
+    .visual-stack-column {
+        max-width: 100%;
     }
 }

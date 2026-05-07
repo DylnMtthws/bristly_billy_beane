@@ -65,92 +65,120 @@
     <canvas id="chart-value" height="100"></canvas>
 </div>
 
-<!-- Card List (collapsible) -->
-<details class="deck-section">
+<!-- Card List -->
+<details class="deck-section" id="card-list-section" open>
     <summary>Card List ({{ deck.cards|length }})</summary>
 
-    <div class="view-tabs">
-        <button class="tab-btn active" onclick="switchView('type')">By Type</button>
-        <button class="tab-btn" onclick="switchView('role')">By Role</button>
+    <div class="view-toolbar">
+        <span class="toolbar-label">Display:</span>
+        <button class="tab-btn active" data-mode="table" onclick="switchMode('table', this)">Table</button>
+        <button class="tab-btn" data-mode="stack" onclick="switchMode('stack', this)">Stack</button>
+        <button class="tab-btn" data-mode="spoiler" onclick="switchMode('spoiler', this)">Spoiler</button>
+        <span class="toolbar-divider"></span>
+        <span class="toolbar-label">Group:</span>
+        <button class="tab-btn group-btn active" data-group="type" onclick="switchGroup('type', this)">By Type</button>
+        <button class="tab-btn group-btn" data-group="role" onclick="switchGroup('role', this)">By Role</button>
     </div>
 
-    <!-- Card Type View (default) -->
-    <div id="view-type" class="card-view">
-    {% set type_order = ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Battle', 'Land'] %}
+    <div class="deck-with-sidebar" id="deck-layout">
+        <div class="deck-main-content" id="deck-main">
 
-    {% for card_type in type_order %}
-    {% if deck.cards_by_type.get(card_type) %}
-    {% set type_cards = deck.cards_by_type[card_type] %}
-    {% set total = type_cards|sum(attribute='qty') %}
-    <details open>
-        <summary>{{ card_type }} ({{ total }})</summary>
-        <table class="card-table">
-            <thead>
-                <tr>
-                    <th>Qty</th>
-                    <th>Card</th>
-                    <th>Mana Cost</th>
-                    <th>CMC</th>
-                    <th>CVAR</th>
-                    <th>Price</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for card in type_cards|sort(attribute='name') %}
-                <tr>
-                    <td>{{ card.qty if card.qty > 1 else '' }}</td>
-                    <td>{{ card.name }}</td>
-                    <td>{{ card.mana_cost or '' }}</td>
-                    <td>{{ card.cmc or '' }}</td>
-                    <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
-                    <td>${{ "%.2f"|format(card.price_usd or 0) }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </details>
-    {% endif %}
-    {% endfor %}
-    </div>
+            <!-- Text By Type view (default) -->
+            <div id="view-type" class="card-view">
+            {% set type_order = ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Battle', 'Land'] %}
+            {% for card_type in type_order %}
+            {% if deck.cards_by_type.get(card_type) %}
+            {% set type_cards = deck.cards_by_type[card_type] %}
+            {% set total = type_cards|sum(attribute='qty') %}
+            <details open>
+                <summary>{{ card_type }} ({{ total }})</summary>
+                <table class="card-table">
+                    <thead>
+                        <tr>
+                            <th>Qty</th>
+                            <th>Card</th>
+                            <th>Mana Cost</th>
+                            <th>CMC</th>
+                            <th>CVAR</th>
+                            <th>Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for card in type_cards|sort(attribute='name') %}
+                        <tr>
+                            <td>{{ card.qty if card.qty > 1 else '' }}</td>
+                            <td>{{ card.name }}</td>
+                            <td>{{ card.mana_cost or '' }}</td>
+                            <td>{{ card.cmc or '' }}</td>
+                            <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
+                            <td>${{ "%.2f"|format(card.price_usd or 0) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </details>
+            {% endif %}
+            {% endfor %}
+            </div>
 
-    <!-- Role View -->
-    <div id="view-role" class="card-view" style="display: none;">
-    {% set role_order = ['land', 'ramp', 'draw', 'removal', 'wincon', 'utility', 'other'] %}
-    {% set role_labels = {'land': 'Lands', 'ramp': 'Ramp', 'draw': 'Card Draw', 'removal': 'Removal', 'wincon': 'Win Conditions', 'utility': 'Utility', 'other': 'Other'} %}
+            <!-- Text By Role view -->
+            <div id="view-role" class="card-view" style="display: none;">
+            {% set role_order = ['land', 'ramp', 'draw', 'removal', 'wincon', 'utility', 'other'] %}
+            {% set role_labels = {'land': 'Lands', 'ramp': 'Ramp', 'draw': 'Card Draw', 'removal': 'Removal', 'wincon': 'Win Conditions', 'utility': 'Utility', 'other': 'Other'} %}
+            {% for role in role_order %}
+            {% if deck.cards_by_role.get(role) %}
+            <details open>
+                <summary>{{ role_labels.get(role, role) }} ({{ deck.cards_by_role[role]|length }})</summary>
+                <table class="card-table">
+                    <thead>
+                        <tr>
+                            <th>Card</th>
+                            <th>Type</th>
+                            <th>CMC</th>
+                            <th>Fit</th>
+                            <th>CVAR</th>
+                            <th>Reasoning</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for card in deck.cards_by_role[role]|sort(attribute='name') %}
+                        <tr>
+                            <td>{{ card.name }}</td>
+                            <td>{{ card.type_line or '' }}</td>
+                            <td>{{ card.cmc or '' }}</td>
+                            <td>{{ card.fit_score or '' }}/10</td>
+                            <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
+                            <td class="reasoning">{{ card.reasoning or '' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </details>
+            {% endif %}
+            {% endfor %}
+            </div>
 
-    {% for role in role_order %}
-    {% if deck.cards_by_role.get(role) %}
-    <details open>
-        <summary>{{ role_labels.get(role, role) }} ({{ deck.cards_by_role[role]|length }})</summary>
-        <table class="card-table">
-            <thead>
-                <tr>
-                    <th>Card</th>
-                    <th>Type</th>
-                    <th>CMC</th>
-                    <th>Fit</th>
-                    <th>CVAR</th>
-                    <th>Reasoning</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for card in deck.cards_by_role[role]|sort(attribute='name') %}
-                <tr>
-                    <td>{{ card.name }}</td>
-                    <td>{{ card.type_line or '' }}</td>
-                    <td>{{ card.cmc or '' }}</td>
-                    <td>{{ card.fit_score or '' }}/10</td>
-                    <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
-                    <td class="reasoning">{{ card.reasoning or '' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </details>
-    {% endif %}
-    {% endfor %}
+            <!-- Visual Stack (built by JS) -->
+            <div id="view-visual-stack" class="card-view" style="display: none;"></div>
+
+            <!-- Visual Spoiler (built by JS) -->
+            <div id="view-visual-spoiler" class="card-view" style="display: none;"></div>
+
+        </div>
+
+        <div class="card-preview-sidebar hidden" id="card-preview-sidebar">
+            <img id="preview-img" src="" alt="Card preview" style="display:none">
+            <div class="preview-name" id="preview-name"></div>
+            <div class="preview-price" id="preview-price"></div>
+            <div class="preview-placeholder" id="preview-placeholder">Hover a card to preview</div>
+        </div>
     </div>
 </details>
+
+<!-- Hover overlay (floating full card image) -->
+<div class="card-hover-overlay" id="card-hover-overlay">
+    <img id="hover-overlay-img" src="" alt="">
+</div>
 
 <!-- Narrative (collapsed) -->
 {% if deck.rationale and deck.rationale.narrative %}
@@ -369,12 +397,370 @@ new Chart(document.getElementById('chart-value'), {
     }
 });
 
-// Card list view toggle
-function switchView(view) {
-    document.getElementById('view-type').style.display = view === 'type' ? '' : 'none';
-    document.getElementById('view-role').style.display = view === 'role' ? '' : 'none';
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+// --- Card data for visual views ---
+window.DECK_CARDS = {{ deck.cards | tojson }};
+window.COMMANDER = {
+    name: {{ deck.commander_name | tojson }},
+    image_uri: {{ (deck.image_uri or '') | tojson }}
+};
+
+// --- Constants ---
+const TYPE_ORDER = ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Battle', 'Land', 'Other'];
+const ROLE_ORDER_VIS = ['land', 'ramp', 'draw', 'removal', 'wincon', 'utility', 'other'];
+const ROLE_LABELS_VIS = {
+    land: 'Lands', ramp: 'Ramp', draw: 'Card Draw',
+    removal: 'Removal', wincon: 'Win Conditions',
+    utility: 'Utility', other: 'Other'
+};
+const VISUAL_MODES = ['stack', 'spoiler'];
+const ALL_VIEW_IDS = ['type', 'role', 'visual-stack', 'visual-spoiler'];
+
+let currentMode = 'table';   // 'table' | 'stack' | 'spoiler'
+let currentGroup = 'type';   // 'type' | 'role'
+let hoverTimer = null;
+let expandedStackCard = null;
+
+// --- Helpers ---
+function getTypeCategory(typeLine) {
+    const tl = (typeLine || '').toLowerCase();
+    if (tl.includes('land')) return 'Land';
+    if (tl.includes('creature')) return 'Creature';
+    if (tl.includes('instant')) return 'Instant';
+    if (tl.includes('sorcery')) return 'Sorcery';
+    if (tl.includes('artifact')) return 'Artifact';
+    if (tl.includes('enchantment')) return 'Enchantment';
+    if (tl.includes('planeswalker')) return 'Planeswalker';
+    if (tl.includes('battle')) return 'Battle';
+    return 'Other';
+}
+
+function buildCardIndex(cards) {
+    const byName = {};
+    cards.forEach(c => {
+        const name = c.name || 'Unknown';
+        if (!byName[name]) {
+            byName[name] = Object.assign({}, c, { qty: 0 });
+        }
+        byName[name].qty += 1;
+    });
+    return Object.values(byName);
+}
+
+function groupCards(cards, groupBy) {
+    const groups = {};
+    cards.forEach(c => {
+        const key = groupBy === 'type' ? getTypeCategory(c.type_line) : (c.slot_role || 'other');
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(c);
+    });
+    Object.values(groups).forEach(arr => arr.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+    return groups;
+}
+
+function getOrderedGroups(groups, groupBy) {
+    const order = groupBy === 'type' ? TYPE_ORDER : ROLE_ORDER_VIS;
+    const result = [];
+    order.forEach(key => {
+        if (groups[key] && groups[key].length > 0) {
+            const label = groupBy === 'type' ? key : (ROLE_LABELS_VIS[key] || key);
+            const count = groups[key].reduce((s, c) => s + (c.qty || 1), 0);
+            result.push({ key: key, label: label, count: count, cards: groups[key] });
+        }
+    });
+    Object.keys(groups).forEach(key => {
+        if (!order.includes(key) && groups[key].length > 0) {
+            const label = groupBy === 'type' ? key : (ROLE_LABELS_VIS[key] || key);
+            const count = groups[key].reduce((s, c) => s + (c.qty || 1), 0);
+            result.push({ key: key, label: label, count: count, cards: groups[key] });
+        }
+    });
+    return result;
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+
+// --- Sidebar ---
+function showCardPreview(imageUri, name, price) {
+    const sidebar = document.getElementById('card-preview-sidebar');
+    const img = document.getElementById('preview-img');
+    const nameEl = document.getElementById('preview-name');
+    const priceEl = document.getElementById('preview-price');
+    const placeholder = document.getElementById('preview-placeholder');
+
+    if (imageUri) {
+        img.src = imageUri;
+        img.style.display = '';
+    } else {
+        img.style.display = 'none';
+    }
+    nameEl.textContent = name || '';
+    priceEl.textContent = price != null ? '$' + Number(price).toFixed(2) : '';
+    placeholder.style.display = 'none';
+}
+
+function showCommanderPreview() {
+    const cmd = window.COMMANDER;
+    if (cmd && cmd.image_uri) {
+        showCardPreview(cmd.image_uri, cmd.name, null);
+    } else {
+        // No commander image available — show placeholder
+        const img = document.getElementById('preview-img');
+        const nameEl = document.getElementById('preview-name');
+        const priceEl = document.getElementById('preview-price');
+        const placeholder = document.getElementById('preview-placeholder');
+        img.style.display = 'none';
+        img.src = '';
+        nameEl.textContent = '';
+        priceEl.textContent = '';
+        placeholder.style.display = '';
+    }
+}
+
+function hideCardPreview() {
+    showCommanderPreview();
+}
+
+// --- Hover overlay ---
+function showHoverOverlay(imageUri, x, y) {
+    const overlay = document.getElementById('card-hover-overlay');
+    const img = document.getElementById('hover-overlay-img');
+    img.src = imageUri;
+    // Position: to the right of cursor, clamped to viewport
+    const viewW = window.innerWidth;
+    const viewH = window.innerHeight;
+    let left = x + 20;
+    let top = y - 100;
+    if (left + 320 > viewW) left = x - 330;
+    if (top < 10) top = 10;
+    if (top + 420 > viewH) top = viewH - 420;
+    overlay.style.left = left + 'px';
+    overlay.style.top = top + 'px';
+    overlay.classList.add('visible');
+}
+
+function hideHoverOverlay() {
+    const overlay = document.getElementById('card-hover-overlay');
+    overlay.classList.remove('visible');
+    document.getElementById('hover-overlay-img').src = '';
+}
+
+// --- Hover timer (shared by grid & stack) ---
+function startHoverTimer(el, card, evt) {
+    clearHoverTimer();
+    // Immediately update sidebar
+    showCardPreview(card.image_uri, card.name, card.price_usd);
+    // Start 2s timer for overlay
+    hoverTimer = setTimeout(function() {
+        if (el.matches(':hover')) {
+            showHoverOverlay(card.image_uri, evt.clientX, evt.clientY);
+        }
+    }, 2000);
+}
+
+function clearHoverTimer() {
+    if (hoverTimer) {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+    }
+    hideHoverOverlay();
+}
+
+// --- Build Visual Stack ---
+function buildVisualStack(container, groupBy) {
+    const cards = buildCardIndex(window.DECK_CARDS);
+    const groups = groupCards(cards, groupBy);
+    const ordered = getOrderedGroups(groups, groupBy);
+    expandedStackCard = null;
+
+    container.innerHTML = '';
+    const columns = document.createElement('div');
+    columns.className = 'visual-stack-columns';
+
+    ordered.forEach(function(g) {
+        const col = document.createElement('div');
+        col.className = 'visual-stack-column';
+
+        const header = document.createElement('h3');
+        header.className = 'visual-stack-header';
+        header.textContent = g.label + ' (' + g.count + ')';
+        col.appendChild(header);
+
+        g.cards.forEach(function(card) {
+            const div = document.createElement('div');
+            div.className = 'visual-stack-card';
+
+            const bar = document.createElement('div');
+            bar.className = 'card-bar';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'bar-name';
+            nameSpan.textContent = (card.qty > 1 ? card.qty + 'x ' : '') + (card.name || '');
+            bar.appendChild(nameSpan);
+
+            const manaSpan = document.createElement('span');
+            manaSpan.className = 'bar-mana';
+            manaSpan.textContent = card.mana_cost || '';
+            bar.appendChild(manaSpan);
+
+            div.appendChild(bar);
+
+            // Hidden card image (shown on expand)
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'stack-card-image';
+            const img = document.createElement('img');
+            img.src = card.image_uri || '';
+            img.alt = card.name || '';
+            img.loading = 'lazy';
+            imgWrap.appendChild(img);
+            div.appendChild(imgWrap);
+
+            // Hover: 2s delay to expand
+            let stackTimer = null;
+            div.addEventListener('mouseenter', function(e) {
+                showCardPreview(card.image_uri, card.name, card.price_usd);
+                stackTimer = setTimeout(function() {
+                    if (div.matches(':hover')) {
+                        // Collapse previously expanded card
+                        if (expandedStackCard && expandedStackCard !== div) {
+                            expandedStackCard.classList.remove('expanded');
+                        }
+                        div.classList.add('expanded');
+                        expandedStackCard = div;
+                    }
+                }, 2000);
+            });
+            div.addEventListener('mouseleave', function() {
+                if (stackTimer) {
+                    clearTimeout(stackTimer);
+                    stackTimer = null;
+                }
+                div.classList.remove('expanded');
+                if (expandedStackCard === div) {
+                    expandedStackCard = null;
+                }
+                showCommanderPreview();
+            });
+
+            col.appendChild(div);
+        });
+
+        columns.appendChild(col);
+    });
+
+    container.appendChild(columns);
+}
+
+// --- Build Visual Spoiler ---
+function buildVisualSpoiler(container, groupBy) {
+    const cards = buildCardIndex(window.DECK_CARDS);
+    const groups = groupCards(cards, groupBy);
+    const ordered = getOrderedGroups(groups, groupBy);
+
+    container.innerHTML = '';
+    ordered.forEach(function(g) {
+        const section = document.createElement('div');
+        section.className = 'visual-spoiler-section';
+
+        const header = document.createElement('h3');
+        header.className = 'visual-spoiler-header';
+        header.textContent = g.label + ' (' + g.count + ')';
+        section.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = 'visual-spoiler';
+
+        g.cards.forEach(function(card) {
+            const div = document.createElement('div');
+            div.className = 'visual-spoiler-card';
+
+            const img = document.createElement('img');
+            img.src = card.image_uri || '';
+            img.alt = card.name || '';
+            img.loading = 'lazy';
+            div.appendChild(img);
+
+            if (card.qty > 1) {
+                const badge = document.createElement('span');
+                badge.className = 'spoiler-card-qty';
+                badge.textContent = card.qty;
+                div.appendChild(badge);
+            }
+
+            // Immediate sidebar update on hover (no delay needed)
+            div.addEventListener('mouseenter', function() {
+                showCardPreview(card.image_uri, card.name, card.price_usd);
+            });
+            div.addEventListener('mouseleave', function() {
+                showCommanderPreview();
+            });
+
+            grid.appendChild(div);
+        });
+
+        section.appendChild(grid);
+        container.appendChild(section);
+    });
+}
+
+// --- View switcher (mode + group are independent axes) ---
+function renderCurrentView() {
+    const isVisual = VISUAL_MODES.includes(currentMode);
+
+    // Hide all view containers
+    ALL_VIEW_IDS.forEach(function(id) {
+        const el = document.getElementById('view-' + id);
+        if (el) el.style.display = 'none';
+    });
+
+    // Show/hide sidebar + widen container
+    const sidebar = document.getElementById('card-preview-sidebar');
+    const container = document.querySelector('.container');
+    if (isVisual) {
+        sidebar.classList.remove('hidden');
+        showCommanderPreview();
+        container.classList.add('container-wide');
+    } else {
+        sidebar.classList.add('hidden');
+        clearHoverTimer();
+        container.classList.remove('container-wide');
+    }
+
+    // Show the right view
+    if (currentMode === 'table') {
+        // Text table view — group determines which Jinja-rendered div to show
+        const viewId = currentGroup === 'role' ? 'view-role' : 'view-type';
+        document.getElementById(viewId).style.display = '';
+    } else if (currentMode === 'stack') {
+        const el = document.getElementById('view-visual-stack');
+        el.style.display = '';
+        buildVisualStack(el, currentGroup);
+    } else if (currentMode === 'spoiler') {
+        const el = document.getElementById('view-visual-spoiler');
+        el.style.display = '';
+        buildVisualSpoiler(el, currentGroup);
+    }
+}
+
+function switchMode(mode, btn) {
+    currentMode = mode;
+    // Update mode button active states
+    document.querySelectorAll('.view-toolbar .tab-btn[data-mode]').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.mode === mode);
+    });
+    renderCurrentView();
+}
+
+function switchGroup(group, btn) {
+    currentGroup = group;
+    // Update group button active states
+    document.querySelectorAll('.view-toolbar .group-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.group === group);
+    });
+    renderCurrentView();
 }
 </script>
 
