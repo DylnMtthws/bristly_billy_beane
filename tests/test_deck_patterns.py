@@ -6,11 +6,15 @@ import tempfile
 from pathlib import Path
 
 from sabermetrics.analytics.deck_patterns import (
+    ArchetypeProfile,
+    CardTypeDistribution,
     ComponentStats,
     DeckbuildingPatterns,
+    FeatureCorrelation,
     GameKnightsAnalyzer,
     KnowledgeBaseBuilder,
     ManaBaseAnalysis,
+    ThemeDensity,
     _compute_stats,
 )
 from sabermetrics.config import KnowledgeBaseSettings, Settings, load_settings
@@ -556,3 +560,160 @@ def test_mana_base_analysis_empty_decks() -> None:
         # No decks → no mana base analysis
         assert patterns.mana_base_analysis is None
         assert patterns.deck_count == 0
+
+
+# --- Card Type Distribution tests ---
+
+
+def test_card_type_distribution_computed() -> None:
+    """Analyzer produces CardTypeDistribution from test DB."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        _create_test_db(db_path)
+
+        analyzer = GameKnightsAnalyzer(db_path)
+        patterns = analyzer.analyze()
+
+        assert patterns.card_type_distribution is not None
+        ctd = patterns.card_type_distribution
+        # Both decks have Korvold (creature) + Grizzly Bears (creature)
+        assert ctd.creatures.mean > 0
+        # Both decks have Sol Ring (artifact)
+        assert ctd.artifacts.mean > 0
+
+
+def test_count_card_types_multitype() -> None:
+    """Artifact Creature counts as both artifact and creature."""
+    cards = [
+        {
+            "name": "Solemn Simulacrum",
+            "type_line": "Artifact Creature — Golem",
+            "oracle_text": "When Solemn Simulacrum enters the battlefield, search your library for a basic land card.",
+        },
+    ]
+    counts = GameKnightsAnalyzer._count_card_types(cards)
+    assert counts["creatures"] == 1
+    assert counts["artifacts"] == 1
+
+
+# --- Theme Density tests ---
+
+
+def test_theme_densities_computed() -> None:
+    """Analyzer produces theme densities with all 15 themes present."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        _create_test_db(db_path)
+
+        analyzer = GameKnightsAnalyzer(db_path)
+        patterns = analyzer.analyze()
+
+        assert len(patterns.theme_densities) == 15
+        theme_names = {td.theme_name for td in patterns.theme_densities}
+        assert "sacrifice" in theme_names
+
+
+# --- Archetype Profile tests ---
+
+
+def test_archetype_profiles_empty_for_small_data() -> None:
+    """Less than 3 decks per theme means empty archetype profiles."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        _create_test_db(db_path)
+
+        analyzer = GameKnightsAnalyzer(db_path)
+        patterns = analyzer.analyze()
+
+        # Only 2 decks in test DB, so no archetype can reach 3-deck minimum
+        assert patterns.archetype_profiles == []
+
+
+# --- KB Builder new section tests ---
+
+
+def test_builder_contains_card_type_section() -> None:
+    """KB output includes Card Type Distribution section."""
+    ctd = CardTypeDistribution(
+        creatures=ComponentStats(mean=25.0, median=25.0, min=18.0, max=32.0, std_dev=3.0),
+        instants=ComponentStats(mean=8.0, median=8.0, min=4.0, max=12.0, std_dev=2.0),
+        sorceries=ComponentStats(mean=7.0, median=7.0, min=3.0, max=11.0, std_dev=2.0),
+        enchantments=ComponentStats(mean=6.0, median=6.0, min=2.0, max=10.0, std_dev=2.0),
+        artifacts=ComponentStats(mean=10.0, median=10.0, min=5.0, max=15.0, std_dev=2.5),
+        planeswalkers=ComponentStats(mean=1.0, median=1.0, min=0.0, max=3.0, std_dev=0.8),
+    )
+    patterns = DeckbuildingPatterns(deck_count=10, card_type_distribution=ctd)
+    builder = KnowledgeBaseBuilder()
+    result = builder.build(patterns)
+
+    assert "## Card Type Distribution" in result
+    assert "Creatures: mean 25.0" in result
+
+
+def test_builder_contains_archetype_profiles() -> None:
+    """KB output includes archetype breakdowns."""
+    profile = ArchetypeProfile(
+        archetype_name="sacrifice",
+        deck_count=5,
+        land_counts=ComponentStats(mean=36.0),
+        ramp_counts=ComponentStats(mean=11.0),
+        draw_counts=ComponentStats(mean=12.0),
+        removal_counts=ComponentStats(mean=9.0),
+        wipe_counts=ComponentStats(mean=3.0),
+        creature_counts=ComponentStats(mean=22.0),
+        avg_cmc=ComponentStats(mean=3.1),
+        avg_theme_density=8.5,
+        top_cards=[{"name": "Viscera Seer", "count": 4, "percentage": 80.0}],
+    )
+    patterns = DeckbuildingPatterns(deck_count=20, archetype_profiles=[profile])
+    builder = KnowledgeBaseBuilder()
+    result = builder.build(patterns)
+
+    assert "## Deckbuilding Archetype Profiles" in result
+    assert "Sacrifice" in result
+    assert "Viscera Seer" in result
+
+
+def test_builder_contains_theme_density() -> None:
+    """KB output includes theme density section."""
+    td = ThemeDensity(
+        theme_name="sacrifice",
+        card_count_stats=ComponentStats(mean=5.2),
+        deck_count_with_theme=15,
+        percentage_of_decks=75.0,
+    )
+    patterns = DeckbuildingPatterns(deck_count=20, theme_densities=[td])
+    builder = KnowledgeBaseBuilder()
+    result = builder.build(patterns)
+
+    assert "## Theme Density Patterns" in result
+    assert "Sacrifice" in result
+    assert "75.0%" in result
+
+
+def test_builder_backward_compatible() -> None:
+    """Old DeckbuildingPatterns without new fields still produces valid KB."""
+    patterns = DeckbuildingPatterns(deck_count=5)
+    builder = KnowledgeBaseBuilder()
+    result = builder.build(patterns)
+
+    # Should still have all original sections
+    assert "## Land Count" in result
+    assert "## Ramp" in result
+    # New sections should NOT appear (no data)
+    assert "## Card Type Distribution" not in result
+    assert "## Deckbuilding Archetype Profiles" not in result
+    assert "## Theme Density Patterns" not in result
+
+
+def test_feature_correlations_empty_for_small_data() -> None:
+    """Less than 10 decks produces empty feature correlations."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        _create_test_db(db_path)
+
+        analyzer = GameKnightsAnalyzer(db_path)
+        patterns = analyzer.analyze()
+
+        # Only 2 decks in test DB, need >= 10 for correlations
+        assert patterns.feature_correlations == []
