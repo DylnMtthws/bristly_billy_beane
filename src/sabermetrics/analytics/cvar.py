@@ -90,6 +90,7 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
             "sacrifice", "token", "counter", "draw", "graveyard",
             "exile", "enters the battlefield", "dies", "combat damage",
             "life", "mana", "enchantment", "artifact", "creature",
+            "aura", "equipment",
         ]
         shared = 0
         for pattern in mechanic_patterns:

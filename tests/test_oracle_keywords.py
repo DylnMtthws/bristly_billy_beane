@@ -849,6 +849,159 @@ def test_fallback_mechanic_patterns_korvold_unchanged() -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Subtype-reference mechanic extraction tests
+# ---------------------------------------------------------------------------
+
+ERIETTE_ACTUAL_TEXT = (
+    "Each creature that's enchanted by an Aura you control can't attack "
+    "you or planeswalkers you control.\n"
+    "At the beginning of your end step, each opponent loses X life and "
+    "you gain X life, where X is the number of Auras you control."
+)
+
+SYTHIS_TEXT = (
+    "Whenever you cast an enchantment spell, you gain 1 life and draw a card."
+)
+
+NAHIRI_TEXT = (
+    "Equipped creatures you control have double strike and indestructible.\n"
+    "Whenever an Equipment enters the battlefield under your control, "
+    "you may attach it to target creature you control."
+)
+
+SHORIKAI_TEXT = (
+    "{1}, {T}: Draw two cards, then discard a card. Create a 1/1 "
+    "colorless Pilot creature token with \"This creature crews "
+    "Vehicles as though its power were 2 greater.\"\n"
+    "Shorikai, Genesis Engine can be your commander.\n"
+    "Crew 8"
+)
+
+
+def test_extract_aura_synergy_from_eriette() -> None:
+    """Eriette's 'number of Auras you control' extracts aura_synergy."""
+    result = extract_referenced_mechanics(ERIETTE_ACTUAL_TEXT)
+    assert "aura_synergy" in result
+
+
+def test_extract_enchantment_synergy_from_sythis() -> None:
+    """Sythis's 'whenever you cast an enchantment' extracts enchantment_synergy."""
+    result = extract_referenced_mechanics(SYTHIS_TEXT)
+    assert "enchantment_synergy" in result
+
+
+def test_extract_equipment_synergy_from_nahiri() -> None:
+    """Nahiri's 'Equipped creatures' + 'Equipment enters' extracts equipment_synergy."""
+    result = extract_referenced_mechanics(NAHIRI_TEXT)
+    assert "equipment_synergy" in result
+
+
+def test_aura_card_matches_aura_synergy() -> None:
+    """An Aura card matches aura_synergy mechanic."""
+    pacifism = _make_card(
+        "Pacifism",
+        oracle_text="Enchant creature\nEnchanted creature can't attack or block.",
+        type_line="Enchantment — Aura",
+    )
+    assert card_matches_referenced_keywords(pacifism, [], ["aura_synergy"]) is True
+
+
+def test_non_aura_enchantment_does_not_match_aura_synergy() -> None:
+    """A non-Aura enchantment without Aura references doesn't match aura_synergy."""
+    propaganda = _make_card(
+        "Propaganda",
+        oracle_text="Creatures can't attack you unless their controller pays {2} for each creature they control that's attacking you.",
+        type_line="Enchantment",
+    )
+    assert card_matches_referenced_keywords(propaganda, [], ["aura_synergy"]) is False
+
+
+def test_enchantress_matches_aura_synergy() -> None:
+    """Enchantress effect (enabler) matches aura_synergy."""
+    mesa = _make_card(
+        "Mesa Enchantress",
+        oracle_text="Whenever you cast an enchantment spell, you may draw a card.",
+        type_line="Creature — Human Druid",
+    )
+    assert card_matches_referenced_keywords(mesa, [], ["aura_synergy"]) is True
+
+
+def test_enchantment_card_matches_enchantment_synergy() -> None:
+    """Any enchantment matches enchantment_synergy."""
+    propaganda = _make_card(
+        "Propaganda",
+        oracle_text="Creatures can't attack you unless their controller pays {2}.",
+        type_line="Enchantment",
+    )
+    assert card_matches_referenced_keywords(propaganda, [], ["enchantment_synergy"]) is True
+
+
+def test_creature_does_not_match_enchantment_synergy() -> None:
+    """Plain creature doesn't match enchantment_synergy."""
+    bear = _make_card(
+        "Grizzly Bears",
+        oracle_text="",
+        type_line="Creature — Bear",
+    )
+    assert card_matches_referenced_keywords(bear, [], ["enchantment_synergy"]) is False
+
+
+def test_equipment_card_matches_equipment_synergy() -> None:
+    """Equipment card matches equipment_synergy."""
+    sword = _make_card(
+        "Swiftfoot Boots",
+        oracle_text="Equipped creature has hexproof and haste.\nEquip {1}",
+        type_line="Artifact — Equipment",
+    )
+    assert card_matches_referenced_keywords(sword, [], ["equipment_synergy"]) is True
+
+
+def test_vehicle_card_matches_vehicle_synergy() -> None:
+    """Vehicle card matches vehicle_synergy."""
+    smuggler = _make_card(
+        "Smuggler's Copter",
+        oracle_text="Whenever Smuggler's Copter attacks or blocks, you may draw a card. If you do, discard a card.\nCrew 1",
+        type_line="Artifact — Vehicle",
+        keywords=["Crew"],
+    )
+    assert card_matches_referenced_keywords(smuggler, [], ["vehicle_synergy"]) is True
+
+
+def test_eriette_synergy_score_boosts_aura() -> None:
+    """Aura card scores significantly higher with Eriette context (aura_synergy)."""
+    aura = _make_card(
+        "Dead Weight",
+        oracle_text="Enchant creature\nEnchanted creature gets -2/-2.",
+        type_line="Enchantment — Aura",
+        color_identity=["B"],
+    )
+    non_aura = _make_card(
+        "Go for the Throat",
+        oracle_text="Destroy target nonartifact creature.",
+        type_line="Instant",
+        color_identity=["B"],
+    )
+    eriette_ctx = ScoringContext(
+        commander_id="eriette-id",
+        commander_name="Eriette of the Charmed Apple",
+        commander_colors=["W", "B"],
+        commander_keywords=[],
+        commander_oracle_text=ERIETTE_ACTUAL_TEXT,
+        referenced_keywords=[],
+        referenced_mechanics=["aura_synergy"],
+    )
+    aura_score = compute_synergy_score(aura, eriette_ctx)
+    non_aura_score = compute_synergy_score(non_aura, eriette_ctx)
+    # Aura gets +0.6 from aura_synergy; non-aura doesn't
+    assert aura_score >= non_aura_score + 0.5
+
+
+# ---------------------------------------------------------------------------
+# EDHREC corroboration synergy tests
+# ---------------------------------------------------------------------------
+
+
 def test_edhrec_corroboration_boosts_synergy() -> None:
     """Card with 50%+ EDHREC inclusion gets +0.2 synergy bonus."""
     ctx = ScoringContext(

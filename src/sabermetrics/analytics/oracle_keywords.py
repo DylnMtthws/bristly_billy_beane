@@ -180,6 +180,46 @@ _MECHANIC_REFERENCE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         ),
         "spellslinger",
     ),
+    # --- Aura synergy (Eriette, Uril, Bruna) ---
+    (
+        re.compile(
+            r"(?:(?:number of|each|whenever\b.*)\bauras?\b"
+            r"|enchanted\s+by\s+an?\s+aura"
+            r"|auras?\s+(?:you control|enters?|attached))",
+            re.IGNORECASE,
+        ),
+        "aura_synergy",
+    ),
+    # --- Enchantment synergy (Sythis, Zur, Tuvasa) ---
+    (
+        re.compile(
+            r"(?:whenever\b.*\bcast\b.*\benchantment"
+            r"|search\b.*\bfor\b.*\benchantment"
+            r"|enchantments?\s+you\s+control(?!\s+can't))",
+            re.IGNORECASE,
+        ),
+        "enchantment_synergy",
+    ),
+    # --- Equipment synergy (Nahiri, Bruenor, Wyleth) ---
+    (
+        re.compile(
+            r"(?:equipped\s+creature"
+            r"|equip\s+costs?"
+            r"|(?:number of|each|whenever\b.*)\bequipments?\b"
+            r"|equipment\s+(?:you control|enters?|attached))",
+            re.IGNORECASE,
+        ),
+        "equipment_synergy",
+    ),
+    # --- Vehicle synergy (Shorikai, Greasefang) ---
+    (
+        re.compile(
+            r"(?:(?:number of|each|whenever\b.*)\bvehicles?\b"
+            r"|vehicles?\s+(?:you control|enters?))",
+            re.IGNORECASE,
+        ),
+        "vehicle_synergy",
+    ),
 ]
 
 
@@ -357,6 +397,42 @@ def card_matches_referenced_keywords(
             if "instant" in type_line or "sorcery" in type_line:
                 return True
             if re.search(r"(?:instant\s+or\s+sorcery|noncreature\s+spell)", card_oracle):
+                return True
+        elif mech == "aura_synergy":
+            # Card IS an Aura (type_line: "Enchantment — Aura")
+            if "aura" in type_line:
+                return True
+            # Card mechanically references Auras
+            if re.search(r"\bauras?\b", card_oracle):
+                return True
+            # Enchantress/constellation effects (enablers for Aura decks)
+            if re.search(
+                r"(?:whenever\b.*\b(?:cast\b.*\benchantment|enchantment\b.*\b(?:enters|put))"
+                r"|for each\s+enchantment)",
+                card_oracle,
+            ):
+                return True
+        elif mech == "enchantment_synergy":
+            if "enchantment" in type_line:
+                return True
+            if re.search(
+                r"(?:enchantments?\s+you\s+control"
+                r"|whenever\b.*\benchantment"
+                r"|enchantment\s+card)",
+                card_oracle,
+            ):
+                return True
+        elif mech == "equipment_synergy":
+            if "equipment" in type_line:
+                return True
+            if re.search(r"(?:equipped?\b|equip\b|equipment)", card_oracle):
+                return True
+        elif mech == "vehicle_synergy":
+            if "vehicle" in type_line:
+                return True
+            if "crew" in card_keywords:
+                return True
+            if re.search(r"\bvehicles?\b", card_oracle):
                 return True
 
     return False
