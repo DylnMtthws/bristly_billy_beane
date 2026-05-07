@@ -416,7 +416,7 @@ status:
   completed_phases: ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"]
   in_progress: []
   blocked: []
-  notes: "All 8 phases complete. Refresh automation: nightly/weekly/monthly/quarterly scripts, launchd plists with install script, JSON structured logging with rotation. CLI refresh-set command wired. 108 tests passing."
+  notes: "All 8 phases complete. Refresh automation: nightly/weekly/monthly/quarterly scripts, launchd plists with install script, JSON structured logging with rotation. CLI refresh-set command wired. KB enriched with Karsten hypergeometric mana base analysis: source requirements table, per-archetype color targets, observed quality scores from Game Knights decks. 140 tests passing."
 ```
 
 </context>
