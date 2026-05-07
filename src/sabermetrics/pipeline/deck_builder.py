@@ -254,10 +254,33 @@ class DeckBuilder:
         """Step 4: Score by embedding similarity to profile narrative.
 
         Keeps top N candidates by cosine similarity.
+        Lands and mana-producing cards bypass embedding filtering — they
+        are deck infrastructure and would score poorly against strategy text.
         """
         from sabermetrics.config import settings
 
         target = settings.pipeline.embedding_filter_target
+
+        # Separate infrastructure cards (lands, ramp) from strategy cards.
+        # These bypass embedding filtering entirely.
+        lands: list[dict] = []
+        ramp: list[dict] = []
+        strategy_cards: list[dict] = []
+
+        for card in candidates:
+            type_line = (card.get("type_line") or "").lower()
+            oracle_text = (card.get("oracle_text") or "").lower()
+            if "land" in type_line and "creature" not in type_line:
+                lands.append(card)
+            elif _is_ramp(type_line, oracle_text):
+                ramp.append(card)
+            else:
+                strategy_cards.append(card)
+
+        logger.info(
+            "Embedding filter: %d lands, %d ramp (bypassing), %d strategy cards",
+            len(lands), len(ramp), len(strategy_cards),
+        )
 
         try:
             from sabermetrics.analytics.embeddings import get_embedding_service
@@ -274,11 +297,11 @@ class DeckBuilder:
             )
             profile_embedding = service.embed(profile_text)
 
-            # Score each candidate
+            # Score strategy cards only
             scored: list[tuple[dict, float]] = []
             batch_size = 100
-            for i in range(0, len(candidates), batch_size):
-                batch = candidates[i:i + batch_size]
+            for i in range(0, len(strategy_cards), batch_size):
+                batch = strategy_cards[i:i + batch_size]
                 texts = [
                     f"{c.get('name', '')} {c.get('type_line', '')} "
                     f"{c.get('oracle_text', '')}"
@@ -294,13 +317,15 @@ class DeckBuilder:
                     scored.append((card, sim))
 
             scored.sort(key=lambda x: x[1], reverse=True)
-            return [card for card, _ in scored[:target]]
+            top_strategy = [card for card, _ in scored[:target]]
+
+            return lands + ramp + top_strategy
 
         except Exception as e:
             logger.warning(
                 "Embedding scoring failed, using all candidates: %s", e
             )
-            return candidates[:target]
+            return lands + ramp + strategy_cards[:target]
 
     def _structural_score(
         self,
@@ -743,6 +768,20 @@ class DeckBuilder:
             logger.info("Persisted deck %s", deck.id)
         finally:
             conn.close()
+
+
+def _is_ramp(type_line: str, oracle_text: str) -> bool:
+    """Check if a card is a mana-producing ramp spell."""
+    # Mana rocks / mana dorks
+    if "add" in oracle_text and ("mana" in oracle_text or "{" in oracle_text):
+        return True
+    # Land-fetching ramp
+    if "search your library for a" in oracle_text and "land" in oracle_text:
+        return True
+    # Land-to-battlefield effects
+    if "put" in oracle_text and "land" in oracle_text and "battlefield" in oracle_text:
+        return True
+    return False
 
 
 def _heuristic_role(card: dict) -> str:
