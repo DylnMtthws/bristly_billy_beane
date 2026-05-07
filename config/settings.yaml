@@ -24,7 +24,7 @@ embeddings:
 pipeline:
   hard_filter_target: 3000
   embedding_filter_target: 200
-  structural_filter_target: 50
+  structural_filter_target: 200
   candidates_per_slot: 5
 
 refresh:

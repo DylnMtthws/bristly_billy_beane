@@ -265,12 +265,11 @@ class DeckBuilder:
             service = get_embedding_service()
 
             # Build profile text for embedding
-            profile = profile_result.profile
             profile_text = (
-                f"{profile.strategic_profile.primary_archetype} "
-                f"{profile.strategic_profile.game_plan_summary} "
+                f"{profile_result.strategic_profile.primary_archetype} "
+                f"{profile_result.strategic_profile.game_plan_summary} "
                 + " ".join(
-                    wc.description for wc in profile.strategic_profile.win_conditions
+                    wc.description for wc in profile_result.strategic_profile.win_conditions
                 )
             )
             profile_embedding = service.embed(profile_text)
@@ -367,15 +366,13 @@ class DeckBuilder:
         """
         from sabermetrics.config import settings
 
-        profile = profile_result.profile
-
         # Build profile summary for LLM
         profile_summary = (
-            f"Commander: {profile.commander_name}\n"
-            f"Archetype: {profile.strategic_profile.primary_archetype}\n"
-            f"Game Plan: {profile.strategic_profile.game_plan_summary}\n"
+            f"Commander: {profile_result.commander_name}\n"
+            f"Archetype: {profile_result.strategic_profile.primary_archetype}\n"
+            f"Game Plan: {profile_result.strategic_profile.game_plan_summary}\n"
             f"Win Conditions: "
-            + ", ".join(wc.description for wc in profile.strategic_profile.win_conditions)
+            + ", ".join(wc.description for wc in profile_result.strategic_profile.win_conditions)
         )
 
         # Separate lands (don't LLM-score lands) from non-lands
@@ -402,7 +399,7 @@ class DeckBuilder:
             results = scorer.score_cards(
                 cards=to_score,
                 profile_summary=profile_summary,
-                archetype_definition=profile.strategic_profile.primary_archetype,
+                archetype_definition=profile_result.strategic_profile.primary_archetype,
             )
 
             for card, fit_response in results:
@@ -474,11 +471,10 @@ class DeckBuilder:
 
     def _synthesize_narrative(self, profile_result, assembly, request):
         """Step 8: Generate deck narrative via Sonnet."""
-        profile = profile_result.profile
         profile_summary = (
-            f"Commander: {profile.commander_name}\n"
-            f"Archetype: {profile.strategic_profile.primary_archetype}\n"
-            f"Game Plan: {profile.strategic_profile.game_plan_summary}"
+            f"Commander: {profile_result.commander_name}\n"
+            f"Archetype: {profile_result.strategic_profile.primary_archetype}\n"
+            f"Game Plan: {profile_result.strategic_profile.game_plan_summary}"
         )
 
         deck_cards_with_reasoning = []
@@ -511,10 +507,10 @@ class DeckBuilder:
         except Exception as e:
             logger.warning("Narrative synthesis failed: %s", e)
             narrative = DeckNarrative(
-                game_plan=profile.strategic_profile.game_plan_summary,
+                game_plan=profile_result.strategic_profile.game_plan_summary,
                 key_synergies=[
                     wc.description
-                    for wc in profile.strategic_profile.win_conditions
+                    for wc in profile_result.strategic_profile.win_conditions
                 ],
                 weaknesses=["Unable to generate narrative — LLM unavailable."],
                 suggested_play_pattern="Follow the core game plan.",
@@ -696,7 +692,7 @@ class DeckBuilder:
             meta=GenerationMeta(
                 generation_time_seconds=round(elapsed, 2),
                 llm_cost_usd=round(total_cost, 4),
-                source_profile_id=profile.profile.commander_id,
+                source_profile_id=profile.commander_id,
             ),
         )
 

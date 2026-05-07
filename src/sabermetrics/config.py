@@ -50,7 +50,7 @@ class PipelineSettings(BaseModel):
 
     hard_filter_target: int = 3000
     embedding_filter_target: int = 200
-    structural_filter_target: int = 50
+    structural_filter_target: int = 200
     candidates_per_slot: int = 5
 
 
