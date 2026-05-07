@@ -143,9 +143,19 @@ class ReferenceIngestion:
 
     @staticmethod
     def _extract_text_from_html(html: str) -> str:
-        """Extract readable text from HTML content."""
+        """Extract readable text from HTML content.
+
+        Strips navigation, header, footer, and aside elements before
+        extracting text to avoid polluting content with menu/chrome text.
+        """
+        # Remove non-content structural elements
+        text = html
+        for tag in ("nav", "header", "footer", "aside"):
+            text = re.sub(
+                rf"<{tag}[^>]*>.*?</{tag}>", "", text, flags=re.DOTALL
+            )
         # Remove script and style elements
-        text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL)
+        text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
         # Remove HTML tags
         text = re.sub(r"<[^>]+>", "\n", text)
