@@ -215,7 +215,10 @@ class GameKnightsAnalyzer:
     def _load_deck_cards(
         self, conn: sqlite3.Connection, deck_id: str
     ) -> list[dict]:
-        """Load all card data for a single deck.
+        """Load all card data for a single deck, expanded by quantity.
+
+        Each card is repeated according to its quantity in the deck,
+        so that counts (lands, ramp, etc.) reflect actual deck composition.
 
         Args:
             conn: Open SQLite connection.
@@ -223,15 +226,23 @@ class GameKnightsAnalyzer:
 
         Returns:
             List of card dicts with oracle_text, type_line, cmc, name, keywords.
+            Cards with quantity > 1 appear multiple times.
         """
         cursor = conn.execute(
-            """SELECT c.name, c.oracle_text, c.type_line, c.cmc, c.keywords
+            """SELECT c.name, c.oracle_text, c.type_line, c.cmc, c.keywords,
+                      dc.quantity
                FROM deck_cards dc
                JOIN cards c ON dc.card_id = c.id
                WHERE dc.deck_id = ?""",
             (deck_id,),
         )
-        return [dict(row) for row in cursor.fetchall()]
+        cards: list[dict] = []
+        for row in cursor.fetchall():
+            card = dict(row)
+            qty = card.pop("quantity", 1) or 1
+            for _ in range(qty):
+                cards.append(card)
+        return cards
 
 
 class KnowledgeBaseBuilder:

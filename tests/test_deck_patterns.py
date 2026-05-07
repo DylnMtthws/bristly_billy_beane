@@ -246,6 +246,44 @@ def test_analyzer_most_played_cards() -> None:
         assert "Phyrexian Arena" in card_names
 
 
+def test_analyzer_respects_quantity() -> None:
+    """Land counts reflect quantity (e.g., 10x Forest = 10 lands, not 1)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        _create_test_db(db_path)
+
+        # Add a deck with high-quantity basics
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            "INSERT INTO decks (id, source, source_id, commander_id, deck_name) "
+            "VALUES ('deck3', 'archidekt_gameknights', 'url3', 'cmd1', 'Basics Deck')"
+        )
+        conn.execute(
+            "INSERT INTO deck_cards (deck_id, card_id, quantity, is_commander) "
+            "VALUES ('deck3', 'cmd1', 1, TRUE)"
+        )
+        # 30 Forests
+        conn.execute(
+            "INSERT INTO deck_cards (deck_id, card_id, quantity, is_commander) "
+            "VALUES ('deck3', 'land1', 30, FALSE)"
+        )
+        # 5 Sol Rings (hypothetical)
+        conn.execute(
+            "INSERT INTO deck_cards (deck_id, card_id, quantity, is_commander) "
+            "VALUES ('deck3', 'ramp1', 5, FALSE)"
+        )
+        conn.commit()
+        conn.close()
+
+        analyzer = GameKnightsAnalyzer(db_path)
+        patterns = analyzer.analyze()
+
+        # deck3 has 30 lands — should pull up the max
+        assert patterns.land_counts.max >= 30.0
+        # deck3 has 5 ramp — should appear in stats
+        assert patterns.ramp_counts.max >= 5.0
+
+
 def test_analyzer_color_distribution() -> None:
     """Color distribution reflects commander colors."""
     with tempfile.TemporaryDirectory() as tmpdir:
