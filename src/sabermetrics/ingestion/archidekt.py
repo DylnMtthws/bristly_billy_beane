@@ -1,6 +1,7 @@
 """Archidekt decklist ingestion via mtg-parser.
 
 Parses Archidekt deck URLs into the decks and deck_cards tables.
+Uses the /api/decks/v3/ search endpoint to discover popular decks.
 """
 
 import logging
@@ -46,9 +47,11 @@ class ArchidektIngestion(DecklistIngestionBase):
             return False
 
     def _discover_deck_urls(self, limit: int = 100) -> list[str]:
-        """Discover popular deck URLs from Archidekt.
+        """Discover popular Commander deck URLs from Archidekt.
 
-        Searches for popular commander decks via Archidekt's API.
+        Uses /api/decks/v3/ search endpoint. Note: Archidekt's API
+        has limited server-side filtering, so results may not be
+        precisely commander-only. Client-side filtering is applied.
         """
         urls: list[str] = []
         commanders = self._get_top_commanders(limit=20)
@@ -60,7 +63,7 @@ class ArchidektIngestion(DecklistIngestionBase):
             try:
                 self._rate_limiter.wait()
                 resp = httpx.get(
-                    f"{ARCHIDEKT_API_URL}/decks/cards/",
+                    f"{ARCHIDEKT_API_URL}/decks/v3/",
                     params={
                         "deckFormat": 3,  # Commander format
                         "commanders": commander_name,
