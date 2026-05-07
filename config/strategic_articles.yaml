@@ -1,0 +1,12 @@
+# Curated strategic articles for reference layer
+# These are fetched and chunked as tier-3 reference material
+
+articles: []
+# Note: Article fetching is deferred. URLs require manual curation
+# and many sites block scraping. The chunker and indexer are ready
+# to process articles when URLs are added here.
+#
+# Example format:
+# - slug: karsten-mana-base
+#   url: "https://example.com/article"
+#   description: "Frank Karsten's mana base mathematics"

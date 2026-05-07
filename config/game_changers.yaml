@@ -1,0 +1,83 @@
+# WotC Official Game Changer Cards (per bracket framework)
+# Source: https://magic.wizards.com/en/news/announcements/commander-format-update
+last_updated: 2025-02-14
+
+game_changers:
+  - card_name: "Dockside Extortionist"
+    bracket_threshold: 4
+    rationale: "Generates massive amounts of treasure tokens based on opponents' artifacts/enchantments"
+  - card_name: "Thassa's Oracle"
+    bracket_threshold: 4
+    rationale: "Enables two-card combo wins with Demonic Consultation / Tainted Pact"
+  - card_name: "Thoracle"
+    bracket_threshold: 4
+    rationale: "Alias for Thassa's Oracle combo"
+  - card_name: "Mana Crypt"
+    bracket_threshold: 4
+    rationale: "Free fast mana dramatically accelerates game pace"
+  - card_name: "Sol Ring"
+    bracket_threshold: 3
+    rationale: "Ubiquitous fast mana, lower threshold due to universal inclusion"
+  - card_name: "Mana Vault"
+    bracket_threshold: 4
+    rationale: "Fast mana with significant acceleration potential"
+  - card_name: "Fierce Guardianship"
+    bracket_threshold: 4
+    rationale: "Free counterspell with commander on battlefield"
+  - card_name: "Deflecting Swat"
+    bracket_threshold: 4
+    rationale: "Free redirect spell with commander on battlefield"
+  - card_name: "Deadly Rollick"
+    bracket_threshold: 4
+    rationale: "Free removal with commander on battlefield"
+  - card_name: "Jeweled Lotus"
+    bracket_threshold: 4
+    rationale: "Banned — free commander-specific mana"
+  - card_name: "Rhystic Study"
+    bracket_threshold: 4
+    rationale: "Persistent card advantage engine that taxes all opponents"
+  - card_name: "Smothering Tithe"
+    bracket_threshold: 4
+    rationale: "Persistent mana generation that taxes all opponents"
+  - card_name: "Cyclonic Rift"
+    bracket_threshold: 4
+    rationale: "One-sided asymmetric board wipe"
+  - card_name: "Demonic Tutor"
+    bracket_threshold: 4
+    rationale: "Unconditional tutor for any card"
+  - card_name: "Vampiric Tutor"
+    bracket_threshold: 4
+    rationale: "Instant-speed unconditional tutor"
+  - card_name: "Mystical Tutor"
+    bracket_threshold: 4
+    rationale: "Instant-speed tutor for instants/sorceries"
+  - card_name: "Enlightened Tutor"
+    bracket_threshold: 4
+    rationale: "Instant-speed tutor for artifacts/enchantments"
+  - card_name: "Worldly Tutor"
+    bracket_threshold: 3
+    rationale: "Instant-speed creature tutor, lower impact than others"
+  - card_name: "Ad Nauseam"
+    bracket_threshold: 4
+    rationale: "Draws massive hands in low-CMC decks"
+  - card_name: "Necropotence"
+    bracket_threshold: 4
+    rationale: "Converts life to massive card advantage"
+  - card_name: "Food Chain"
+    bracket_threshold: 4
+    rationale: "Enables infinite mana combos with specific commanders"
+  - card_name: "Gaea's Cradle"
+    bracket_threshold: 4
+    rationale: "Generates massive mana in creature-heavy boards"
+  - card_name: "Serra's Sanctum"
+    bracket_threshold: 4
+    rationale: "Generates massive mana in enchantment-heavy boards"
+  - card_name: "The Tabernacle at Pendrell Vale"
+    bracket_threshold: 4
+    rationale: "Punishes creature strategies asymmetrically"
+  - card_name: "Opposition Agent"
+    bracket_threshold: 4
+    rationale: "Steals opponents' tutored cards"
+  - card_name: "Drannith Magistrate"
+    bracket_threshold: 4
+    rationale: "Prevents commanders from being cast"

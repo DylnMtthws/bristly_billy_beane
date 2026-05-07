@@ -1,0 +1,320 @@
+# Hand-curated synergy rules for pattern matching
+# Each rule defines a trigger-payoff pair with strength score
+# Used by the analytics layer to identify card synergies
+
+rules:
+  # --- Creature/Token synergies ---
+  - id: tokens_with_sacrifice_payoff
+    trigger:
+      text_contains: ["create", "token"]
+    payoff:
+      text_contains: ["sacrifice"]
+    strength: 0.8
+    description: "Token generators pair with sacrifice outlets"
+
+  - id: tokens_with_anthem
+    trigger:
+      text_contains: ["create", "token"]
+    payoff:
+      text_contains: ["creatures you control get +"]
+    strength: 0.7
+    description: "Token generators pair with anthem effects"
+
+  - id: tokens_with_overrun
+    trigger:
+      text_contains: ["create", "token"]
+    payoff:
+      text_contains: ["trample", "creatures you control"]
+    strength: 0.6
+    description: "Wide token boards benefit from mass trample"
+
+  - id: etb_with_flicker
+    trigger:
+      text_contains: ["enters the battlefield"]
+    payoff:
+      text_contains: ["exile", "return", "to the battlefield"]
+    strength: 0.9
+    description: "ETB triggers pair with flicker/blink effects"
+
+  - id: etb_with_panharmonicon
+    trigger:
+      text_contains: ["enters the battlefield"]
+    payoff:
+      text_contains: ["additional time"]
+    strength: 0.9
+    description: "ETB triggers pair with doubling effects"
+
+  # --- Mana/Ramp synergies ---
+  - id: untap_lands_with_high_cost_activated
+    trigger:
+      text_contains: ["untap", "land"]
+    payoff:
+      text_contains: ["{T}:"]
+      cmc_range: [0, 3]
+    strength: 0.7
+    description: "Land untappers pair with tap-activated abilities"
+
+  - id: mana_doubler_with_x_spells
+    trigger:
+      text_contains: ["add", "additional", "mana"]
+    payoff:
+      text_contains: ["{X}"]
+    strength: 0.8
+    description: "Mana doublers pair with X-cost spells"
+
+  - id: cost_reduction_with_expensive_spells
+    trigger:
+      text_contains: ["costs", "less to cast"]
+    payoff:
+      cmc_range: [5, 15]
+    strength: 0.6
+    description: "Cost reducers pair with expensive spells"
+
+  # --- Spellslinger synergies ---
+  - id: spellslinger_count_triggers
+    trigger:
+      text_contains: ["instant or sorcery"]
+      type_includes: ["Instant", "Sorcery"]
+    payoff:
+      text_contains: ["whenever you cast", "instant or sorcery"]
+    strength: 0.8
+    description: "Instants/sorceries trigger spellslinger payoffs"
+
+  - id: spell_copy_with_high_impact
+    trigger:
+      text_contains: ["copy", "spell"]
+    payoff:
+      text_contains: ["each opponent", "all creatures"]
+    strength: 0.7
+    description: "Spell copiers pair with high-impact targets"
+
+  - id: cantrips_with_prowess
+    trigger:
+      text_contains: ["draw a card"]
+      cmc_range: [0, 2]
+    payoff:
+      keywords: ["Prowess"]
+    strength: 0.6
+    description: "Cheap cantrips trigger prowess multiple times"
+
+  # --- Graveyard synergies ---
+  - id: graveyard_recursion_with_self_mill
+    trigger:
+      text_contains: ["mill", "into your graveyard"]
+    payoff:
+      text_contains: ["from your graveyard"]
+    strength: 0.9
+    description: "Self-mill fills graveyard for recursion"
+
+  - id: reanimation_with_big_creatures
+    trigger:
+      text_contains: ["return", "creature", "from your graveyard", "to the battlefield"]
+    payoff:
+      type_includes: ["Creature"]
+      cmc_range: [6, 15]
+    strength: 0.8
+    description: "Reanimation cheats expensive creatures into play"
+
+  - id: death_triggers_with_sacrifice
+    trigger:
+      text_contains: ["when", "dies"]
+    payoff:
+      text_contains: ["sacrifice"]
+    strength: 0.8
+    description: "Death triggers pair with sacrifice outlets"
+
+  - id: dredge_with_graveyard_payoffs
+    trigger:
+      keywords: ["Dredge"]
+    payoff:
+      text_contains: ["from your graveyard"]
+    strength: 0.7
+    description: "Dredge fills graveyard for various payoffs"
+
+  # --- Draw/Card advantage synergies ---
+  - id: draw_triggers_with_card_draw
+    trigger:
+      text_contains: ["whenever you draw"]
+    payoff:
+      text_contains: ["draw", "cards"]
+    strength: 0.8
+    description: "Draw triggers scale with card draw volume"
+
+  - id: discard_with_madness
+    trigger:
+      text_contains: ["discard"]
+    payoff:
+      keywords: ["Madness"]
+    strength: 0.9
+    description: "Forced discard turns into free casting with madness"
+
+  - id: wheels_with_draw_triggers
+    trigger:
+      text_contains: ["each player", "draws", "discards"]
+    payoff:
+      text_contains: ["whenever", "draw"]
+    strength: 0.8
+    description: "Wheel effects trigger draw payoffs en masse"
+
+  # --- Combat synergies ---
+  - id: evasion_with_combat_damage_triggers
+    trigger:
+      keywords: ["Flying", "Menace", "Trample"]
+    payoff:
+      text_contains: ["deals combat damage"]
+    strength: 0.7
+    description: "Evasion keywords enable combat damage triggers"
+
+  - id: equipment_with_voltron
+    trigger:
+      type_includes: ["Equipment"]
+    payoff:
+      text_contains: ["equipped creature"]
+    strength: 0.6
+    description: "Equipment synergizes with equipment-matters effects"
+
+  - id: double_strike_with_power_boost
+    trigger:
+      keywords: ["Double strike"]
+    payoff:
+      text_contains: ["gets +", "power"]
+    strength: 0.8
+    description: "Double strike doubles the value of power boosts"
+
+  # --- Control synergies ---
+  - id: counterspells_with_flash
+    trigger:
+      type_includes: ["Instant"]
+      text_contains: ["counter target"]
+    payoff:
+      keywords: ["Flash"]
+    strength: 0.5
+    description: "Counterspells pair with flash creatures for mana efficiency"
+
+  - id: stax_with_asymmetric_break
+    trigger:
+      text_contains: ["can't", "each player"]
+    payoff:
+      text_contains: ["you may", "you don't"]
+    strength: 0.9
+    description: "Stax pieces pair with cards that break symmetry"
+
+  # --- Enchantment synergies ---
+  - id: enchantress_with_enchantments
+    trigger:
+      text_contains: ["whenever you cast an enchantment"]
+    payoff:
+      type_includes: ["Enchantment"]
+    strength: 0.7
+    description: "Enchantress effects reward casting enchantments"
+
+  - id: constellation_with_enchantments
+    trigger:
+      text_contains: ["enchantment enters the battlefield"]
+    payoff:
+      type_includes: ["Enchantment"]
+    strength: 0.7
+    description: "Constellation triggers on enchantment ETBs"
+
+  # --- Artifact synergies ---
+  - id: artifact_recursion_with_sacrifice
+    trigger:
+      text_contains: ["sacrifice", "artifact"]
+    payoff:
+      text_contains: ["return", "artifact", "from your graveyard"]
+    strength: 0.8
+    description: "Artifact sacrifice pairs with artifact recursion"
+
+  - id: artifact_cost_reduction
+    trigger:
+      text_contains: ["artifact", "costs", "less"]
+    payoff:
+      type_includes: ["Artifact"]
+      cmc_range: [3, 10]
+    strength: 0.6
+    description: "Artifact cost reducers pair with expensive artifacts"
+
+  # --- Lands-matter synergies ---
+  - id: landfall_with_extra_lands
+    trigger:
+      text_contains: ["play an additional land"]
+    payoff:
+      text_contains: ["whenever a land enters"]
+    strength: 0.9
+    description: "Extra land drops multiply landfall triggers"
+
+  - id: land_recursion_with_sacrifice_lands
+    trigger:
+      text_contains: ["return", "land", "from your graveyard"]
+    payoff:
+      text_contains: ["sacrifice", "land"]
+    strength: 0.8
+    description: "Land recursion enables repeated sacrifice-land value"
+
+  # --- Lifegain synergies ---
+  - id: lifegain_triggers
+    trigger:
+      text_contains: ["whenever you gain life"]
+    payoff:
+      text_contains: ["gain", "life"]
+    strength: 0.7
+    description: "Lifegain triggers pair with life-gaining effects"
+
+  - id: lifegain_with_payment
+    trigger:
+      text_contains: ["gain", "life"]
+    payoff:
+      text_contains: ["pay", "life"]
+    strength: 0.6
+    description: "Lifegain offsets life payment costs"
+
+  # --- Tribal synergies ---
+  - id: tribal_lord_with_tribe
+    trigger:
+      text_contains: ["other", "you control get +"]
+    payoff:
+      type_includes: ["Creature"]
+    strength: 0.5
+    description: "Tribal lords boost creatures of the same type"
+
+  - id: changeling_with_tribal
+    trigger:
+      keywords: ["Changeling"]
+    payoff:
+      text_contains: ["you control get +"]
+    strength: 0.6
+    description: "Changelings count for all tribal synergies"
+
+  # --- Topdeck manipulation ---
+  - id: topdeck_with_cascade
+    trigger:
+      text_contains: ["look at the top", "scry"]
+    payoff:
+      keywords: ["Cascade"]
+    strength: 0.6
+    description: "Top-deck manipulation improves cascade hits"
+
+  - id: topdeck_with_miracle
+    trigger:
+      text_contains: ["look at the top", "scry"]
+    payoff:
+      keywords: ["Miracle"]
+    strength: 0.8
+    description: "Top-deck manipulation enables miracle costs"
+
+  # --- Commander-specific ---
+  - id: partner_with_color_expansion
+    trigger:
+      text_contains: ["Partner"]
+    payoff:
+      text_contains: ["Partner"]
+    strength: 0.5
+    description: "Partner commanders expand available color identity"
+
+  - id: commander_tax_reduction
+    trigger:
+      text_contains: ["commander", "costs", "less"]
+    payoff:
+      text_contains: ["from the command zone"]
+    strength: 0.7
+    description: "Commander tax reduction enables repeated casting"
