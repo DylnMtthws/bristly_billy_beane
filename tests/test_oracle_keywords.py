@@ -489,6 +489,67 @@ def test_sacrifice_card_matches_sacrifice_synergy() -> None:
     assert card_matches_referenced_keywords(card, [], ["sacrifice_synergy"]) is True
 
 
+def test_toughness_matters_rejects_base_stat_setting() -> None:
+    """Cards that set 'base power and toughness' do NOT match toughness_matters.
+
+    Regression test: cards like Warkite Marauder mention 'toughness' in
+    stat-setting text but don't mechanically care about high toughness.
+    """
+    marauder = _make_card(
+        "Warkite Marauder",
+        oracle_text=(
+            "Flying. Whenever Warkite Marauder attacks, target creature "
+            "defending player controls loses all abilities and has base "
+            "power and toughness 0/1 until end of turn."
+        ),
+        type_line="Creature — Human Pirate",
+        keywords=["Flying"],
+    )
+    assert card_matches_referenced_keywords(
+        marauder, [], ["toughness_matters"]
+    ) is False
+
+    spirit = _make_card(
+        "Ascendant Spirit",
+        oracle_text=(
+            "Ascendant Spirit becomes a Spirit Warrior with base power "
+            "and toughness 2/3."
+        ),
+        type_line="Creature — Spirit",
+        keywords=["Flying"],
+    )
+    assert card_matches_referenced_keywords(
+        spirit, [], ["toughness_matters"]
+    ) is False
+
+
+def test_toughness_matters_accepts_damage_equal_to_toughness() -> None:
+    """Cards with 'assigns combat damage equal to its toughness' match."""
+    assault = _make_card(
+        "Assault Formation",
+        oracle_text=(
+            "Each creature you control assigns combat damage equal to "
+            "its toughness rather than its power."
+        ),
+        type_line="Enchantment",
+    )
+    assert card_matches_referenced_keywords(
+        assault, [], ["toughness_matters"]
+    ) is True
+
+
+def test_toughness_matters_accepts_toughness_buff() -> None:
+    """Cards with +0/+X toughness-only buffs match."""
+    tower = _make_card(
+        "Tower Defense",
+        oracle_text="Creatures you control get +0/+5 and gain reach until end of turn.",
+        type_line="Instant",
+    )
+    assert card_matches_referenced_keywords(
+        tower, [], ["toughness_matters"]
+    ) is True
+
+
 def test_high_cmc_card_matches_cost_reduction() -> None:
     """Card with CMC >= 5 matches cost_reduction."""
     card = _make_card("Blightsteel Colossus", type_line="Artifact Creature — Phyrexian Golem")

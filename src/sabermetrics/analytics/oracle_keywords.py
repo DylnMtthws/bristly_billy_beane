@@ -294,8 +294,20 @@ def card_matches_referenced_keywords(
             # Walls and high-toughness creatures
             if "wall" in type_line or "defender" in card_keywords:
                 return True
-            # Cards that reference toughness
-            if "toughness" in card_oracle:
+            # Cards that mechanically USE toughness as a resource —
+            # not cards that merely set or mention toughness values
+            # (e.g. "base power and toughness 0/1" is NOT relevant).
+            if re.search(
+                r"(?:"
+                r"equal to (?:its |that creature's |their )?toughness"
+                r"|toughness (?:is )?greater than"
+                r"|total toughness"
+                r"|(?:creatures?|permanents?)\s+(?:you control\s+)?with defender"
+                r"|\+0/\+\d"
+                r"|assigns? combat damage equal to"
+                r")",
+                card_oracle,
+            ):
                 return True
         elif mech == "artifact_creature":
             if "artifact" in type_line and "creature" in type_line:
