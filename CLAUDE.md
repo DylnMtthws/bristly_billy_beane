@@ -412,11 +412,11 @@ Track progress here. Update as phases complete.
 
 ```yaml
 status:
-  current_phase: "Phase 1 - Foundation"
-  completed_phases: []
-  in_progress: ["Foundation: directory structure, SQLite schema setup"]
+  current_phase: "Phase 3 - Reference Layer"
+  completed_phases: ["P1", "P2"]
+  in_progress: []
   blocked: []
-  notes: "Initial scaffolding underway"
+  notes: "Phase 1 & 2 complete. All ingestion sources implemented and tested."
 ```
 
 </context>

@@ -1,6 +1,14 @@
 """CLI interface for Sabermetrics."""
 
+import json
+from pathlib import Path
+
 import click
+
+
+def _default_db_path() -> Path:
+    """Resolve the default database path."""
+    return Path("data/sabermetrics.db")
 
 
 @click.group()
@@ -80,7 +88,24 @@ def report(period: str) -> None:
 @cli.command()
 def health() -> None:
     """Show status of all data sources."""
-    click.echo("Not implemented yet")
+    from sabermetrics.ingestion.health import SourceHealthMonitor
+
+    db_path = _default_db_path()
+    monitor = SourceHealthMonitor(db_path)
+    records = monitor.get_health_report()
+
+    if not records:
+        click.echo("No source health data recorded yet.")
+        return
+
+    click.echo(f"{'Source':<15} {'Last Success':<22} {'Last Failure':<22} {'Failures':>8}")
+    click.echo("-" * 70)
+    for rec in records:
+        source = rec.get("source", "?")
+        last_ok = rec.get("last_successful_sync", "-") or "-"
+        last_fail = rec.get("last_failed_sync", "-") or "-"
+        failures = rec.get("consecutive_failures", 0)
+        click.echo(f"{source:<15} {str(last_ok):<22} {str(last_fail):<22} {failures:>8}")
 
 
 @cli.command()
@@ -88,4 +113,48 @@ def health() -> None:
 @click.option("--full", is_flag=True, help="Full refresh instead of incremental.")
 def sync(source: str | None, full: bool) -> None:
     """Sync data from external sources."""
-    click.echo("Not implemented yet")
+    from sabermetrics.ingestion.scryfall import ScryfallIngestion
+    from sabermetrics.ingestion.topdeck import TopDeckIngestion
+    from sabermetrics.ingestion.edhrec import EDHRECIngestion
+    from sabermetrics.ingestion.spellbook import SpellbookIngestion
+    from sabermetrics.ingestion.mtgapi import MtgApiIngestion
+    from sabermetrics.ingestion.moxfield import MoxfieldIngestion
+    from sabermetrics.ingestion.archidekt import ArchidektIngestion
+    from sabermetrics.ingestion.deckstats import DeckstatsIngestion
+
+    db_path = _default_db_path()
+
+    all_sources = {
+        "scryfall": ScryfallIngestion(db_path),
+        "topdeck": TopDeckIngestion(db_path),
+        "edhrec": EDHRECIngestion(db_path),
+        "spellbook": SpellbookIngestion(db_path),
+        "mtgapi": MtgApiIngestion(db_path),
+        "moxfield": MoxfieldIngestion(db_path),
+        "archidekt": ArchidektIngestion(db_path),
+        "deckstats": DeckstatsIngestion(db_path),
+    }
+
+    if source:
+        if source not in all_sources:
+            click.echo(f"Unknown source '{source}'. Available: {', '.join(all_sources)}")
+            return
+        sources_to_sync = {source: all_sources[source]}
+    else:
+        sources_to_sync = all_sources
+
+    for name, src in sources_to_sync.items():
+        click.echo(f"Syncing {name}...")
+        try:
+            result = src.sync(full=full)
+            click.echo(
+                f"  {name}: ingested={result.items_ingested}, "
+                f"updated={result.items_updated}, "
+                f"failed={result.items_failed}, "
+                f"success={result.success}"
+            )
+            if result.errors:
+                for err in result.errors[:5]:
+                    click.echo(f"  Error: {err}")
+        except Exception as e:
+            click.echo(f"  {name}: FAILED - {e}")

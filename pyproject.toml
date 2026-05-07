@@ -12,6 +12,8 @@ dependencies = [
     "click",
     "flask",
     "httpx",
+    "mtg-parser",
+    "mtgsdk",
     "numpy",
     "pandas",
     "pydantic>=2.0",
