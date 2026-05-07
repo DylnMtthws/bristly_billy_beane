@@ -73,6 +73,14 @@ class OutputSettings(BaseModel):
     alternatives_per_slot: int = 3
 
 
+class KnowledgeBaseSettings(BaseModel):
+    """Knowledge base build settings."""
+
+    game_knights_archidekt_owner: str = "GameKnights"
+    game_knights_fallback_deck_ids: list[str] = Field(default_factory=list)
+    edhrec_articles: list[dict[str, str]] = Field(default_factory=list)
+
+
 class Settings(BaseModel):
     """Top-level settings container."""
 
@@ -82,6 +90,7 @@ class Settings(BaseModel):
     pipeline: PipelineSettings = Field(default_factory=PipelineSettings)
     refresh: RefreshSettings = Field(default_factory=RefreshSettings)
     output: OutputSettings = Field(default_factory=OutputSettings)
+    knowledge_base: KnowledgeBaseSettings = Field(default_factory=KnowledgeBaseSettings)
 
 
 def _find_config_path() -> Path:

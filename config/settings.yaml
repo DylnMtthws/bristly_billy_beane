@@ -39,3 +39,12 @@ output:
   deck_format: "json"
   include_alternatives: true
   alternatives_per_slot: 3
+
+knowledge_base:
+  game_knights_archidekt_owner: "GameKnights"
+  game_knights_fallback_deck_ids: []
+  edhrec_articles:
+    - slug: "how-to-build-commander-deck"
+      url: "https://edhrec.com/articles/how-to-build-a-commander-deck"
+    - slug: "superior-numbers-land-counts"
+      url: "https://edhrec.com/articles/superior-numbers-land-counts"

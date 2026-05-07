@@ -234,6 +234,39 @@ def health() -> None:
         click.echo(f"{source:<15} {str(last_ok):<22} {str(last_fail):<22} {failures:>8}")
 
 
+@cli.command(name="build-kb")
+@click.option("--skip-ingest", is_flag=True, help="Skip Game Knights deck ingestion.")
+@click.option("--skip-fetch", is_flag=True, help="Skip EDHREC article fetching.")
+def build_kb(skip_ingest: bool, skip_fetch: bool) -> None:
+    """Build the deckbuilding knowledge base."""
+    import subprocess
+    import sys
+
+    scripts_dir = Path(__file__).resolve().parent.parent.parent / "scripts"
+    script = scripts_dir / "build_deckbuilding_kb.py"
+
+    if not script.exists():
+        click.echo(f"Script not found: {script}")
+        return
+
+    db_path = _default_db_path()
+    cmd = [sys.executable, str(script), "--db-path", str(db_path)]
+    if skip_ingest:
+        cmd.append("--skip-ingest")
+    if skip_fetch:
+        cmd.append("--skip-fetch")
+
+    click.echo("Building deckbuilding knowledge base...")
+    result = subprocess.run(
+        cmd,
+        env={**__import__("os").environ, "PYTHONPATH": str(scripts_dir.parent / "src")},
+    )
+    if result.returncode != 0:
+        click.echo("Knowledge base build completed with errors (check logs)")
+    else:
+        click.echo("Knowledge base built successfully.")
+
+
 @cli.command()
 @click.option("--source", default=None, help="Specific source to sync.")
 @click.option("--full", is_flag=True, help="Full refresh instead of incremental.")
