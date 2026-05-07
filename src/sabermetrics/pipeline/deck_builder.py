@@ -336,10 +336,24 @@ class DeckBuilder:
     ) -> list[dict]:
         """Step 5: Score by CVAR composite and sort."""
         from sabermetrics.analytics.cvar import ScoringContext, compute_cvar
+        from sabermetrics.analytics.oracle_keywords import (
+            card_matches_referenced_keywords,
+            extract_referenced_keywords,
+            extract_referenced_mechanics,
+        )
         from sabermetrics.config import settings
 
         target = settings.pipeline.structural_filter_target
         weights = request.weights or CVARWeights()
+
+        # Extract keywords the commander references in oracle text
+        ref_keywords = extract_referenced_keywords(commander.oracle_text)
+        ref_mechanics = extract_referenced_mechanics(commander.oracle_text)
+        if ref_keywords or ref_mechanics:
+            logger.info(
+                "Commander %s references keywords=%s mechanics=%s",
+                commander.name, ref_keywords, ref_mechanics,
+            )
 
         context = ScoringContext(
             commander_id=commander.id,
@@ -347,6 +361,8 @@ class DeckBuilder:
             commander_colors=commander.color_identity,
             commander_keywords=commander.keywords or [],
             commander_oracle_text=commander.oracle_text,
+            referenced_keywords=ref_keywords,
+            referenced_mechanics=ref_mechanics,
             weights_synergy=weights.synergy,
             weights_mana_efficiency=weights.mana_efficiency,
             weights_replacement_value=weights.replacement_value,
@@ -367,6 +383,7 @@ class DeckBuilder:
         # Include all lands in the pool regardless of score
         keep = max(target, settings.llm.max_candidates_for_llm_fit)
         top_cards = [card for card, _ in scored[:keep]]
+        top_card_ids = {id(card) for card in top_cards}
 
         # Also ensure we have enough lands
         land_cards = [
@@ -374,8 +391,30 @@ class DeckBuilder:
             if "land" in (card.get("type_line") or "").lower()
         ]
         for lc in land_cards:
-            if lc not in top_cards:
+            if id(lc) not in top_card_ids:
                 top_cards.append(lc)
+                top_card_ids.add(id(lc))
+
+        # Candidate pool guarantee: promote cards matching referenced
+        # keywords that fell below the CVAR cutoff into the LLM pool.
+        if ref_keywords or ref_mechanics:
+            promoted = 0
+            for card, _ in scored[keep:]:
+                if id(card) in top_card_ids:
+                    continue
+                if "land" in (card.get("type_line") or "").lower():
+                    continue
+                if card_matches_referenced_keywords(
+                    card, ref_keywords, ref_mechanics
+                ):
+                    top_cards.append(card)
+                    top_card_ids.add(id(card))
+                    promoted += 1
+            if promoted:
+                logger.info(
+                    "Promoted %d keyword-matching cards into LLM pool",
+                    promoted,
+                )
 
         return top_cards
 

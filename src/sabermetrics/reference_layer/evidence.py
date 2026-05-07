@@ -237,6 +237,10 @@ class EvidenceAggregator:
     def _get_reference_chunks(self, commander: Card) -> list[ReferenceChunk]:
         """Retrieve relevant reference chunks via embedding search."""
         try:
+            from sabermetrics.analytics.oracle_keywords import (
+                extract_referenced_keywords,
+                extract_referenced_mechanics,
+            )
             from sabermetrics.reference_layer.retriever import (
                 ReferenceQuery,
                 ReferenceRetriever,
@@ -254,6 +258,24 @@ class EvidenceAggregator:
             if commander.keywords:
                 for kw in commander.keywords[:3]:
                     queries.append(f"{kw} keyword ability rules")
+
+            # Add oracle-text-referenced keyword queries
+            ref_keywords = extract_referenced_keywords(commander.oracle_text)
+            for ref_kw in ref_keywords[:3]:
+                queries.append(f"{ref_kw} keyword ability rules")
+                queries.append(f"creatures with {ref_kw} strategy")
+
+            # Add mechanic-based queries
+            ref_mechanics = extract_referenced_mechanics(commander.oracle_text)
+            mechanic_query_map = {
+                "toughness_matters": "toughness matters combat damage strategy",
+                "artifact_creature": "artifact creature synergy strategy",
+                "enchantment_creature": "enchantment creature synergy strategy",
+            }
+            for mech in ref_mechanics:
+                query_text = mechanic_query_map.get(mech)
+                if query_text:
+                    queries.append(query_text)
 
             all_chunks: list[ReferenceChunk] = []
             seen_ids: set[str] = set()

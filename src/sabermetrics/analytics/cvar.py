@@ -35,6 +35,8 @@ class ScoringContext(BaseModel):
     commander_colors: list[str]
     commander_keywords: list[str] = Field(default_factory=list)
     commander_oracle_text: Optional[str] = None
+    referenced_keywords: list[str] = Field(default_factory=list)
+    referenced_mechanics: list[str] = Field(default_factory=list)
     weights_synergy: float = 0.35
     weights_mana_efficiency: float = 0.25
     weights_replacement_value: float = 0.25
@@ -75,6 +77,18 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
             shared += 1
     if shared > 0:
         score += min(0.4, shared * 0.1)
+
+    # Referenced keyword/mechanic match (commander references keywords it
+    # doesn't possess, e.g. Arcades → defender)
+    if context.referenced_keywords or context.referenced_mechanics:
+        from sabermetrics.analytics.oracle_keywords import (
+            card_matches_referenced_keywords,
+        )
+
+        if card_matches_referenced_keywords(
+            card, context.referenced_keywords, context.referenced_mechanics
+        ):
+            score += 0.4
 
     # Color alignment bonus (more colors shared = better)
     card_ci = card.get("color_identity", "[]")
