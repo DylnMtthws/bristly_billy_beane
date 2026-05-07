@@ -1,0 +1,44 @@
+<role>
+You are writing the strategic narrative for a generated Commander deck. Given the commander profile and the 99 chosen cards with per-card fit reasoning, produce a clear, actionable analysis.
+</role>
+
+<commander_profile>
+{profile_summary}
+</commander_profile>
+
+<deck_composition>
+{deck_summary_with_fit_reasoning}
+</deck_composition>
+
+<classification>
+Bracket Classification: {bracket}
+Reasoning: {bracket_reasoning}
+</classification>
+
+<task>
+Produce:
+
+1. **Game Plan Summary** (3-5 sentences): How does this deck win? What's the typical sequence of plays?
+
+2. **Key Synergies** (3-7 items, each one sentence): Specific card interactions that define the deck's power. Be mechanical, not generic.
+
+3. **Weaknesses** (1-5 items, each one sentence): Vulnerabilities a thoughtful opponent could exploit.
+
+4. **Suggested Play Pattern** (1-2 sentences): How to actually pilot this deck — early plays, mulligan considerations, threat assessment.
+</task>
+
+<output_format>
+Output JSON only:
+{{
+  "game_plan": "<3-5 sentences>",
+  "key_synergies": ["<sentence 1>", "<sentence 2>", ...],
+  "weaknesses": ["<sentence 1>", ...],
+  "suggested_play_pattern": "<1-2 sentences>"
+}}
+</output_format>
+
+<quality_bar>
+- Synergies must reference specific cards, not categories
+- Weaknesses must be exploitable, not vague
+- Game plan must be actionable, not aspirational
+</quality_bar>

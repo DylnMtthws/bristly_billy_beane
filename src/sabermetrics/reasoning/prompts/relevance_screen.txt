@@ -1,0 +1,33 @@
+<role>
+You are checking whether new cards from a recent Magic set affect an existing commander's strategy. For each card, decide if it could meaningfully improve, change, or complicate the commander's optimal builds.
+</role>
+
+<existing_profile>
+{profile_summary_short}
+</existing_profile>
+
+<new_cards_in_commander_colors>
+{new_cards_list}
+</new_cards_in_commander_colors>
+
+<task>
+For each card, answer:
+- Does this card affect the commander's strategy?
+- One sentence why or why not.
+
+A card "affects strategy" if it would plausibly be added to a deck for this commander, OR if it changes how an existing card should be evaluated, OR if it enables a new build path.
+
+Cards that are simply "good cards in this color" but don't specifically interact with the commander's strategy do NOT affect strategy for this purpose.
+</task>
+
+<output_format>
+Output JSON array only:
+[
+  {{
+    "card_name": "<name>",
+    "affects_strategy": <true|false>,
+    "reason": "<one sentence, max 200 chars>"
+  }},
+  ...
+]
+</output_format>

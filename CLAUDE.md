@@ -412,11 +412,11 @@ Track progress here. Update as phases complete.
 
 ```yaml
 status:
-  current_phase: "Phase 5 - LLM Reasoning"
-  completed_phases: ["P1", "P2", "P3", "P4"]
+  current_phase: "Phase 6 - Deck Assembly"
+  completed_phases: ["P1", "P2", "P3", "P4", "P5"]
   in_progress: []
   blocked: []
-  notes: "Phase 1-4 complete. Analytics layer: filters (104K→20K cards for BRG), CVAR scoring (<1ms/card), component analysis, bracket classification, co-occurrence/CWE builders, embedding service. 41 tests passing."
+  notes: "Phase 1-5 complete. LLM reasoning layer: Anthropic client with cost tracking/caching/ceiling, 4 prompt templates, evidence aggregator, profile manager with cache, per-card fit scorer, deck synthesizer. 55 tests passing."
 ```
 
 </context>

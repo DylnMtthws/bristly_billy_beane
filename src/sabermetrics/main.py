@@ -23,7 +23,47 @@ def cli() -> None:
 @click.option("--force-refresh", is_flag=True, help="Force profile regeneration.")
 def profile(commander_name: str, user_intent: str | None, force_refresh: bool) -> None:
     """Generate or retrieve a commander profile."""
-    click.echo("Not implemented yet")
+    import json as _json
+    import sqlite3
+
+    db_path = _default_db_path()
+
+    # Look up commander by name
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.execute(
+        "SELECT id, name FROM cards WHERE name LIKE ? AND is_legal_commander = 1 LIMIT 1",
+        (f"%{commander_name}%",),
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        click.echo(f"Commander not found: {commander_name}")
+        return
+
+    commander_id, full_name = row
+    click.echo(f"Generating profile for {full_name}...")
+
+    from sabermetrics.reasoning.profiler import ProfileManager, ProfileRequest
+
+    manager = ProfileManager(db_path)
+    request = ProfileRequest(
+        commander_id=commander_id,
+        user_intent=user_intent,
+        force_refresh=force_refresh,
+    )
+
+    try:
+        result = manager.generate_profile(request)
+        click.echo(f"\nCache hit: {result.cache_hit}")
+        click.echo(f"Cost: ${result.generation_cost_usd:.4f}")
+        click.echo(f"Time: {result.generation_time_seconds:.1f}s")
+        click.echo(f"\nArchetype: {result.profile.strategic_profile.primary_archetype}")
+        click.echo(f"Game plan: {result.profile.strategic_profile.game_plan_summary}")
+        click.echo(f"Power range: {result.profile.strategic_profile.power_indicators.estimated_floor_bracket}"
+                    f"-{result.profile.strategic_profile.power_indicators.estimated_ceiling_bracket}")
+    except Exception as e:
+        click.echo(f"Profile generation failed: {e}")
 
 
 @cli.command()
@@ -62,7 +102,21 @@ def refresh_set(set_code: str) -> None:
 @click.option("--top-k", type=int, default=5, help="Number of results.")
 def search_rules(query: str, top_k: int) -> None:
     """Search reference material (rules, etc.)."""
-    click.echo("Not implemented yet")
+    from sabermetrics.reference_layer.retriever import ReferenceQuery, ReferenceRetriever
+
+    db_path = _default_db_path()
+    retriever = ReferenceRetriever(db_path)
+    rq = ReferenceQuery(query_text=query, top_k=top_k)
+    results = retriever.retrieve(rq)
+
+    if not results:
+        click.echo("No results found.")
+        return
+
+    for i, r in enumerate(results, 1):
+        click.echo(f"\n--- Result {i} [{r.similarity_score:.3f}] ---")
+        click.echo(f"Source: {r.document} / {r.section or 'N/A'}")
+        click.echo(r.content[:300])
 
 
 @cli.command()

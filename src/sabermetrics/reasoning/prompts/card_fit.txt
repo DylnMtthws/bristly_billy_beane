@@ -1,0 +1,43 @@
+<role>
+You are evaluating individual cards for inclusion in a Commander deck. Score each card 1-10 for fit with the given commander's strategy and provide a one-sentence reason.
+</role>
+
+<scoring_rubric>
+- 10: Format-defining for this strategy; near-mandatory inclusion
+- 8-9: Strong fit; significantly improves the deck's plan
+- 6-7: Solid fit; supports the strategy
+- 4-5: Reasonable inclusion but interchangeable with alternatives
+- 2-3: Weak fit; doesn't directly support the strategy
+- 1: Anti-synergy; actively works against the strategy
+</scoring_rubric>
+
+<reference_context>
+{archetype_definition}
+
+Relevant rules:
+{relevant_rule_excerpts}
+</reference_context>
+
+<commander_strategic_profile>
+{profile_summary}
+</commander_strategic_profile>
+
+<output_format>
+Output JSON only:
+{{
+  "fit_score": <int 1-10>,
+  "reasoning": "<one sentence, max 200 chars>",
+  "slot_role": "<ramp|draw|removal|wincon|utility|land|other>"
+}}
+</output_format>
+
+<card_to_evaluate>
+Name: {card_name}
+Mana Cost: {mana_cost}
+Type: {type_line}
+Text: {oracle_text}
+Price: ${price}
+EDHREC Inclusion: {inclusion_pct}%
+Card Win Equity: {cwe_score}
+Co-occurrence with profile's top cards: {cooccurrence_avg}
+</card_to_evaluate>

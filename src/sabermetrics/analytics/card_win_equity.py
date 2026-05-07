@@ -62,10 +62,11 @@ def compute_card_win_equity(
     try:
         # Get all tournament results with deck mappings
         cursor = conn.execute(
-            "SELECT tr.deck_id, tr.wins, tr.losses, d.commander_id "
+            "SELECT tr.deck_id, tr.games_won, tr.games_played, "
+            "tr.commander_id "
             "FROM tournament_results tr "
-            "JOIN decks d ON tr.deck_id = d.id "
-            "WHERE tr.wins IS NOT NULL AND tr.losses IS NOT NULL"
+            "WHERE tr.games_won IS NOT NULL AND tr.games_played IS NOT NULL "
+            "AND tr.deck_id IS NOT NULL"
         )
         results = cursor.fetchall()
 
@@ -74,12 +75,13 @@ def compute_card_win_equity(
             return 0
 
         # Build per-commander per-deck win rates
-        # commander_id -> deck_id -> (wins, losses)
+        # commander_id -> deck_id -> (wins, games)
         cmdr_decks: dict[str, dict[str, tuple[int, int]]] = {}
-        for deck_id, wins, losses, cmdr_id in results:
+        for deck_id, wins, games, cmdr_id in results:
             if cmdr_id not in cmdr_decks:
                 cmdr_decks[cmdr_id] = {}
-            cmdr_decks[cmdr_id][deck_id] = (wins, losses)
+            losses = (games or 0) - (wins or 0)
+            cmdr_decks[cmdr_id][deck_id] = (wins or 0, max(0, losses))
 
         now = datetime.now().isoformat()
         total_entries = 0
