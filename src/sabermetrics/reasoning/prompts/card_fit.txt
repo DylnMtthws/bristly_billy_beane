@@ -63,6 +63,10 @@ Output JSON only:
 }}
 </output_format>
 
+<deck_composition_context>
+{deck_composition_context}
+</deck_composition_context>
+
 <card_to_evaluate>
 Name: {card_name}
 Mana Cost: {mana_cost}

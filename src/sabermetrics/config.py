@@ -32,6 +32,7 @@ class LLMSettings(BaseModel):
     fit_model: str = "claude-haiku-4-5"
     synthesis_model: str = "claude-sonnet-4-6"
     refresh_model: str = "claude-haiku-4-5"
+    template_model: str = "claude-haiku-4-5"
     max_candidates_for_llm_fit: int = 50
     prompt_caching: bool = True
     monthly_cost_ceiling_usd: float = 5.0

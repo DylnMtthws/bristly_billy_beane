@@ -1,16 +1,14 @@
-"""Deck builder orchestrator (D6.2).
+"""Deck builder orchestrator (D6.2, restructured for 6.5.5).
 
-Runs the 10-step pipeline from SKILL-005:
-1. Validate request
-2. Acquire profile
-3. Filter candidates
-4. Embedding score (cosine similarity vs profile narrative)
-5. Structural score (CVAR composite)
-6. LLM fit reasoning (Haiku for top N)
-7. Assemble 99 cards (slot assigner)
-8. Synthesize narrative (Sonnet)
-9. Classify bracket
-10. Persist and return
+8-stage pipeline:
+1. Hard filters + role tag loading
+2. Pareto filter (remove dominated cards per role)
+3. Template derivation (profile-driven composition)
+4. Infrastructure fill (4 deterministic generators)
+5. Category coverage analysis
+6. Differentiator fill (deck-context-aware LLM scoring)
+7. Budget redistribution (upgrade/downgrade passes)
+8. Synthesis + classify + persist
 """
 
 import json
@@ -72,7 +70,7 @@ class DeckBuilder:
         self.db_path = db_path
 
     def build(self, request: DeckBuildRequest) -> DeckBuildResult:
-        """Execute the full 10-step deck building pipeline.
+        """Execute the 8-stage deck building pipeline.
 
         Args:
             request: Deck build parameters.
@@ -84,71 +82,120 @@ class DeckBuilder:
         metrics: dict[str, float] = {}
         total_cost = 0.0
 
-        # --- Step 1: Validate Request ---
+        # --- Validate & Profile (unchanged) ---
         t = time.time()
         commander = self._validate_request(request)
         metrics["1_validate"] = time.time() - t
 
-        # --- Step 2: Acquire Profile ---
         t = time.time()
         profile_result = self._acquire_profile(request, commander)
         profile = profile_result.profile
         total_cost += profile_result.generation_cost_usd
         metrics["2_profile"] = time.time() - t
 
-        # --- Step 3: Filter Candidates ---
+        # --- Stage 1: Hard Filters + Role Tag Loading ---
         t = time.time()
         candidates = self._filter_candidates(request, commander)
+        candidates = self._load_role_tags(candidates)
         metrics["3_filter"] = time.time() - t
-        logger.info("Step 3: %d candidates after hard filters", len(candidates))
+        logger.info("Stage 1: %d candidates after hard filters", len(candidates))
 
-        # --- Step 4: Embedding Score ---
-        t = time.time()
-        candidates = self._embedding_score(candidates, profile)
-        metrics["4_embedding"] = time.time() - t
-        logger.info("Step 4: %d candidates after embedding filter", len(candidates))
-
-        # --- Step 5: Structural Score ---
+        # --- Stage 2: Pareto Filter ---
         t = time.time()
         candidates = self._structural_score(
             candidates, commander, request, profile_result
         )
-        metrics["5_structural"] = time.time() - t
-        logger.info("Step 5: %d candidates after structural scoring", len(candidates))
+        candidates = self._pareto_filter(candidates)
+        metrics["4_pareto"] = time.time() - t
+        logger.info("Stage 2: %d candidates after Pareto filter", len(candidates))
 
-        # --- Step 6: LLM Fit Reasoning ---
+        # --- Stage 3: Template Derivation ---
         t = time.time()
-        scored_candidates, fit_cost = self._llm_fit_score(
-            candidates, profile, commander
+        template = self._derive_template(profile, request)
+        metrics["5_template"] = time.time() - t
+        logger.info(
+            "Stage 3: Template derived (%d land, %d ramp, %d draw, "
+            "%d removal, %d diff)",
+            template.land_count, template.ramp_count, template.draw_count,
+            template.removal_count, template.differentiator_slots,
+        )
+
+        # --- Stage 4: Infrastructure Fill ---
+        t = time.time()
+        infrastructure, budget_used = self._fill_infrastructure(
+            candidates, commander, request, template
+        )
+        metrics["6_infrastructure"] = time.time() - t
+        logger.info(
+            "Stage 4: %d infrastructure cards placed ($%.2f)",
+            len(infrastructure), budget_used,
+        )
+
+        # --- Stage 5: Category Coverage ---
+        t = time.time()
+        from sabermetrics.pipeline.category_coverage import analyze_category_coverage
+
+        slot_intents = analyze_category_coverage(
+            profile=profile,
+            partial_deck=[a.card for a in infrastructure],
+            remaining_slots=template.differentiator_slots,
+            remaining_budget=request.budget_usd - budget_used,
+        )
+        metrics["7_coverage"] = time.time() - t
+
+        # --- Stage 6: Differentiator Fill (LLM scoring) ---
+        t = time.time()
+        all_assignments, fit_cost = self._fill_differentiators(
+            candidates, infrastructure, profile_result, commander,
+            request, template, slot_intents, budget_used,
         )
         total_cost += fit_cost
-        metrics["6_llm_fit"] = time.time() - t
-        logger.info("Step 6: %d cards scored by LLM", len(scored_candidates))
-
-        # --- Step 7: Assemble 99 Cards ---
-        t = time.time()
-        assembly = self._assemble_deck(scored_candidates, request, commander)
-        metrics["7_assemble"] = time.time() - t
+        metrics["8_differentiator"] = time.time() - t
         logger.info(
-            "Step 7: %d cards assembled, $%.2f total",
-            len(assembly.assignments), assembly.total_price,
+            "Stage 6: %d total cards, $%.4f LLM cost",
+            len(all_assignments), fit_cost,
         )
 
-        # --- Step 8: Synthesize Narrative ---
+        # --- Stage 7: Budget Redistribution ---
         t = time.time()
+        all_assignments = self._redistribute_budget(
+            all_assignments, request.budget_usd, candidates,
+        )
+        metrics["9_budget"] = time.time() - t
+
+        # --- Stage 8: Synthesis + Classify + Persist ---
+        t = time.time()
+        total_price = sum(
+            float(a.card.get("price_usd", 0) or 0) for a in all_assignments
+        )
+
+        # Build AssemblyResult-compatible wrapper
+        from sabermetrics.pipeline.slot_assigner import AssemblyResult
+        target_comp = template.to_composition()
+        actual_comp: dict[str, int] = {}
+        for a in all_assignments:
+            actual_comp[a.slot_role] = actual_comp.get(a.slot_role, 0) + 1
+
+        assembly = AssemblyResult(
+            assignments=all_assignments,
+            composition=actual_comp,
+            target_composition=target_comp,
+            total_price=round(total_price, 2),
+            warnings=[],
+        )
+
+        if len(all_assignments) < 99:
+            assembly.warnings.append(
+                f"Only {len(all_assignments)} cards, need 99."
+            )
+
         narrative, synth_cost = self._synthesize_narrative(
-            profile, assembly, request
+            profile_result, assembly, request
         )
         total_cost += synth_cost
-        metrics["8_narrative"] = time.time() - t
 
-        # --- Step 9: Classify Bracket ---
-        t = time.time()
         classification = self._classify_bracket(assembly)
-        metrics["9_classify"] = time.time() - t
 
-        # --- Step 10: Persist and Return ---
-        t = time.time()
         deck = self._build_deck_model(
             commander=commander,
             request=request,
@@ -160,7 +207,7 @@ class DeckBuilder:
             start_time=start_time,
         )
         self._persist_deck(deck)
-        metrics["10_persist"] = time.time() - t
+        metrics["10_synthesis"] = time.time() - t
 
         total_time = time.time() - start_time
         logger.info(
@@ -179,7 +226,7 @@ class DeckBuilder:
     # --- Step implementations ---
 
     def _validate_request(self, request: DeckBuildRequest) -> Card:
-        """Step 1: Validate the build request and load commander."""
+        """Validate the build request and load commander."""
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
         try:
@@ -231,7 +278,7 @@ class DeckBuilder:
             conn.close()
 
     def _acquire_profile(self, request, commander):
-        """Step 2: Get or generate commander profile."""
+        """Get or generate commander profile."""
         from sabermetrics.reasoning.profiler import ProfileManager, ProfileRequest
 
         manager = ProfileManager(self.db_path)
@@ -242,7 +289,7 @@ class DeckBuilder:
         return manager.generate_profile(profile_request)
 
     def _filter_candidates(self, request, commander) -> list[dict]:
-        """Step 3: Apply hard-rule filters."""
+        """Stage 1: Apply hard-rule filters."""
         from sabermetrics.analytics.filters import apply_hard_filters
 
         return apply_hard_filters(
@@ -251,84 +298,47 @@ class DeckBuilder:
             max_budget_usd=request.budget_usd,
         )
 
-    def _embedding_score(
-        self, candidates: list[dict], profile_result
-    ) -> list[dict]:
-        """Step 4: Score by embedding similarity to profile narrative.
-
-        Keeps top N candidates by cosine similarity.
-        Lands and mana-producing cards bypass embedding filtering — they
-        are deck infrastructure and would score poorly against strategy text.
-        """
-        from sabermetrics.config import settings
-
-        target = settings.pipeline.embedding_filter_target
-
-        # Separate infrastructure cards (lands, ramp) from strategy cards.
-        # These bypass embedding filtering entirely.
-        lands: list[dict] = []
-        ramp: list[dict] = []
-        strategy_cards: list[dict] = []
-
-        for card in candidates:
-            type_line = (card.get("type_line") or "").lower()
-            oracle_text = (card.get("oracle_text") or "").lower()
-            if "land" in type_line and "creature" not in type_line:
-                lands.append(card)
-            elif _is_ramp(type_line, oracle_text):
-                ramp.append(card)
-            else:
-                strategy_cards.append(card)
-
-        logger.info(
-            "Embedding filter: %d lands, %d ramp (bypassing), %d strategy cards",
-            len(lands), len(ramp), len(strategy_cards),
-        )
-
+    def _load_role_tags(self, candidates: list[dict]) -> list[dict]:
+        """Load role_tags and functional_categories for candidates from DB."""
+        conn = sqlite3.connect(str(self.db_path))
+        conn.row_factory = sqlite3.Row
         try:
-            from sabermetrics.analytics.embeddings import get_embedding_service
+            # Check if columns exist
+            cursor = conn.execute("PRAGMA table_info(cards)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "role_tags" not in columns:
+                return candidates
 
-            service = get_embedding_service()
+            card_ids = [c.get("id", "") for c in candidates]
+            if not card_ids:
+                return candidates
 
-            # Build profile text for embedding
-            profile_text = (
-                f"{profile_result.strategic_profile.primary_archetype} "
-                f"{profile_result.strategic_profile.game_plan_summary} "
-                + " ".join(
-                    wc.description for wc in profile_result.strategic_profile.win_conditions
+            # Batch load role tags
+            tag_map: dict[str, tuple[str, str]] = {}
+            batch_size = 500
+            for i in range(0, len(card_ids), batch_size):
+                batch = card_ids[i:i + batch_size]
+                placeholders = ",".join("?" * len(batch))
+                cursor = conn.execute(
+                    f"SELECT id, role_tags, functional_categories "
+                    f"FROM cards WHERE id IN ({placeholders})",
+                    batch,
                 )
-            )
-            profile_embedding = service.embed(profile_text)
-
-            # Score strategy cards only
-            scored: list[tuple[dict, float]] = []
-            batch_size = 100
-            for i in range(0, len(strategy_cards), batch_size):
-                batch = strategy_cards[i:i + batch_size]
-                texts = [
-                    f"{c.get('name', '')} {c.get('type_line', '')} "
-                    f"{c.get('oracle_text', '')}"
-                    for c in batch
-                ]
-                embeddings = service.embed_batch(texts)
-                for card, emb in zip(batch, embeddings):
-                    sim = float(
-                        np.dot(profile_embedding, emb)
-                        / (np.linalg.norm(profile_embedding) * np.linalg.norm(emb) + 1e-8)
+                for row in cursor:
+                    tag_map[row["id"]] = (
+                        row["role_tags"] or "[]",
+                        row["functional_categories"] or "[]",
                     )
-                    card["_embedding_score"] = sim
-                    scored.append((card, sim))
 
-            scored.sort(key=lambda x: x[1], reverse=True)
-            top_strategy = [card for card, _ in scored[:target]]
+            for card in candidates:
+                cid = card.get("id", "")
+                if cid in tag_map:
+                    card["role_tags"] = tag_map[cid][0]
+                    card["functional_categories"] = tag_map[cid][1]
+        finally:
+            conn.close()
 
-            return lands + ramp + top_strategy
-
-        except Exception as e:
-            logger.warning(
-                "Embedding scoring failed, using all candidates: %s", e
-            )
-            return lands + ramp + strategy_cards[:target]
+        return candidates
 
     def _structural_score(
         self,
@@ -337,7 +347,7 @@ class DeckBuilder:
         request: DeckBuildRequest,
         profile_result=None,
     ) -> list[dict]:
-        """Step 5: Score by CVAR composite and sort."""
+        """Score by CVAR composite (reused from v1)."""
         from sabermetrics.analytics.cvar import ScoringContext, compute_cvar
         from sabermetrics.analytics.oracle_keywords import (
             card_matches_referenced_keywords,
@@ -349,20 +359,13 @@ class DeckBuilder:
         target = settings.pipeline.structural_filter_target
         weights = request.weights or CVARWeights()
 
-        # Extract keywords the commander references in oracle text
         ref_keywords = extract_referenced_keywords(commander.oracle_text)
         ref_mechanics = extract_referenced_mechanics(commander.oracle_text)
-        if ref_keywords or ref_mechanics:
-            logger.info(
-                "Commander %s references keywords=%s mechanics=%s",
-                commander.name, ref_keywords, ref_mechanics,
-            )
 
-        # Extract engine dependency keywords from profile
+        # Extract engine keywords from profile
         engine_keywords: list[str] = []
         output_keywords: list[str] = []
         if profile_result is not None:
-            # profile_result is a ProfileResult; .profile is CommanderProfile
             sp = getattr(
                 getattr(profile_result, "profile", None),
                 "strategic_profile",
@@ -373,7 +376,7 @@ class DeckBuilder:
                     engine_keywords.extend(dep.engine_card_traits)
                     output_keywords.extend(dep.dependent_outputs)
 
-        # Load EDHREC top cards for this commander
+        # Load EDHREC top cards
         edhrec_top_cards: dict[str, float] = {}
         try:
             conn = sqlite3.connect(str(self.db_path))
@@ -391,11 +394,6 @@ class DeckBuilder:
                     if name and pct > 0:
                         edhrec_top_cards[name] = pct
             conn.close()
-            if edhrec_top_cards:
-                logger.info(
-                    "Loaded %d EDHREC top cards for %s",
-                    len(edhrec_top_cards), commander.name,
-                )
         except Exception as e:
             logger.warning("Failed to load EDHREC data: %s", e)
 
@@ -417,9 +415,7 @@ class DeckBuilder:
             max_budget=request.budget_usd,
         )
 
-        scored: list[tuple[dict, float]] = []
         for card in candidates:
-            # Annotate with EDHREC inclusion % for the LLM fit scorer
             card_name_lower = (card.get("name") or "").lower()
             card["edhrec_inclusion_pct"] = edhrec_top_cards.get(
                 card_name_lower, 0.0
@@ -427,125 +423,474 @@ class DeckBuilder:
             result = compute_cvar(card, context, self.db_path)
             card["_cvar_result"] = result.model_dump()
             card["_cvar_score"] = result.composite_score
-            scored.append((card, result.composite_score))
 
-        scored.sort(key=lambda x: x[1], reverse=True)
+        return candidates
 
-        # Keep more than target to have overflow for slot filling
-        # Include all lands in the pool regardless of score
-        keep = max(target, settings.llm.max_candidates_for_llm_fit)
-        top_cards = [card for card, _ in scored[:keep]]
-        top_card_ids = {id(card) for card in top_cards}
+    def _pareto_filter(self, candidates: list[dict]) -> list[dict]:
+        """Stage 2: Remove dominated cards within each role.
 
-        # Also ensure we have enough lands
-        land_cards = [
-            card for card, _ in scored
-            if "land" in (card.get("type_line") or "").lower()
-        ]
-        for lc in land_cards:
-            if id(lc) not in top_card_ids:
-                top_cards.append(lc)
-                top_card_ids.add(id(lc))
-
-        # Candidate pool guarantee: promote cards matching referenced
-        # keywords that fell below the CVAR cutoff into the LLM pool.
-        if ref_keywords or ref_mechanics:
-            promoted = 0
-            for card, _ in scored[keep:]:
-                if id(card) in top_card_ids:
-                    continue
-                if "land" in (card.get("type_line") or "").lower():
-                    continue
-                if card_matches_referenced_keywords(
-                    card, ref_keywords, ref_mechanics
-                ):
-                    top_cards.append(card)
-                    top_card_ids.add(id(card))
-                    promoted += 1
-            if promoted:
-                logger.info(
-                    "Promoted %d keyword-matching cards into LLM pool",
-                    promoted,
-                )
-
-        # EDHREC candidate pool guarantee: promote cards with >=20%
-        # inclusion that fell below the CVAR cutoff. Proven picks
-        # deserve LLM evaluation regardless of CVAR ranking.
-        if edhrec_top_cards:
-            edhrec_promoted = 0
-            for card, _ in scored[keep:]:
-                if id(card) in top_card_ids:
-                    continue
-                if "land" in (card.get("type_line") or "").lower():
-                    continue
-                card_name_lower = (card.get("name") or "").lower()
-                if edhrec_top_cards.get(card_name_lower, 0.0) >= 20.0:
-                    top_cards.append(card)
-                    top_card_ids.add(id(card))
-                    edhrec_promoted += 1
-            if edhrec_promoted:
-                logger.info(
-                    "Promoted %d EDHREC high-inclusion cards into LLM pool",
-                    edhrec_promoted,
-                )
-
-        # Mispriced card promotion: ensure profile-identified undervalued
-        # cards make it into the LLM evaluation pool regardless of CVAR rank
-        if profile_result is not None:
-            sp = getattr(
-                getattr(profile_result, "profile", None),
-                "strategic_profile",
-                None,
-            )
-            mispriced_names: set[str] = set()
-            if sp is not None and hasattr(sp, "mispriced_card_examples"):
-                mispriced_names = {
-                    ex.card_name.lower()
-                    for ex in sp.mispriced_card_examples
-                }
-            if mispriced_names:
-                mispriced_promoted = 0
-                for card, _ in scored[keep:]:
-                    if id(card) in top_card_ids:
-                        continue
-                    if "land" in (card.get("type_line") or "").lower():
-                        continue
-                    card_name_lower = (card.get("name") or "").lower()
-                    if card_name_lower in mispriced_names:
-                        top_cards.append(card)
-                        top_card_ids.add(id(card))
-                        mispriced_promoted += 1
-                if mispriced_promoted:
-                    logger.info(
-                        "Promoted %d mispriced cards into LLM pool",
-                        mispriced_promoted,
-                    )
-
-        return top_cards
-
-    def _llm_fit_score(
-        self,
-        candidates: list[dict],
-        profile_result,
-        commander: Card,
-    ) -> tuple[list[tuple[dict, dict]], float]:
-        """Step 6: LLM fit scoring for top candidates.
-
-        Returns:
-            Tuple of (list of (card, scoring_dict), total_cost).
+        A card is dominated if another card in the same role has both
+        a higher CVAR score and a lower price.
         """
         from sabermetrics.config import settings
 
-        # Build profile summary for LLM
+        # Group by primary role
+        role_groups: dict[str, list[dict]] = {}
+        for card in candidates:
+            role_tags_raw = card.get("role_tags", "[]")
+            if isinstance(role_tags_raw, str):
+                try:
+                    role_tags = json.loads(role_tags_raw)
+                except (json.JSONDecodeError, TypeError):
+                    role_tags = ["utility"]
+            else:
+                role_tags = role_tags_raw or ["utility"]
+
+            primary_role = role_tags[0] if role_tags else "utility"
+            if primary_role not in role_groups:
+                role_groups[primary_role] = []
+            role_groups[primary_role].append(card)
+
+        # Pareto filter within each role
+        kept: list[dict] = []
+        removed = 0
+
+        for role, group in role_groups.items():
+            if role == "land":
+                kept.extend(group)  # Don't Pareto-filter lands
+                continue
+
+            # Sort by CVAR descending
+            group.sort(key=lambda c: c.get("_cvar_score", 0), reverse=True)
+
+            # Keep card if no other card strictly dominates it
+            frontier: list[dict] = []
+            for card in group:
+                cvar = card.get("_cvar_score", 0)
+                price = float(card.get("price_usd", 0) or 0)
+
+                dominated = False
+                for f_card in frontier:
+                    f_cvar = f_card.get("_cvar_score", 0)
+                    f_price = float(f_card.get("price_usd", 0) or 0)
+                    if f_cvar >= cvar and f_price <= price and (f_cvar > cvar or f_price < price):
+                        dominated = True
+                        break
+
+                if not dominated:
+                    frontier.append(card)
+                else:
+                    removed += 1
+
+            kept.extend(frontier)
+
+        # Ensure we keep enough candidates
+        min_keep = max(
+            settings.pipeline.structural_filter_target,
+            settings.llm.max_candidates_for_llm_fit,
+        )
+        if len(kept) < min_keep and removed > 0:
+            # Re-add removed cards sorted by CVAR
+            all_sorted = sorted(
+                candidates, key=lambda c: c.get("_cvar_score", 0), reverse=True
+            )
+            kept_ids = {id(c) for c in kept}
+            for card in all_sorted:
+                if len(kept) >= min_keep:
+                    break
+                if id(card) not in kept_ids:
+                    kept.append(card)
+                    kept_ids.add(id(card))
+
+        logger.info(
+            "Pareto filter: %d kept, %d removed (across %d roles)",
+            len(kept), removed, len(role_groups),
+        )
+        return kept
+
+    def _derive_template(self, profile, request):
+        """Stage 3: Derive deck template from profile."""
+        from sabermetrics.reasoning.template_deriver import derive_deck_template
+
+        return derive_deck_template(
+            profile=profile,
+            budget=request.budget_usd,
+            power_target=request.power_target,
+            db_path=self.db_path,
+        )
+
+    def _fill_infrastructure(
+        self, candidates, commander, request, template,
+    ) -> tuple[list, float]:
+        """Stage 4: Fill infrastructure slots with deterministic generators.
+
+        Returns:
+            Tuple of (list of SlotAssignment, total budget used).
+        """
+        from sabermetrics.pipeline.generators import (
+            DrawPackageGenerator,
+            LandPackageGenerator,
+            RampPackageGenerator,
+            RemovalPackageGenerator,
+        )
+        from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+        all_assignments: list[SlotAssignment] = []
+        budget_used = 0.0
+        colors = commander.color_identity
+
+        # Helper to get cards with a specific role tag
+        def _pool_by_role(role: str) -> list[dict]:
+            pool = []
+            for card in candidates:
+                rt_raw = card.get("role_tags", "[]")
+                if isinstance(rt_raw, str):
+                    try:
+                        rt = json.loads(rt_raw)
+                    except (json.JSONDecodeError, TypeError):
+                        rt = []
+                else:
+                    rt = rt_raw or []
+                if role in rt:
+                    pool.append(card)
+            return pool
+
+        def _land_pool() -> list[dict]:
+            pool = []
+            for card in candidates:
+                type_line = (card.get("type_line") or "").lower()
+                if "land" in type_line and "creature" not in type_line:
+                    pool.append(card)
+            return pool
+
+        placed_cards = lambda: [a.card for a in all_assignments]
+
+        # 1. Ramp (first, so land generator knows what spells are in deck)
+        ramp_gen = RampPackageGenerator(self.db_path)
+        ramp = ramp_gen.generate(
+            color_identity=colors,
+            target_count=template.ramp_count,
+            budget_remaining=request.budget_usd - budget_used,
+            template=template,
+            already_placed=placed_cards(),
+            role_tag_pool=_pool_by_role("ramp"),
+        )
+        all_assignments.extend(ramp)
+        budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in ramp)
+
+        # 2. Draw
+        draw_gen = DrawPackageGenerator(self.db_path)
+        draw = draw_gen.generate(
+            color_identity=colors,
+            target_count=template.draw_count,
+            budget_remaining=request.budget_usd - budget_used,
+            template=template,
+            already_placed=placed_cards(),
+            role_tag_pool=_pool_by_role("draw"),
+        )
+        all_assignments.extend(draw)
+        budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in draw)
+
+        # 3. Removal + board wipes
+        removal_pool = _pool_by_role("removal") + _pool_by_role("board_wipe")
+        # Deduplicate
+        seen = set()
+        deduped_removal = []
+        for c in removal_pool:
+            cid = c.get("id", id(c))
+            if cid not in seen:
+                seen.add(cid)
+                deduped_removal.append(c)
+
+        removal_gen = RemovalPackageGenerator(self.db_path)
+        removal = removal_gen.generate(
+            color_identity=colors,
+            target_count=template.removal_count,
+            budget_remaining=request.budget_usd - budget_used,
+            template=template,
+            already_placed=placed_cards(),
+            role_tag_pool=deduped_removal,
+            board_wipe_target=template.board_wipe_count,
+        )
+        all_assignments.extend(removal)
+        budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in removal)
+
+        # 4. Lands (last, so it knows what spells need color support)
+        land_gen = LandPackageGenerator(self.db_path)
+        lands = land_gen.generate(
+            color_identity=colors,
+            target_count=template.land_count,
+            budget_remaining=request.budget_usd - budget_used,
+            template=template,
+            already_placed=placed_cards(),
+            role_tag_pool=_land_pool(),
+        )
+        all_assignments.extend(lands)
+        budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in lands)
+
+        return all_assignments, budget_used
+
+    def _fill_differentiators(
+        self, candidates, infrastructure, profile_result, commander,
+        request, template, slot_intents, budget_used,
+    ) -> tuple[list, float]:
+        """Stage 6: LLM-score differentiator candidates with deck context.
+
+        Returns:
+            Tuple of (all assignments including infrastructure, LLM cost).
+        """
+        from sabermetrics.config import settings
+        from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+        # Build profile summary (same as v1)
+        profile_summary = self._build_profile_summary(profile_result)
+
+        # Identify non-land, non-infrastructure candidates
+        infra_names = {a.card.get("name", "") for a in infrastructure}
+        diff_candidates = [
+            c for c in candidates
+            if c.get("name", "") not in infra_names
+            and "land" not in (c.get("type_line") or "").lower()
+        ]
+
+        # Sort by CVAR and take top N for LLM scoring
+        diff_candidates.sort(
+            key=lambda c: c.get("_cvar_score", 0), reverse=True,
+        )
+        max_llm = settings.llm.max_candidates_for_llm_fit
+        to_score = diff_candidates[:max_llm]
+
+        total_cost = 0.0
+        scored: list[tuple[dict, dict]] = []
+
+        try:
+            from sabermetrics.reasoning.fit import FitScorer
+
+            scorer = FitScorer(self.db_path)
+            results = scorer.score_cards(
+                cards=to_score,
+                profile_summary=profile_summary,
+                archetype_definition=profile_result.strategic_profile.primary_archetype,
+                partial_deck=[a.card for a in infrastructure],
+                slot_intents=slot_intents,
+            )
+
+            for card, fit_response in results:
+                card["_fit_reasoning"] = fit_response.reasoning
+                scoring = {
+                    "cvar_score": card.get("_cvar_score", 0.0),
+                    "llm_fit_score": fit_response.fit_score,
+                    "slot_role": fit_response.slot_role,
+                    "reasoning": fit_response.reasoning,
+                }
+                scored.append((card, scoring))
+
+        except Exception as e:
+            logger.warning("LLM fit scoring failed, using CVAR only: %s", e)
+            for card in to_score:
+                card["_fit_reasoning"] = "LLM scoring unavailable; CVAR-only ranking."
+                scoring = {
+                    "cvar_score": card.get("_cvar_score", 0.0),
+                    "llm_fit_score": 5,
+                    "slot_role": _heuristic_role(card),
+                    "reasoning": "LLM scoring unavailable; CVAR-only ranking.",
+                }
+                scored.append((card, scoring))
+
+        # Add remaining non-scored candidates
+        for card in diff_candidates[max_llm:]:
+            card["_fit_reasoning"] = "Not LLM-scored; below candidate threshold."
+            scoring = {
+                "cvar_score": card.get("_cvar_score", 0.0),
+                "llm_fit_score": 5,
+                "slot_role": _heuristic_role(card),
+                "reasoning": "Not LLM-scored; below candidate threshold.",
+            }
+            scored.append((card, scoring))
+
+        # Fill differentiator slots from scored candidates
+        diff_assignments: list[SlotAssignment] = []
+        used_names = infra_names.copy()
+        running_price = budget_used
+        target_diff = template.differentiator_slots
+
+        # Sort by combined score
+        scored.sort(
+            key=lambda x: 0.6 * x[1].get("cvar_score", 0)
+            + 0.4 * (x[1].get("llm_fit_score", 5) / 10.0),
+            reverse=True,
+        )
+
+        for card, scoring in scored:
+            if len(diff_assignments) >= target_diff:
+                break
+
+            name = card.get("name", "")
+            if name in used_names:
+                continue
+
+            price = float(card.get("price_usd", 0) or 0)
+            if request.budget_usd and running_price + price > request.budget_usd:
+                continue
+
+            combined = (
+                0.6 * scoring.get("cvar_score", 0)
+                + 0.4 * (scoring.get("llm_fit_score", 5) / 10.0)
+            )
+            role = scoring.get("slot_role", "utility")
+            if role == "land":
+                role = "utility"
+
+            diff_assignments.append(SlotAssignment(
+                card=card,
+                slot_role=role,
+                score=round(combined, 4),
+                alternatives=[],
+            ))
+            used_names.add(name)
+            running_price += price
+
+        # Combine infrastructure + differentiators
+        all_assignments = list(infrastructure) + diff_assignments
+        return all_assignments, total_cost
+
+    def _redistribute_budget(
+        self,
+        deck: list,
+        budget: float,
+        candidate_pool: list[dict],
+    ) -> list:
+        """Stage 7: Two-pass budget optimization.
+
+        Pass 1 — Upgrade: if budget remains, replace weak cards with better ones.
+        Pass 2 — Downgrade: if over budget, replace expensive cards with cheaper ones.
+        """
+        from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+        total_price = sum(
+            float(a.card.get("price_usd", 0) or 0) for a in deck
+        )
+        used_names = {a.card.get("name", "") for a in deck}
+
+        # Build upgrade pool indexed by role
+        pool_by_role: dict[str, list[dict]] = {}
+        for card in candidate_pool:
+            if card.get("name", "") in used_names:
+                continue
+            type_line = (card.get("type_line") or "").lower()
+            if "land" in type_line:
+                continue
+            role = _heuristic_role(card)
+            if role not in pool_by_role:
+                pool_by_role[role] = []
+            pool_by_role[role].append(card)
+
+        for role in pool_by_role:
+            pool_by_role[role].sort(
+                key=lambda c: c.get("_cvar_score", 0), reverse=True
+            )
+
+        # Pass 1: Upgrade (if budget remains)
+        budget_remaining = budget - total_price
+        if budget_remaining > 0:
+            # Sort deck by score ascending (weakest first)
+            indexed = [(i, a) for i, a in enumerate(deck) if a.slot_role != "land"]
+            indexed.sort(key=lambda x: x[1].score)
+
+            for idx, assignment in indexed[:5]:  # Check 5 weakest
+                role = assignment.slot_role
+                if role not in pool_by_role:
+                    continue
+
+                current_score = assignment.score
+                current_price = float(assignment.card.get("price_usd", 0) or 0)
+
+                for upgrade_card in pool_by_role[role]:
+                    up_name = upgrade_card.get("name", "")
+                    if up_name in used_names:
+                        continue
+                    up_price = float(upgrade_card.get("price_usd", 0) or 0)
+                    up_score = upgrade_card.get("_cvar_score", 0)
+
+                    price_diff = up_price - current_price
+                    if price_diff <= budget_remaining and up_score > current_score + 0.1:
+                        # Replace
+                        old_name = assignment.card.get("name", "")
+                        deck[idx] = SlotAssignment(
+                            card=upgrade_card,
+                            slot_role=role,
+                            score=round(up_score, 4),
+                            alternatives=[],
+                        )
+                        used_names.discard(old_name)
+                        used_names.add(up_name)
+                        budget_remaining -= price_diff
+                        total_price += price_diff
+                        logger.info(
+                            "Budget upgrade: %s → %s (+$%.2f, +%.2f score)",
+                            old_name, up_name, price_diff,
+                            up_score - current_score,
+                        )
+                        break
+
+        # Pass 2: Downgrade (if over budget)
+        if total_price > budget:
+            # Sort by score descending (strongest first = last to cut)
+            indexed = [(i, a) for i, a in enumerate(deck) if a.slot_role != "land"]
+            indexed.sort(key=lambda x: x[1].score)
+
+            for idx, assignment in indexed:  # Weakest first
+                if total_price <= budget:
+                    break
+
+                role = assignment.slot_role
+                if role not in pool_by_role:
+                    continue
+
+                current_price = float(assignment.card.get("price_usd", 0) or 0)
+                if current_price < 1.0:
+                    continue  # Not worth downgrading cheap cards
+
+                for alt_card in reversed(pool_by_role.get(role, [])):
+                    alt_name = alt_card.get("name", "")
+                    if alt_name in used_names:
+                        continue
+                    alt_price = float(alt_card.get("price_usd", 0) or 0)
+
+                    if alt_price < current_price:
+                        savings = current_price - alt_price
+                        old_name = assignment.card.get("name", "")
+                        alt_score = alt_card.get("_cvar_score", 0)
+                        deck[idx] = SlotAssignment(
+                            card=alt_card,
+                            slot_role=role,
+                            score=round(alt_score, 4),
+                            alternatives=[],
+                        )
+                        used_names.discard(old_name)
+                        used_names.add(alt_name)
+                        total_price -= savings
+                        logger.info(
+                            "Budget downgrade: %s → %s (-$%.2f)",
+                            old_name, alt_name, savings,
+                        )
+                        break
+
+        return deck
+
+    def _build_profile_summary(self, profile_result) -> str:
+        """Build the profile summary string for LLM fit scoring."""
         profile_summary = (
             f"Commander: {profile_result.commander_name}\n"
             f"Archetype: {profile_result.strategic_profile.primary_archetype}\n"
             f"Game Plan: {profile_result.strategic_profile.game_plan_summary}\n"
             f"Win Conditions: "
-            + ", ".join(wc.description for wc in profile_result.strategic_profile.win_conditions)
+            + ", ".join(
+                wc.description for wc in profile_result.strategic_profile.win_conditions
+            )
         )
 
-        # Add value inversions if present
+        # Add value inversions
         if profile_result.strategic_profile.value_inversions:
             inversions = profile_result.strategic_profile.value_inversions
             inversion_text = (
@@ -560,7 +905,7 @@ class DeckBuilder:
                 )
             profile_summary += inversion_text
 
-        # Add engine dependencies if present
+        # Add engine dependencies
         if hasattr(profile_result.strategic_profile, "engine_dependencies"):
             deps = profile_result.strategic_profile.engine_dependencies
             if deps:
@@ -573,14 +918,14 @@ class DeckBuilder:
                         f"- Engine: {dep.engine}\n"
                         f"  Engine card traits: "
                         f"{', '.join(dep.engine_card_traits)}\n"
-                        f"  Dependent outputs (NOT independent synergy axes): "
+                        f"  Dependent outputs: "
                         f"{', '.join(dep.dependent_outputs)}\n"
                         f"  FALSE SYNERGY WARNING: "
                         f"{dep.false_synergy_warning}\n"
                     )
                 profile_summary += dep_text
 
-        # Add mispriced card examples if present
+        # Add mispriced card examples
         if hasattr(profile_result.strategic_profile, "mispriced_card_examples"):
             examples = profile_result.strategic_profile.mispriced_card_examples
             if examples:
@@ -596,106 +941,10 @@ class DeckBuilder:
                 )
                 profile_summary += example_text
 
-        # Separate lands (don't LLM-score lands) from non-lands
-        non_land_candidates = [
-            c for c in candidates
-            if "land" not in (c.get("type_line") or "").lower()
-        ]
-        land_candidates = [
-            c for c in candidates
-            if "land" in (c.get("type_line") or "").lower()
-        ]
-
-        # LLM-score top N non-land candidates
-        max_llm = settings.llm.max_candidates_for_llm_fit
-        to_score = non_land_candidates[:max_llm]
-
-        total_cost = 0.0
-        scored: list[tuple[dict, dict]] = []
-
-        try:
-            from sabermetrics.reasoning.fit import FitScorer
-
-            scorer = FitScorer(self.db_path)
-            results = scorer.score_cards(
-                cards=to_score,
-                profile_summary=profile_summary,
-                archetype_definition=profile_result.strategic_profile.primary_archetype,
-            )
-
-            for card, fit_response in results:
-                card["_fit_reasoning"] = fit_response.reasoning
-                scoring = {
-                    "cvar_score": card.get("_cvar_score", 0.0),
-                    "llm_fit_score": fit_response.fit_score,
-                    "slot_role": fit_response.slot_role,
-                    "reasoning": fit_response.reasoning,
-                    "cvar_result": card.get("_cvar_result", {}),
-                }
-                scored.append((card, scoring))
-
-        except Exception as e:
-            logger.warning("LLM fit scoring failed, using CVAR only: %s", e)
-            for card in to_score:
-                card["_fit_reasoning"] = "LLM scoring unavailable; CVAR-only ranking."
-                scoring = {
-                    "cvar_score": card.get("_cvar_score", 0.0),
-                    "llm_fit_score": 5,
-                    "slot_role": _heuristic_role(card),
-                    "reasoning": "LLM scoring unavailable; CVAR-only ranking.",
-                    "cvar_result": card.get("_cvar_result", {}),
-                }
-                scored.append((card, scoring))
-
-        # Add remaining non-land candidates not LLM-scored
-        for card in non_land_candidates[max_llm:]:
-            card["_fit_reasoning"] = "Not LLM-scored; below candidate threshold."
-            scoring = {
-                "cvar_score": card.get("_cvar_score", 0.0),
-                "llm_fit_score": 5,
-                "slot_role": _heuristic_role(card),
-                "reasoning": "Not LLM-scored; below candidate threshold.",
-                "cvar_result": card.get("_cvar_result", {}),
-            }
-            scored.append((card, scoring))
-
-        # Add lands with high default scores (lands are auto-included)
-        for card in land_candidates:
-            card["_fit_reasoning"] = "Land — included for mana base."
-            scoring = {
-                "cvar_score": card.get("_cvar_score", 0.0),
-                "llm_fit_score": 7,
-                "slot_role": "land",
-                "reasoning": "Land — included for mana base.",
-                "cvar_result": card.get("_cvar_result", {}),
-            }
-            scored.append((card, scoring))
-
-        return scored, total_cost
-
-    def _assemble_deck(self, scored_candidates, request, commander):
-        """Step 7: Slot-aware assembly of 99 cards."""
-        from sabermetrics.config import settings
-        from sabermetrics.pipeline.slot_assigner import (
-            fill_slots,
-            get_target_composition,
-        )
-
-        target_comp = get_target_composition(
-            power_target=request.power_target,
-            strategy=request.strategy,
-        )
-
-        return fill_slots(
-            scored_candidates=scored_candidates,
-            target_composition=target_comp,
-            max_budget=request.budget_usd,
-            commander_colors=commander.color_identity,
-            alternatives_per_slot=settings.output.alternatives_per_slot,
-        )
+        return profile_summary
 
     def _synthesize_narrative(self, profile_result, assembly, request):
-        """Step 8: Generate deck narrative via Sonnet."""
+        """Generate deck narrative via Sonnet."""
         profile_summary = (
             f"Commander: {profile_result.commander_name}\n"
             f"Archetype: {profile_result.strategic_profile.primary_archetype}\n"
@@ -715,7 +964,6 @@ class DeckBuilder:
             from sabermetrics.reasoning.synthesis import DeckSynthesizer
 
             synthesizer = DeckSynthesizer(self.db_path)
-            # Use a placeholder bracket for narrative (real classification in step 9)
             synthesis, cost = synthesizer.synthesize(
                 profile_summary=profile_summary,
                 deck_cards_with_reasoning=deck_cards_with_reasoning,
@@ -743,7 +991,7 @@ class DeckBuilder:
             return narrative, 0.0
 
     def _classify_bracket(self, assembly):
-        """Step 9: Classify deck power bracket."""
+        """Classify deck power bracket."""
         from sabermetrics.analytics.brackets import classify_bracket
 
         cards = [a.card for a in assembly.assignments]
@@ -776,7 +1024,6 @@ class DeckBuilder:
             card_data = assignment.card
             cvar_data = card_data.get("_cvar_result", {})
 
-            # Build Card model from dict
             ci = card_data.get("color_identity", "[]")
             if isinstance(ci, str):
                 ci = json.loads(ci)
@@ -836,7 +1083,7 @@ class DeckBuilder:
         all_card_dicts = [a.card for a in assembly.assignments]
 
         # Mana curve
-        mana_curve = [0] * 8  # 0-6+, index 7 = 7+
+        mana_curve = [0] * 8
         color_dist: dict[str, int] = {}
         type_dist: dict[str, int] = {}
         for card in all_card_dicts:
@@ -862,7 +1109,6 @@ class DeckBuilder:
         cmcs = [float(c.get("cmc", 0)) for c in non_lands if c.get("cmc")]
         avg_cmc = sum(cmcs) / len(cmcs) if cmcs else 0.0
 
-        # Detect game changers and combos
         gc_names = []
         try:
             from sabermetrics.analytics.brackets import _load_game_changers
@@ -923,7 +1169,7 @@ class DeckBuilder:
         )
 
     def _persist_deck(self, deck: GeneratedDeck) -> None:
-        """Step 10: Save to generated_decks table."""
+        """Save to generated_decks table."""
         conn = sqlite3.connect(str(self.db_path))
         try:
             cards_json = json.dumps([
@@ -974,13 +1220,10 @@ class DeckBuilder:
 
 def _is_ramp(type_line: str, oracle_text: str) -> bool:
     """Check if a card is a mana-producing ramp spell."""
-    # Mana rocks / mana dorks
     if "add" in oracle_text and ("mana" in oracle_text or "{" in oracle_text):
         return True
-    # Land-fetching ramp
     if "search your library for a" in oracle_text and "land" in oracle_text:
         return True
-    # Land-to-battlefield effects
     if "put" in oracle_text and "land" in oracle_text and "battlefield" in oracle_text:
         return True
     return False

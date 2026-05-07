@@ -1,0 +1,43 @@
+# Karsten hypergeometric mana base configuration for 99-card Commander decks.
+# Sources needed for ~90% on-curve cast probability.
+
+# Key: (pips_of_color, cast_turn) -> sources required
+# Adapted from Frank Karsten's analysis for 99-card / ~36-land decks.
+color_source_requirements:
+  1:
+    turn_1: 22
+    turn_2: 19
+    turn_3: 17
+    turn_4: 15
+    turn_5: 13
+    turn_6: 12
+    turn_7: 11
+  2:
+    turn_2: 27
+    turn_3: 23
+    turn_4: 20
+    turn_5: 18
+    turn_6: 16
+    turn_7: 15
+  3:
+    turn_3: 29
+    turn_4: 26
+    turn_5: 23
+    turn_6: 21
+    turn_7: 19
+
+# Target total land count by average CMC of non-land cards
+land_count_targets:
+  "2.0": 33
+  "2.5": 35
+  "3.0": 36
+  "3.5": 38
+  "4.0": 39
+  "4.5": 40
+  "5.0": 41
+
+# Reference land count used in the Karsten source requirement table
+reference_land_count: 36
+
+# Minimum sources per commander color regardless of pip count
+minimum_sources_per_color: 5

@@ -1,0 +1,24 @@
+# Auto-include cards for infrastructure generators.
+# Cards listed here are always included when conditions are met.
+
+always:
+  # Sol Ring is the best mana rock in Commander, period
+  - name: "Sol Ring"
+    role: "ramp"
+
+multicolor:
+  # Command Tower and Arcane Signet for any deck with 2+ colors
+  - name: "Command Tower"
+    role: "land"
+  - name: "Arcane Signet"
+    role: "ramp"
+
+three_plus_colors:
+  # Exotic Orchard for 3+ color decks
+  - name: "Exotic Orchard"
+    role: "land"
+
+has_black:
+  # Bojuka Bog for any deck with black (free graveyard hate)
+  - name: "Bojuka Bog"
+    role: "land"

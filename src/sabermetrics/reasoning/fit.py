@@ -1,7 +1,9 @@
-"""Per-card fit scorer (D5.6).
+"""Per-card fit scorer (D5.6, updated for 6.5.7 deck-context awareness).
 
 Scores candidate cards against a commander profile using Haiku.
 Uses prompt caching so the profile context is shared across all 50 calls.
+The deck composition context is passed in the per-request section for
+deck-context-aware scoring.
 """
 
 import json
@@ -10,6 +12,7 @@ import sqlite3
 from pathlib import Path
 
 from sabermetrics.models.llm_responses import CardFitResponse
+from sabermetrics.models.template import SlotIntent
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,8 @@ class FitScorer:
         profile_summary: str,
         archetype_definition: str = "",
         relevant_rules: str = "",
+        partial_deck: list[dict] | None = None,
+        slot_intents: list[SlotIntent] | None = None,
     ) -> list[tuple[dict, CardFitResponse]]:
         """Score a batch of cards against a commander profile.
 
@@ -34,6 +39,8 @@ class FitScorer:
             profile_summary: Compressed profile text (cached across calls).
             archetype_definition: Archetype text from reference layer.
             relevant_rules: Rule excerpts from reference layer.
+            partial_deck: Infrastructure cards already placed (for context).
+            slot_intents: Category coverage intents (what the deck still needs).
 
         Returns:
             List of (card_dict, CardFitResponse) tuples.
@@ -54,6 +61,9 @@ class FitScorer:
 
         results: list[tuple[dict, CardFitResponse]] = []
 
+        # Build deck composition context (shared across all card evaluations)
+        deck_context = _build_deck_composition_context(partial_deck, slot_intents)
+
         for i, card in enumerate(cards):
             try:
                 fit_response = self._score_single_card(
@@ -65,6 +75,7 @@ class FitScorer:
                     archetype_definition=archetype_definition,
                     relevant_rules=relevant_rules,
                     model=settings.llm.fit_model,
+                    deck_composition_context=deck_context,
                 )
                 results.append((card, fit_response))
                 logger.debug(
@@ -100,6 +111,7 @@ class FitScorer:
         archetype_definition: str,
         relevant_rules: str,
         model: str,
+        deck_composition_context: str = "",
     ) -> CardFitResponse:
         """Score a single card via LLM call."""
         # Format the prompt
@@ -115,6 +127,7 @@ class FitScorer:
             inclusion_pct=f"{card.get('edhrec_inclusion_pct', 0) or 0:.1f}",
             cwe_score=f"{card.get('cwe_score', 'N/A')}",
             cooccurrence_avg=f"{card.get('cooccurrence_avg', 0) or 0:.2f}",
+            deck_composition_context=deck_composition_context or "No deck context available yet.",
         )
 
         # The cached section is the profile + archetype + rules (message 0)
@@ -148,3 +161,63 @@ class FitScorer:
 
         data = json.loads(response_text)
         return CardFitResponse(**data)
+
+
+def _build_deck_composition_context(
+    partial_deck: list[dict] | None,
+    slot_intents: list[SlotIntent] | None,
+) -> str:
+    """Build deck composition context for the per-request prompt section.
+
+    Args:
+        partial_deck: Infrastructure cards already placed in the deck.
+        slot_intents: What categories the deck still needs.
+
+    Returns:
+        Formatted string for the {deck_composition_context} placeholder.
+    """
+    if not partial_deck:
+        return ""
+
+    lines: list[str] = []
+
+    # Role counts
+    role_counts: dict[str, int] = {}
+    for card in partial_deck:
+        role_tags_raw = card.get("role_tags", "[]")
+        if isinstance(role_tags_raw, str):
+            try:
+                role_tags = json.loads(role_tags_raw)
+            except (json.JSONDecodeError, TypeError):
+                role_tags = []
+        else:
+            role_tags = role_tags_raw or []
+        for tag in role_tags:
+            role_counts[tag] = role_counts.get(tag, 0) + 1
+
+    lines.append(f"Cards already placed: {len(partial_deck)}")
+    if role_counts:
+        role_str = ", ".join(f"{k}: {v}" for k, v in sorted(role_counts.items()))
+        lines.append(f"Role distribution: {role_str}")
+
+    # Key cards (top 10 by CVAR score)
+    scored = sorted(
+        partial_deck,
+        key=lambda c: c.get("_cvar_score", 0),
+        reverse=True,
+    )[:10]
+    if scored:
+        key_names = [c.get("name", "?") for c in scored]
+        lines.append(f"Key infrastructure cards: {', '.join(key_names)}")
+
+    # Slot intents
+    if slot_intents:
+        needs = []
+        for intent in slot_intents[:5]:
+            needs.append(
+                f"{intent.category} (need {intent.slots_to_fill} more, "
+                f"have {intent.current_count}/{intent.target_count})"
+            )
+        lines.append(f"Categories still needed: {'; '.join(needs)}")
+
+    return "\n".join(lines)

@@ -1,0 +1,59 @@
+# Manual role tag overrides for cards that pattern-matching gets wrong.
+# Format: card_name -> { role_tags: [...], functional_categories: [...] }
+# These override (replace) the auto-detected tags for the named card.
+
+overrides:
+  # Rhystic Study's draw mode is conditional but it's premier card draw
+  "Rhystic Study":
+    role_tags: ["draw"]
+    functional_categories: ["draw_trigger"]
+
+  # Mystic Remora is draw, not just "enchantment"
+  "Mystic Remora":
+    role_tags: ["draw"]
+    functional_categories: ["draw_trigger"]
+
+  # Smothering Tithe creates Treasures (ramp) from opponent draws
+  "Smothering Tithe":
+    role_tags: ["ramp"]
+    functional_categories: ["treasure_generation"]
+
+  # Dockside Extortionist is primarily ramp via Treasures
+  "Dockside Extortionist":
+    role_tags: ["ramp"]
+    functional_categories: ["treasure_generation"]
+
+  # Cyclonic Rift is removal (board wipe mode), not utility
+  "Cyclonic Rift":
+    role_tags: ["removal", "board_wipe"]
+    functional_categories: []
+
+  # Fierce Guardianship is removal (counterspell), free with commander
+  "Fierce Guardianship":
+    role_tags: ["removal", "protection"]
+    functional_categories: []
+
+  # Teferi's Protection is protection, not utility
+  "Teferi's Protection":
+    role_tags: ["protection"]
+    functional_categories: []
+
+  # Beast Within is removal despite creating a token for opponent
+  "Beast Within":
+    role_tags: ["removal"]
+    functional_categories: []
+
+  # Generous Gift same as Beast Within
+  "Generous Gift":
+    role_tags: ["removal"]
+    functional_categories: []
+
+  # Dark Ritual is ramp (temporary)
+  "Dark Ritual":
+    role_tags: ["ramp"]
+    functional_categories: []
+
+  # Lotus Petal is ramp
+  "Lotus Petal":
+    role_tags: ["ramp"]
+    functional_categories: []

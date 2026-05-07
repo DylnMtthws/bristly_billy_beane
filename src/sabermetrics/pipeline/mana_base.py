@@ -8,6 +8,9 @@ then greedily selects nonbasic lands and fills basics by pip demand.
 import logging
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
 
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -42,6 +45,7 @@ MANA_SYMBOL_COLORS: dict[str, str] = {
 
 # Sources needed for ~90% on-curve cast rate in 99-card / ~36-land decks.
 # Key: (pips_of_color_in_cost, turn_to_cast) → sources required
+# This is the in-memory default; overridden by load_karsten_config().
 KARSTEN_SOURCES_99: dict[tuple[int, int], int] = {
     (1, 1): 22, (1, 2): 19, (1, 3): 17, (1, 4): 15, (1, 5): 13,
     (1, 6): 12, (1, 7): 11,
@@ -50,6 +54,78 @@ KARSTEN_SOURCES_99: dict[tuple[int, int], int] = {
     (3, 3): 29, (3, 4): 26, (3, 5): 23,
     (3, 6): 21, (3, 7): 19,
 }
+
+# Cached Karsten config
+_KARSTEN_CONFIG: dict | None = None
+
+
+def load_karsten_config() -> dict:
+    """Load Karsten mana base configuration from YAML.
+
+    Returns:
+        Dict with keys: color_source_requirements, land_count_targets,
+        reference_land_count, minimum_sources_per_color.
+    """
+    global _KARSTEN_CONFIG
+    if _KARSTEN_CONFIG is not None:
+        return _KARSTEN_CONFIG
+
+    config_path = Path(__file__).resolve().parent.parent.parent.parent / "config" / "karsten_mana_base.yaml"
+    if not config_path.exists():
+        logger.warning("karsten_mana_base.yaml not found, using built-in defaults")
+        _KARSTEN_CONFIG = {
+            "color_source_requirements": {},
+            "land_count_targets": {},
+            "reference_land_count": 36,
+            "minimum_sources_per_color": 5,
+        }
+        return _KARSTEN_CONFIG
+
+    with open(config_path) as f:
+        data = yaml.safe_load(f) or {}
+
+    # Rebuild KARSTEN_SOURCES_99 from YAML structure
+    csr = data.get("color_source_requirements", {})
+    for pips, turns in csr.items():
+        pips_int = int(pips)
+        for turn_key, sources in turns.items():
+            turn_int = int(turn_key.replace("turn_", ""))
+            KARSTEN_SOURCES_99[(pips_int, turn_int)] = sources
+
+    _KARSTEN_CONFIG = data
+    return _KARSTEN_CONFIG
+
+
+def target_land_count(avg_cmc: float) -> int:
+    """Determine target land count from average CMC using Karsten guidelines.
+
+    Args:
+        avg_cmc: Average converted mana cost of non-land cards.
+
+    Returns:
+        Recommended total land count (typically 33-41).
+    """
+    config = load_karsten_config()
+    targets = config.get("land_count_targets", {})
+
+    if not targets:
+        # Fallback formula: 33 + (avg_cmc - 2.0) * 2.67
+        return max(33, min(41, round(33 + (avg_cmc - 2.0) * 2.67)))
+
+    # Find closest bracket in the YAML targets
+    best_key = None
+    best_dist = float("inf")
+    for key_str in targets:
+        key_val = float(key_str)
+        dist = abs(key_val - avg_cmc)
+        if dist < best_dist:
+            best_dist = dist
+            best_key = key_str
+
+    if best_key is not None:
+        return int(targets[best_key])
+
+    return 36  # Safe default
 
 # Regex patterns for oracle text parsing
 _ADD_MANA_PATTERN = re.compile(

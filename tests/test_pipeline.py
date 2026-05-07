@@ -24,7 +24,9 @@ from sabermetrics.pipeline.mana_base import (
     build_mana_base,
     compute_color_targets,
     count_color_pips,
+    load_karsten_config,
     parse_land_colors,
+    target_land_count,
 )
 from sabermetrics.pipeline.formatters import (
     format_archidekt,
@@ -371,6 +373,24 @@ def test_mana_base_prefers_untapped() -> None:
         if a.card["name"] not in ("Plains", "Island")
     ]
     assert nonbasic_names[0] == "Good Dual"
+
+
+def test_target_land_count_from_karsten() -> None:
+    """target_land_count returns reasonable values for various avg CMC."""
+    assert target_land_count(2.5) == 35
+    assert target_land_count(3.0) == 36
+    assert target_land_count(4.0) == 39
+    # Out of range should still give reasonable result
+    assert 33 <= target_land_count(1.5) <= 41
+    assert 33 <= target_land_count(6.0) <= 41
+
+
+def test_load_karsten_config() -> None:
+    """Karsten config loads from YAML with expected keys."""
+    config = load_karsten_config()
+    assert "land_count_targets" in config
+    assert "reference_land_count" in config
+    assert config["reference_land_count"] == 36
 
 
 # --- Formatter Tests ---

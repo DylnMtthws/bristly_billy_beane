@@ -1,0 +1,32 @@
+<role>
+You are determining deck composition targets for a Commander deck based on the commander's strategic profile.
+</role>
+
+<commander_profile>
+{profile_summary}
+</commander_profile>
+
+<task>
+Given the commander profile above, determine:
+1. avg_cmc_target: What should the average CMC of non-land cards be? (1.5-5.0)
+2. creature_density: What fraction of non-land cards should be creatures? (0.1-0.7)
+3. curve_shape: How many non-land cards at each CMC point? (0-7+)
+
+Consider:
+- Speed tier: {speed_tier}
+- Primary archetype: {archetype}
+- Win conditions: {win_conditions}
+- Power target: {power_target}
+</task>
+
+<output_format>
+Output JSON only:
+{{
+  "avg_cmc_target": <float 1.5-5.0>,
+  "creature_density": <float 0.1-0.7>,
+  "curve_shape": {{
+    "0": <int>, "1": <int>, "2": <int>, "3": <int>,
+    "4": <int>, "5": <int>, "6": <int>, "7": <int>
+  }}
+}}
+</output_format>

@@ -1,0 +1,132 @@
+# Functional category taxonomy for card role tagging.
+# Each category has oracle_text patterns (regex) and type_line patterns.
+# A card matches a category if ANY pattern in the list matches.
+
+categories:
+  treasure_generation:
+    oracle_patterns:
+      - "create.*treasure"
+      - "treasure token"
+    type_patterns: []
+
+  sacrifice_outlet:
+    oracle_patterns:
+      - "sacrifice (?:a|an|another)"
+      - ", sacrifice (?:a |an |another |this )"
+    type_patterns: []
+
+  etb_payoff:
+    oracle_patterns:
+      - "enters the battlefield"
+      - "entering the battlefield"
+      - "enters under your control"
+    type_patterns: []
+
+  recursion:
+    oracle_patterns:
+      - "return.*from.*graveyard"
+      - "put.*from.*graveyard.*battlefield"
+      - "cast.*from.*graveyard"
+    type_patterns: []
+
+  aura:
+    oracle_patterns:
+      - "enchant (?:creature|permanent|player|land|artifact)"
+    type_patterns:
+      - "Aura"
+
+  equipment:
+    oracle_patterns:
+      - "equip"
+    type_patterns:
+      - "Equipment"
+
+  counter:
+    oracle_patterns:
+      - "\\+1/\\+1 counter"
+      - "counters on"
+      - "counter on"
+      - "distribute.*counters"
+    type_patterns: []
+
+  evasion:
+    oracle_patterns:
+      - "can't be blocked"
+      - "unblockable"
+      - "flying"
+      - "menace"
+      - "trample"
+      - "shadow"
+      - "fear"
+      - "intimidate"
+    type_patterns: []
+
+  flicker:
+    oracle_patterns:
+      - "exile.*return.*to the battlefield"
+      - "exile.*then return"
+      - "blink"
+    type_patterns: []
+
+  token_generation:
+    oracle_patterns:
+      - "create.*\\d+.*token"
+      - "create a.*token"
+      - "creature token"
+    type_patterns: []
+
+  graveyard_payoff:
+    oracle_patterns:
+      - "whenever.*dies"
+      - "whenever.*put into.*graveyard"
+      - "cards in your graveyard"
+      - "for each creature card in your graveyard"
+    type_patterns: []
+
+  anthem:
+    oracle_patterns:
+      - "creatures you control get \\+"
+      - "other creatures you control"
+      - "creatures you control have"
+    type_patterns: []
+
+  mana_doubler:
+    oracle_patterns:
+      - "add.*additional"
+      - "mana.*double"
+      - "whenever.*tap.*land.*for mana.*add"
+    type_patterns: []
+
+  lifegain_payoff:
+    oracle_patterns:
+      - "whenever you gain life"
+      - "whenever.*life is gained"
+      - "you gain.*life"
+    type_patterns: []
+
+  draw_trigger:
+    oracle_patterns:
+      - "whenever you draw"
+      - "whenever.*draws a card"
+      - "second card you draw"
+    type_patterns: []
+
+  damage_trigger:
+    oracle_patterns:
+      - "whenever.*deals.*damage"
+      - "whenever.*dealt damage"
+    type_patterns: []
+
+  death_trigger:
+    oracle_patterns:
+      - "whenever.*dies"
+      - "whenever.*creature.*put into.*graveyard from the battlefield"
+    type_patterns: []
+
+  cast_trigger:
+    oracle_patterns:
+      - "whenever you cast"
+      - "whenever.*casts"
+      - "storm"
+      - "magecraft"
+    type_patterns: []
