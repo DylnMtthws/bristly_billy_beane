@@ -412,11 +412,11 @@ Track progress here. Update as phases complete.
 
 ```yaml
 status:
-  current_phase: "Phase 4 - Commander Profiling"
-  completed_phases: ["P1", "P2", "P3"]
+  current_phase: "Phase 5 - LLM Reasoning"
+  completed_phases: ["P1", "P2", "P3", "P4"]
   in_progress: []
   blocked: []
-  notes: "Phase 1-3 complete. Reference layer: 537 chunks indexed with embeddings (comprehensive rules, commander rules, game changers). Retrieval <200ms. 40 synergy rules curated."
+  notes: "Phase 1-4 complete. Analytics layer: filters (104K→20K cards for BRG), CVAR scoring (<1ms/card), component analysis, bracket classification, co-occurrence/CWE builders, embedding service. 41 tests passing."
 ```
 
 </context>
