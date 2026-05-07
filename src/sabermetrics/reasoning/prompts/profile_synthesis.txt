@@ -112,7 +112,7 @@ Synthesize these evidence streams into a strategic profile. Your reasoning must:
     Examples of what qualifies:
     - Wall of Denial for Arcades (0/8 defender = 8-damage flyer for 3 mana)
     - Dead Weight for Eriette (bad removal becomes Aura that feeds drain engine)
-    - Flamewave Invoker for Agatha ({8} ability becomes {1} with power 7+)
+    - Flamewave Invoker for Agatha ({{8}} ability becomes {{1}} with power 7+)
 
     If the commander does NOT invert conventional heuristics (e.g., a tribal
     lord that just wants the best creatures of its type), explicitly set
