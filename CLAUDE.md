@@ -412,11 +412,11 @@ Track progress here. Update as phases complete.
 
 ```yaml
 status:
-  current_phase: "Phase 8 - Automation"
-  completed_phases: ["P1", "P2", "P3", "P4", "P5", "P6", "P7"]
+  current_phase: "Complete"
+  completed_phases: ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"]
   in_progress: []
   blocked: []
-  notes: "Phase 1-7 complete. Local UI: Flask app (127.0.0.1 only), 6 routes, 6 templates, dark-theme CSS, commander search/profile/deck view/rules search/cost report. CLI serve command wired. 89 tests passing."
+  notes: "All 8 phases complete. Refresh automation: nightly/weekly/monthly/quarterly scripts, launchd plists with install script, JSON structured logging with rotation. CLI refresh-set command wired. 108 tests passing."
 ```
 
 </context>

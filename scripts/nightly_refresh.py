@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Nightly refresh script (D8.1).
+
+Runs daily at 2am via launchd.
+Actions:
+  1. Scryfall card sync (bulk download, ~10 min)
+  2. Update health monitoring for all sources
+"""
+
+import sys
+import time
+from pathlib import Path
+
+# Ensure src/ is on the path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from sabermetrics.utils.logging import setup_job_logging
+
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "sabermetrics.db"
+
+
+def main() -> int:
+    logger = setup_job_logging("nightly")
+    start = time.time()
+    errors: list[str] = []
+
+    # --- Step 1: Scryfall sync ---
+    logger.info("Step 1: Scryfall sync")
+    try:
+        from sabermetrics.ingestion.scryfall import ScryfallIngestion
+
+        scryfall = ScryfallIngestion(DB_PATH)
+        result = scryfall.sync(full=False)
+        logger.info(
+            "Scryfall: ingested=%d, updated=%d, failed=%d, success=%s",
+            result.items_ingested, result.items_updated,
+            result.items_failed, result.success,
+        )
+        if result.errors:
+            for err in result.errors[:5]:
+                logger.warning("Scryfall error: %s", err)
+                errors.append(f"scryfall: {err}")
+    except Exception as e:
+        logger.error("Scryfall sync failed: %s", e)
+        errors.append(f"scryfall: {e}")
+
+    # --- Step 2: Health monitoring ---
+    logger.info("Step 2: Health monitoring update")
+    try:
+        from sabermetrics.ingestion.health import SourceHealthMonitor
+
+        monitor = SourceHealthMonitor(DB_PATH)
+        report = monitor.check_all()
+        for source_name, status in report.items():
+            logger.info("Health: %s = %s", source_name, status)
+    except Exception as e:
+        logger.warning("Health check failed: %s", e)
+        errors.append(f"health: {e}")
+
+    elapsed = time.time() - start
+    logger.info(
+        "Nightly refresh complete in %.1fs with %d errors",
+        elapsed, len(errors),
+    )
+
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

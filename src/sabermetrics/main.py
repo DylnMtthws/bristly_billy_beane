@@ -145,7 +145,25 @@ def build(
 @click.argument("set_code")
 def refresh_set(set_code: str) -> None:
     """Refresh data for a newly released set."""
-    click.echo("Not implemented yet")
+    import subprocess
+    import sys
+
+    scripts_dir = Path(__file__).resolve().parent.parent.parent / "scripts"
+    script = scripts_dir / "quarterly_set_refresh.py"
+
+    if not script.exists():
+        click.echo(f"Script not found: {script}")
+        return
+
+    click.echo(f"Running quarterly set refresh for {set_code}...")
+    result = subprocess.run(
+        [sys.executable, str(script), set_code],
+        env={**__import__("os").environ, "PYTHONPATH": str(scripts_dir.parent / "src")},
+    )
+    if result.returncode != 0:
+        click.echo("Refresh completed with errors (check data/logs/)")
+    else:
+        click.echo("Refresh completed successfully.")
 
 
 @cli.command(name="search-rules")
