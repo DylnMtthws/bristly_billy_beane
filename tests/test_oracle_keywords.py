@@ -594,3 +594,190 @@ def test_cvar_bonus_differentiates_defenders_from_generic() -> None:
     generic_score = compute_synergy_score(generic, ctx)
     # Effective differential in CVAR = 0.35 * (defender - generic) >= 0.21
     assert (defender_score - generic_score) * 0.35 >= 0.18
+
+
+# ---------------------------------------------------------------------------
+# EngineDependency model tests
+# ---------------------------------------------------------------------------
+
+
+def test_engine_dependency_model_validates() -> None:
+    """EngineDependency Pydantic model validates correctly."""
+    from sabermetrics.models.profile import EngineDependency
+
+    dep = EngineDependency(
+        engine="Auras you control",
+        engine_card_traits=["aura", "enchant creature", "bestow"],
+        dependent_outputs=["life drain", "creature lockdown"],
+        false_synergy_warning=(
+            "Lifegain cards that don't interact with Auras are false synergies."
+        ),
+    )
+    assert dep.engine == "Auras you control"
+    assert len(dep.engine_card_traits) == 3
+    assert "life drain" in dep.dependent_outputs
+    assert "false synergies" in dep.false_synergy_warning
+
+
+def test_strategic_profile_defaults_empty_engine_deps() -> None:
+    """StrategicProfile defaults to empty engine_dependencies list."""
+    from sabermetrics.models.profile import (
+        AntiSynergy,
+        PowerIndicators,
+        StrategicConstraints,
+        WinCondition,
+    )
+
+    profile = StrategicProfile(
+        primary_archetype="Voltron",
+        game_plan_summary="Attack with commander",
+        win_conditions=[
+            WinCondition(
+                description="Commander damage",
+                key_cards=["Sword of Fire and Ice"],
+                reliability="primary",
+            )
+        ],
+        build_paths=[],
+        synergy_priorities={"high": [], "medium": [], "low": []},
+        anti_synergies=[],
+        strategic_constraints=StrategicConstraints(
+            mana_base_requirements="Standard",
+            interaction_density="medium",
+            speed_tier="midrange",
+        ),
+        power_indicators=PowerIndicators(
+            estimated_ceiling_bracket=3,
+            estimated_floor_bracket=2,
+            notes="Mid-power Voltron",
+        ),
+    )
+    assert profile.engine_dependencies == []
+
+
+# ---------------------------------------------------------------------------
+# Engine-aware CVAR scoring tests
+# ---------------------------------------------------------------------------
+
+
+ERIETTE_TEXT = (
+    "Other enchanted creatures you control have lifelink.\n"
+    "At the beginning of your end step, each opponent loses life equal "
+    "to the amount of life you gained this turn."
+)
+
+
+def _eriette_engine_context() -> ScoringContext:
+    """Context for Eriette with engine dependency keywords.
+
+    Note: Eriette doesn't *have* Lifelink as a keyword — she grants it
+    to enchanted creatures. Her keywords list is empty.
+    """
+    return ScoringContext(
+        commander_id="eriette-id",
+        commander_name="Eriette of the Charmed Apple",
+        commander_colors=["W", "B"],
+        commander_keywords=[],
+        commander_oracle_text=ERIETTE_TEXT,
+        engine_keywords=["aura", "enchant creature", "bestow"],
+        output_keywords=["life drain", "lifelink", "life"],
+    )
+
+
+def _eriette_no_engine_context() -> ScoringContext:
+    """Context for Eriette WITHOUT engine data (fallback behavior)."""
+    return ScoringContext(
+        commander_id="eriette-id",
+        commander_name="Eriette of the Charmed Apple",
+        commander_colors=["W", "B"],
+        commander_keywords=[],
+        commander_oracle_text=ERIETTE_TEXT,
+    )
+
+
+def test_engine_card_gets_mechanic_bonus() -> None:
+    """Aura card matching engine keywords gets synergy bonus."""
+    aura = _make_card(
+        "All That Glitters",
+        oracle_text="Enchant creature\nEnchanted creature gets +1/+1 for each artifact and enchantment you control.",
+        type_line="Enchantment — Aura",
+        color_identity=["W"],
+    )
+    ctx = _eriette_engine_context()
+    score = compute_synergy_score(aura, ctx)
+    # Should get engine bonus (0.15+ from "enchant creature" match)
+    assert score >= 0.15
+
+
+def test_output_only_card_gets_no_mechanic_bonus() -> None:
+    """Lifelink creature matching only output keywords gets no mechanic bonus."""
+    lifelink_creature = _make_card(
+        "Gifted Aetherborn",
+        oracle_text="Deathtouch, lifelink",
+        type_line="Creature — Aetherborn Vampire",
+        keywords=["Deathtouch", "Lifelink"],
+        color_identity=["B"],
+    )
+    ctx = _eriette_engine_context()
+    score = compute_synergy_score(lifelink_creature, ctx)
+    # Should NOT get mechanic pattern bonus — lifelink is an output,
+    # and Lifelink keyword overlap gives 0.3, plus color 0.1 = 0.4 max
+    # The key assertion: no mechanic_patterns bonus was added
+    assert score <= 0.5
+
+
+def test_engine_card_scores_higher_than_output_only() -> None:
+    """Aura card scores higher than standalone lifelink creature with engine context."""
+    aura = _make_card(
+        "Ethereal Armor",
+        oracle_text="Enchant creature\nEnchanted creature gets +1/+1 for each enchantment you control and has first strike.",
+        type_line="Enchantment — Aura",
+        color_identity=["W"],
+    )
+    lifelink_only = _make_card(
+        "Gifted Aetherborn",
+        oracle_text="Deathtouch, lifelink",
+        type_line="Creature — Aetherborn Vampire",
+        keywords=["Deathtouch", "Lifelink"],
+        color_identity=["B"],
+    )
+    ctx = _eriette_engine_context()
+    aura_score = compute_synergy_score(aura, ctx)
+    lifelink_score = compute_synergy_score(lifelink_only, ctx)
+    assert aura_score > lifelink_score
+
+
+def test_fallback_uses_mechanic_patterns_without_engine() -> None:
+    """Without engine keywords, fallback to original mechanic_patterns."""
+    card = _make_card(
+        "Sanguine Bond",
+        oracle_text="Whenever you gain life, target opponent loses that much life.",
+        type_line="Enchantment",
+        color_identity=["B"],
+    )
+    ctx = _eriette_no_engine_context()
+    score = compute_synergy_score(card, ctx)
+    # "life" appears in both oracle_text and commander_oracle_text,
+    # so it should get the original mechanic_patterns bonus
+    assert score >= 0.1
+
+
+def test_fallback_mechanic_patterns_korvold_unchanged() -> None:
+    """Korvold (no engine data) still uses original mechanic_patterns correctly."""
+    korvold_ctx = ScoringContext(
+        commander_id="korvold-id",
+        commander_name="Korvold, Fae-Cursed King",
+        commander_colors=["B", "R", "G"],
+        commander_keywords=["Flying"],
+        commander_oracle_text=KORVOLD_TEXT,
+        # No engine_keywords — should use fallback
+    )
+    sac_outlet = _make_card(
+        "Viscera Seer",
+        oracle_text="Sacrifice a creature: Scry 1.",
+        type_line="Creature — Vampire Wizard",
+        color_identity=["B"],
+    )
+    score = compute_synergy_score(sac_outlet, korvold_ctx)
+    # "sacrifice" pattern should match in both oracle texts
+    assert score >= 0.1

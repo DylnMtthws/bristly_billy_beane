@@ -37,6 +37,8 @@ class ScoringContext(BaseModel):
     commander_oracle_text: Optional[str] = None
     referenced_keywords: list[str] = Field(default_factory=list)
     referenced_mechanics: list[str] = Field(default_factory=list)
+    engine_keywords: list[str] = Field(default_factory=list)
+    output_keywords: list[str] = Field(default_factory=list)
     weights_synergy: float = 0.35
     weights_mana_efficiency: float = 0.25
     weights_replacement_value: float = 0.25
@@ -65,18 +67,35 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
     if card_keywords & cmdr_keywords:
         score += 0.3
 
-    # Shared mechanic patterns
-    mechanic_patterns = [
-        "sacrifice", "token", "counter", "draw", "graveyard",
-        "exile", "enters the battlefield", "dies", "combat damage",
-        "life", "mana", "enchantment", "artifact", "creature",
-    ]
-    shared = 0
-    for pattern in mechanic_patterns:
-        if pattern in oracle_text and pattern in cmdr_text:
-            shared += 1
-    if shared > 0:
-        score += min(0.4, shared * 0.1)
+    # Engine-aware mechanic matching
+    if context.engine_keywords:
+        # Cards matching engine keywords get full bonus
+        engine_matches = sum(
+            1 for kw in context.engine_keywords if kw in oracle_text
+        )
+        if engine_matches > 0:
+            score += min(0.4, engine_matches * 0.15)
+        # Cards matching ONLY output keywords (not engine) get zero from
+        # this signal — they are false synergy traps
+        elif context.output_keywords:
+            output_matches = sum(
+                1 for kw in context.output_keywords if kw in oracle_text
+            )
+            if output_matches > 0 and engine_matches == 0:
+                pass  # Deliberately no bonus — false synergy trap
+    else:
+        # Fallback: original mechanic_patterns for commanders without engine data
+        mechanic_patterns = [
+            "sacrifice", "token", "counter", "draw", "graveyard",
+            "exile", "enters the battlefield", "dies", "combat damage",
+            "life", "mana", "enchantment", "artifact", "creature",
+        ]
+        shared = 0
+        for pattern in mechanic_patterns:
+            if pattern in oracle_text and pattern in cmdr_text:
+                shared += 1
+        if shared > 0:
+            score += min(0.4, shared * 0.1)
 
     # Referenced keyword/mechanic match (commander references keywords it
     # doesn't possess, e.g. Arcades → defender)
@@ -88,7 +107,7 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
         if card_matches_referenced_keywords(
             card, context.referenced_keywords, context.referenced_mechanics
         ):
-            score += 0.4
+            score += 0.6
 
     # Color alignment bonus (more colors shared = better)
     card_ci = card.get("color_identity", "[]")

@@ -41,6 +41,18 @@ Primer Articles: {primer_summaries}
 
 {user_intent_section}
 
+<keyword_mechanics>
+The following keyword abilities are referenced in this commander's oracle text
+(keywords the commander interacts with, not necessarily possesses):
+
+Referenced Keywords: {referenced_keywords}
+Referenced Mechanics: {referenced_mechanics}
+
+If this commander references keywords it doesn't possess, this typically
+indicates a "value inversion" — the commander transforms normally-weak
+characteristics into strengths. Identify these inversions explicitly.
+</keyword_mechanics>
+
 <task>
 Synthesize these evidence streams into a strategic profile. Your reasoning must:
 
@@ -60,6 +72,32 @@ Synthesize these evidence streams into a strategic profile. Your reasoning must:
 6. **Cite specific rules** when they affect your reasoning (e.g., "CR 702.2 confirms flash creatures count as cast for trigger purposes").
 
 7. **Use rulings** when they clarify edge-case interactions relevant to the commander's strategy.
+
+8. **Identify value inversions** — If this commander transforms normally-weak
+   card characteristics into strengths (e.g., defender creatures becoming
+   attackers, high-CMC spells becoming cheap, sacrifice becoming an upside),
+   articulate the inversion explicitly: what characteristics become valuable,
+   why, and what card selection criteria follow from it. Include a
+   "desired_card_characteristics" list specifying the traits to look for.
+
+9. **Map engine dependencies** — Identify the commander's core mechanical
+   engine (the thing the deck must accumulate or activate) and distinguish
+   it from the engine's DEPENDENT OUTPUTS (effects the engine produces as
+   consequences). Cards that replicate an output independently without
+   feeding the engine are FALSE SYNERGIES — they look aligned but don't
+   actually advance the game plan.
+
+   For each engine dependency, specify:
+   - engine: what the deck must build around
+   - engine_card_traits: oracle text patterns / card types that feed the engine
+   - dependent_outputs: effects the engine produces
+   - false_synergy_warning: why cards matching outputs but not engine are traps
+
+   Example: Eriette's engine is "Auras you control." The outputs are "life
+   drain" and "creature lockdown." A lifelink creature drains life but doesn't
+   increase Aura count — it's a false synergy. A cheap Aura that enchants an
+   opponent's creature is a true synergy — it feeds the engine AND produces
+   the output.
 </task>
 
 <output_format>

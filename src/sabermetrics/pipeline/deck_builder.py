@@ -110,7 +110,9 @@ class DeckBuilder:
 
         # --- Step 5: Structural Score ---
         t = time.time()
-        candidates = self._structural_score(candidates, commander, request)
+        candidates = self._structural_score(
+            candidates, commander, request, profile_result
+        )
         metrics["5_structural"] = time.time() - t
         logger.info("Step 5: %d candidates after structural scoring", len(candidates))
 
@@ -333,6 +335,7 @@ class DeckBuilder:
         candidates: list[dict],
         commander: Card,
         request: DeckBuildRequest,
+        profile_result=None,
     ) -> list[dict]:
         """Step 5: Score by CVAR composite and sort."""
         from sabermetrics.analytics.cvar import ScoringContext, compute_cvar
@@ -355,6 +358,21 @@ class DeckBuilder:
                 commander.name, ref_keywords, ref_mechanics,
             )
 
+        # Extract engine dependency keywords from profile
+        engine_keywords: list[str] = []
+        output_keywords: list[str] = []
+        if profile_result is not None:
+            # profile_result is a ProfileResult; .profile is CommanderProfile
+            sp = getattr(
+                getattr(profile_result, "profile", None),
+                "strategic_profile",
+                None,
+            )
+            if sp is not None:
+                for dep in getattr(sp, "engine_dependencies", []):
+                    engine_keywords.extend(dep.engine_card_traits)
+                    output_keywords.extend(dep.dependent_outputs)
+
         context = ScoringContext(
             commander_id=commander.id,
             commander_name=commander.name,
@@ -363,6 +381,8 @@ class DeckBuilder:
             commander_oracle_text=commander.oracle_text,
             referenced_keywords=ref_keywords,
             referenced_mechanics=ref_mechanics,
+            engine_keywords=[kw.lower() for kw in engine_keywords],
+            output_keywords=[kw.lower() for kw in output_keywords],
             weights_synergy=weights.synergy,
             weights_mana_efficiency=weights.mana_efficiency,
             weights_replacement_value=weights.replacement_value,
@@ -454,6 +474,26 @@ class DeckBuilder:
                     f"  Evaluation: {vi.evaluation_guidance}\n"
                 )
             profile_summary += inversion_text
+
+        # Add engine dependencies if present
+        if hasattr(profile_result.strategic_profile, "engine_dependencies"):
+            deps = profile_result.strategic_profile.engine_dependencies
+            if deps:
+                dep_text = (
+                    "\n\nENGINE DEPENDENCIES "
+                    "(cards must feed the engine, not just match outputs):\n"
+                )
+                for dep in deps:
+                    dep_text += (
+                        f"- Engine: {dep.engine}\n"
+                        f"  Engine card traits: "
+                        f"{', '.join(dep.engine_card_traits)}\n"
+                        f"  Dependent outputs (NOT independent synergy axes): "
+                        f"{', '.join(dep.dependent_outputs)}\n"
+                        f"  FALSE SYNERGY WARNING: "
+                        f"{dep.false_synergy_warning}\n"
+                    )
+                profile_summary += dep_text
 
         # Separate lands (don't LLM-score lands) from non-lands
         non_land_candidates = [

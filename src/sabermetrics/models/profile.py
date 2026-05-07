@@ -71,6 +71,29 @@ class AntiSynergy(BaseModel):
     reasoning: str
 
 
+class ValueInversion(BaseModel):
+    """A heuristic the commander inverts."""
+
+    normal_heuristic: str
+    inverted_value: str
+    desired_characteristics: List[str]
+    evaluation_guidance: str
+
+
+class EngineDependency(BaseModel):
+    """A causal dependency in the commander's strategy.
+
+    Captures the distinction between the commander's core engine
+    (what the deck must accumulate/activate) and the engine's outputs
+    (effects produced as consequences of the engine running).
+    """
+
+    engine: str  # e.g. "Auras you control"
+    engine_card_traits: List[str]  # e.g. ["aura", "enchant creature", "bestow"]
+    dependent_outputs: List[str]  # e.g. ["life drain", "creature lockdown"]
+    false_synergy_warning: str  # e.g. "Lifegain cards that don't interact with Auras..."
+
+
 class StrategicConstraints(BaseModel):
     """Constraints on how the deck should be built."""
 
@@ -98,6 +121,8 @@ class StrategicProfile(BaseModel):
     anti_synergies: List[AntiSynergy]
     strategic_constraints: StrategicConstraints
     power_indicators: PowerIndicators
+    value_inversions: List[ValueInversion] = Field(default_factory=list)
+    engine_dependencies: List[EngineDependency] = Field(default_factory=list)
 
 
 class UserIntent(BaseModel):

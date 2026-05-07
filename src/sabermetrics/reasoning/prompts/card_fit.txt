@@ -11,6 +11,28 @@ You are evaluating individual cards for inclusion in a Commander deck. Score eac
 - 1: Anti-synergy; actively works against the strategy
 </scoring_rubric>
 
+<evaluation_guidance>
+IMPORTANT: The commander's strategic profile may describe "value inversions" —
+cases where normally-weak card characteristics become strengths. If the profile
+lists value inversions, evaluate cards against the INVERTED value framework,
+not generic heuristics. A 0/4 defender creature that would normally score 2-3
+could score 8-9 if the commander turns defenders into attackers.
+
+When the profile specifies desired card characteristics, prioritize cards that
+match those characteristics over generically "good" cards.
+
+ENGINE vs. OUTPUT: When the profile lists "engine_dependencies," the commander's
+strategy has a causal chain: ENGINE → OUTPUT. A card that produces the commander's
+OUTPUT (e.g., life drain) without feeding the ENGINE (e.g., Aura count) is a
+FALSE SYNERGY. Score it on general utility (3-5), NOT on output similarity (7-9).
+Only cards that feed the engine or directly amplify the engine's outputs deserve
+high synergy scores.
+
+Example: For an Aura-drain commander, a lifelink creature scores 3-4 (doesn't
+feed the Aura engine). An Aura that enchants opponents' creatures scores 8-9
+(feeds the engine AND produces the output).
+</evaluation_guidance>
+
 <reference_context>
 {archetype_definition}
 
