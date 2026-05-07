@@ -19,6 +19,13 @@ from sabermetrics.pipeline.slot_assigner import (
     fill_slots,
     get_target_composition,
 )
+from sabermetrics.pipeline.mana_base import (
+    LandInfo,
+    build_mana_base,
+    compute_color_targets,
+    count_color_pips,
+    parse_land_colors,
+)
 from sabermetrics.pipeline.formatters import (
     format_archidekt,
     format_deck,
@@ -104,18 +111,20 @@ def test_fill_slots_basic() -> None:
     # Create simple scored candidates
     candidates = []
     for i in range(120):
+        is_land = i < 40
         card = {
             "id": f"card-{i}",
             "name": f"Test Card {i}",
-            "type_line": "Creature" if i >= 40 else "Land",
-            "oracle_text": "",
+            "type_line": "Land" if is_land else "Creature",
+            "oracle_text": "{T}: Add {W} or {U}." if is_land else "",
+            "mana_cost": "" if is_land else "{1}{W}",
             "price_usd": 1.0,
-            "cmc": 3,
+            "cmc": 0 if is_land else 3,
         }
         scoring = {
             "cvar_score": 0.5 + (i % 10) * 0.05,
             "llm_fit_score": 6,
-            "slot_role": "land" if i < 40 else "utility",
+            "slot_role": "land" if is_land else "utility",
         }
         candidates.append((card, scoring))
 
@@ -124,6 +133,7 @@ def test_fill_slots_basic() -> None:
         scored_candidates=candidates,
         target_composition=target,
         max_budget=200.0,
+        commander_colors=["W", "U"],
     )
 
     assert isinstance(result, AssemblyResult)
@@ -188,6 +198,179 @@ def test_fill_slots_singleton() -> None:
 
     names = [a.card["name"] for a in result.assignments]
     assert len(names) == len(set(names)), "Duplicate card names found"
+
+
+# --- Mana Base Tests ---
+
+
+def test_parse_land_dual() -> None:
+    """Dual land oracle text produces both colors."""
+    info = parse_land_colors(
+        oracle_text="{T}: Add {W} or {B}.",
+        type_line="Land",
+    )
+    assert sorted(info.colors_produced) == ["B", "W"]
+    assert not info.enters_tapped
+    assert not info.is_fetch
+
+
+def test_parse_land_fetch() -> None:
+    """Fetch land is detected with correct targets."""
+    info = parse_land_colors(
+        oracle_text=(
+            "{T}, Pay 1 life, Sacrifice this: "
+            "Search your library for a Plains or Island card, "
+            "put it onto the battlefield, then shuffle."
+        ),
+        type_line="Land",
+        commander_colors=["W", "U"],
+    )
+    assert info.is_fetch
+    assert "W" in info.fetch_targets
+    assert "U" in info.fetch_targets
+
+
+def test_parse_land_etb_tapped() -> None:
+    """ETB tapped lands are detected."""
+    info = parse_land_colors(
+        oracle_text=(
+            "Swiftwater Cliffs enters the battlefield tapped.\n"
+            "{T}: Add {U} or {R}."
+        ),
+        type_line="Land",
+    )
+    assert info.enters_tapped
+    assert sorted(info.colors_produced) == ["R", "U"]
+
+
+def test_parse_land_any_color() -> None:
+    """'Any color' lands produce all commander colors."""
+    info = parse_land_colors(
+        oracle_text="{T}: Add one mana of any color.",
+        type_line="Land",
+        commander_colors=["W", "U", "G"],
+    )
+    assert info.produces_any_color
+    assert "W" in info.colors_produced
+    assert "U" in info.colors_produced
+    assert "G" in info.colors_produced
+
+
+def test_parse_land_basic_types() -> None:
+    """Basic land types in type line produce correct colors."""
+    info = parse_land_colors(
+        oracle_text="({T}: Add {W} or {U}.)",
+        type_line="Land — Plains Island",
+    )
+    assert "W" in info.colors_produced
+    assert "U" in info.colors_produced
+
+
+def test_count_color_pips() -> None:
+    """Pip counting from mana costs."""
+    cards = [
+        {"mana_cost": "{2}{W}{U}{B}", "cmc": 5, "type_line": "Sorcery"},
+        {"mana_cost": "{W}{W}", "cmc": 2, "type_line": "Creature"},
+        {"mana_cost": "{3}{U}", "cmc": 4, "type_line": "Instant"},
+    ]
+    result = count_color_pips(cards)
+    assert result["W"]["total_pips"] == 3  # 1 + 2
+    assert result["W"]["max_pips"] == 2    # {W}{W}
+    assert result["U"]["total_pips"] == 2  # 1 + 1
+    assert result["B"]["total_pips"] == 1
+
+
+def test_color_targets_karsten() -> None:
+    """Karsten lookup produces reasonable targets for a 3-color deck."""
+    spells = [
+        {"mana_cost": "{1}{W}{W}", "cmc": 3, "type_line": "Creature"},
+        {"mana_cost": "{2}{U}", "cmc": 3, "type_line": "Instant"},
+        {"mana_cost": "{3}{G}{G}", "cmc": 5, "type_line": "Sorcery"},
+    ]
+    targets = compute_color_targets(spells, ["W", "U", "G"], total_lands=36)
+    # WW at CMC 3 → 23 sources; single U at CMC 3 → 17; GG at CMC 5 → 18
+    assert targets["W"] >= 15
+    assert targets["U"] >= 10
+    assert targets["G"] >= 15
+
+
+def test_mana_base_includes_basics() -> None:
+    """Mana base output includes basic lands."""
+    land_candidates = [
+        (
+            {"id": f"land-{i}", "name": f"Nonbasic {i}",
+             "type_line": "Land", "oracle_text": "{T}: Add {W} or {U}.",
+             "price_usd": 1.0},
+            {"cvar_score": 0.5, "slot_role": "land"},
+        )
+        for i in range(10)
+    ]
+    spells = [
+        {"mana_cost": "{1}{W}", "cmc": 2, "type_line": "Creature"},
+        {"mana_cost": "{1}{U}", "cmc": 2, "type_line": "Creature"},
+        {"mana_cost": "{1}{G}", "cmc": 2, "type_line": "Creature"},
+    ]
+    result = build_mana_base(
+        land_candidates=land_candidates,
+        spells=spells,
+        commander_colors=["W", "U", "G"],
+        total_lands=36,
+    )
+    names = [a.card["name"] for a in result]
+    basics = [n for n in names if n in ("Plains", "Island", "Forest")]
+    assert len(basics) > 0, "Expected basic lands in mana base"
+
+
+def test_mana_base_color_coverage() -> None:
+    """All commander colors have at least some sources."""
+    spells = [
+        {"mana_cost": "{W}", "cmc": 1, "type_line": "Creature"},
+        {"mana_cost": "{U}", "cmc": 1, "type_line": "Creature"},
+        {"mana_cost": "{B}", "cmc": 1, "type_line": "Creature"},
+    ]
+    result = build_mana_base(
+        land_candidates=[],
+        spells=spells,
+        commander_colors=["W", "U", "B"],
+        total_lands=36,
+    )
+    # With no nonbasic candidates, all lands should be basics
+    names = [a.card["name"] for a in result]
+    assert "Plains" in names
+    assert "Island" in names
+    assert "Swamp" in names
+
+
+def test_mana_base_prefers_untapped() -> None:
+    """Untapped lands should be preferred over ETB-tapped lands."""
+    untapped = (
+        {"id": "untapped-1", "name": "Good Dual",
+         "type_line": "Land", "oracle_text": "{T}: Add {W} or {U}.",
+         "price_usd": 5.0},
+        {"cvar_score": 0.5, "slot_role": "land"},
+    )
+    tapped = (
+        {"id": "tapped-1", "name": "Bad Dual",
+         "type_line": "Land",
+         "oracle_text": "Bad Dual enters the battlefield tapped.\n{T}: Add {W} or {U}.",
+         "price_usd": 0.5},
+        {"cvar_score": 0.8, "slot_role": "land"},
+    )
+    spells = [
+        {"mana_cost": "{1}{W}{U}", "cmc": 3, "type_line": "Creature"},
+    ]
+    result = build_mana_base(
+        land_candidates=[untapped, tapped],
+        spells=spells,
+        commander_colors=["W", "U"],
+        total_lands=36,
+    )
+    # Both should be included, but untapped should come first (higher score)
+    nonbasic_names = [
+        a.card["name"] for a in result
+        if a.card["name"] not in ("Plains", "Island")
+    ]
+    assert nonbasic_names[0] == "Good Dual"
 
 
 # --- Formatter Tests ---

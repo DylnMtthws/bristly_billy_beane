@@ -196,15 +196,6 @@ def get_target_composition(
     return composition
 
 
-def _min_basic_lands(num_colors: int) -> int:
-    """Minimum basic lands based on commander color count.
-
-    Every Commander deck needs basics for budget, fetchability, and
-    resilience to nonbasic hate (Blood Moon, Back to Basics, etc.).
-    """
-    return {1: 12, 2: 8, 3: 6, 4: 5, 5: 4}.get(num_colors, 6)
-
-
 def fill_slots(
     scored_candidates: list[tuple[dict, dict]],
     target_composition: dict[str, int],
@@ -231,64 +222,72 @@ def fill_slots(
     Returns:
         AssemblyResult with 99 assigned cards.
     """
+    from sabermetrics.pipeline.mana_base import build_mana_base
+
     warnings: list[str] = []
     colors = commander_colors or []
 
-    # Reserve basic land slots
     land_target = target_composition.get("land", 36)
-    min_basics = _min_basic_lands(len(colors)) if colors else 0
-    nonbasic_land_cap = land_target - min_basics
 
-    # Group candidates by role
-    role_candidates: dict[str, list[tuple[dict, float]]] = {
-        role: [] for role in target_composition
-    }
+    # Separate land candidates from non-land candidates
+    land_scored: list[tuple[dict, dict]] = []
+    nonland_scored: list[tuple[dict, dict]] = []
 
     for card, scoring in scored_candidates:
         role = scoring.get("slot_role", "other")
-        if role not in role_candidates:
+        type_line = (card.get("type_line") or "").lower()
+        is_land = role == "land" or ("land" in type_line and "creature" not in type_line)
+        if is_land:
+            land_scored.append((card, scoring))
+        else:
+            nonland_scored.append((card, scoring))
+
+    # Group non-land candidates by role
+    nonland_roles: dict[str, list[tuple[dict, float]]] = {
+        role: [] for role in target_composition if role != "land"
+    }
+
+    for card, scoring in nonland_scored:
+        role = scoring.get("slot_role", "other")
+        if role == "land":
+            role = "other"
+        if role not in nonland_roles:
             role = "other"
 
-        # Combined score: weighted CVAR + LLM fit
         cvar = scoring.get("cvar_score", 0.0)
-        llm_fit = scoring.get("llm_fit_score", 5) / 10.0  # Normalize to 0-1
+        llm_fit = scoring.get("llm_fit_score", 5) / 10.0
         combined = 0.6 * cvar + 0.4 * llm_fit
-        role_candidates[role].append((card, combined))
+        nonland_roles[role].append((card, combined))
 
-    # Sort each role's candidates by combined score (descending)
-    for role in role_candidates:
-        role_candidates[role].sort(key=lambda x: x[1], reverse=True)
+    for role in nonland_roles:
+        nonland_roles[role].sort(key=lambda x: x[1], reverse=True)
 
-    # Fill slots
+    # Pass 1: Fill non-land roles up to target count
     assignments: list[SlotAssignment] = []
     used_names: set[str] = set()
     running_price = 0.0
 
     actual_composition: dict[str, int] = {role: 0 for role in target_composition}
 
-    # Pass 1: Fill each role up to target count.
-    # For lands, cap nonbasics to leave room for basics.
     for role, target_count in target_composition.items():
-        candidates = role_candidates.get(role, [])
+        if role == "land":
+            continue  # Lands handled by mana base builder
 
-        # Cap nonbasic land slots to reserve room for basics
-        effective_target = nonbasic_land_cap if role == "land" else target_count
+        candidates = nonland_roles.get(role, [])
         filled = 0
 
         for card, score in candidates:
-            if filled >= effective_target:
+            if filled >= target_count:
                 break
 
             name = card.get("name", "")
             if name in used_names:
                 continue
 
-            # Budget check
             price = float(card.get("price_usd", 0) or 0)
             if max_budget and running_price + price > max_budget:
                 continue
 
-            # Find alternatives (next few unused candidates of same role)
             alts: list[str] = []
             for alt_card, _ in candidates:
                 if len(alts) >= alternatives_per_slot:
@@ -309,12 +308,12 @@ def fill_slots(
             filled += 1
             actual_composition[role] = filled
 
-    # Pass 2: Fill remaining non-land slots from overflow (skip lands —
-    # land target is handled by basics in pass 3).
-    remaining_needed = 99 - len(assignments) - min_basics
+    # Pass 2: Fill remaining non-land slots from overflow
+    nonland_slots_target = 99 - land_target
+    remaining_needed = nonland_slots_target - len(assignments)
     if remaining_needed > 0:
         overflow: list[tuple[dict, float, str]] = []
-        for role, candidates in role_candidates.items():
+        for role, candidates in nonland_roles.items():
             for card, score in candidates:
                 name = card.get("name", "")
                 if name not in used_names:
@@ -328,11 +327,6 @@ def fill_slots(
 
             name = card.get("name", "")
             if name in used_names:
-                continue
-
-            # Skip lands in overflow — basics will fill land slots
-            type_line = (card.get("type_line") or "").lower()
-            if "land" in type_line and "creature" not in type_line:
                 continue
 
             price = float(card.get("price_usd", 0) or 0)
@@ -350,13 +344,29 @@ def fill_slots(
             actual_composition["other"] = actual_composition.get("other", 0) + 1
             remaining_needed -= 1
 
-    # Pass 3: Fill remaining slots with basic lands.
-    total_remaining = 99 - len(assignments)
-    if total_remaining > 0 and colors:
-        _fill_basic_lands(
-            assignments, actual_composition, used_names,
-            colors, total_remaining,
-        )
+    # Pass 3: Build mana base using Karsten-style calculator
+    spells = [a.card for a in assignments]
+
+    # Filter out land candidates whose names are already used
+    available_lands = [
+        (card, scoring) for card, scoring in land_scored
+        if card.get("name", "") not in used_names
+    ]
+
+    land_assignments = build_mana_base(
+        land_candidates=available_lands,
+        spells=spells,
+        commander_colors=colors,
+        total_lands=land_target,
+        max_budget=max_budget,
+        running_price=running_price,
+    )
+
+    for la in land_assignments:
+        assignments.append(la)
+        used_names.add(la.card.get("name", ""))
+        running_price += float(la.card.get("price_usd", 0) or 0)
+    actual_composition["land"] = len(land_assignments)
 
     if len(assignments) < 99:
         warnings.append(
@@ -381,54 +391,3 @@ def fill_slots(
     )
 
 
-def _fill_basic_lands(
-    assignments: list[SlotAssignment],
-    actual_composition: dict[str, int],
-    used_names: set[str],
-    commander_colors: list[str],
-    count: int,
-) -> int:
-    """Add basic lands to fill land slots.
-
-    Distributes basics evenly across the commander's colors.
-    Basic lands are free ($0) and can appear multiple times.
-
-    Returns:
-        Number of basics still needed (0 if fully filled).
-    """
-    # Determine which basics are in color identity
-    available_basics = [
-        (name, color) for name, color in BASIC_LANDS.items()
-        if color in commander_colors
-    ]
-
-    if not available_basics:
-        return count
-
-    added = 0
-    cycle = 0
-    while added < count:
-        name, _ = available_basics[cycle % len(available_basics)]
-        basic_card = {
-            "id": f"basic-{name.lower()}-{added}",
-            "name": name,
-            "type_line": f"Basic Land — {name}",
-            "oracle_text": "",
-            "mana_cost": "",
-            "cmc": 0.0,
-            "color_identity": "[]",
-            "price_usd": 0.0,
-            "rarity": "common",
-        }
-        assignments.append(SlotAssignment(
-            card=basic_card,
-            slot_role="land",
-            score=0.5,
-            alternatives=[],
-        ))
-        actual_composition["land"] = actual_composition.get("land", 0) + 1
-        added += 1
-        cycle += 1
-
-    logger.info("Added %d basic lands to fill land slots", added)
-    return 0
