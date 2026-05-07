@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Profile: {{ commander_name }}{% endblock %}
+
+{% block content %}
+{% if error is defined and error %}
+<h1>Profile Error</h1>
+<p>{{ error }}</p>
+{% else %}
+
+<h1>{{ commander_name }}</h1>
+
+<div class="profile-header">
+    <div class="card-info">
+        <p><strong>Type:</strong> {{ card.type_line }}</p>
+        <p><strong>Mana Cost:</strong> {{ card.mana_cost or 'N/A' }}</p>
+        <p><strong>Colors:</strong>
+            {% for c in card.color_identity %}
+            <span class="mana mana-{{ c }}">{{ c }}</span>
+            {% endfor %}
+        </p>
+        {% if card.oracle_text %}
+        <p class="oracle-text">{{ card.oracle_text }}</p>
+        {% endif %}
+        {% if card.image_uri %}
+        <img src="{{ card.image_uri }}" alt="{{ commander_name }}" class="card-image">
+        {% endif %}
+    </div>
+</div>
+
+{% if profile %}
+<section class="profile-section">
+    <h2>Strategic Profile</h2>
+    <p class="generated-note">Generated: {{ profile._generated_at }}</p>
+
+    {% if profile.strategic_profile %}
+    <div class="strategy">
+        <h3>{{ profile.strategic_profile.primary_archetype }}</h3>
+        <p>{{ profile.strategic_profile.game_plan_summary }}</p>
+
+        {% if profile.strategic_profile.win_conditions %}
+        <h4>Win Conditions</h4>
+        <ul>
+            {% for wc in profile.strategic_profile.win_conditions %}
+            <li>
+                <strong>[{{ wc.reliability }}]</strong> {{ wc.description }}
+                {% if wc.key_cards %}
+                <span class="key-cards">({{ wc.key_cards|join(', ') }})</span>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if profile.strategic_profile.build_paths %}
+        <h4>Build Paths</h4>
+        <ul>
+            {% for bp in profile.strategic_profile.build_paths %}
+            <li>
+                <strong>{{ bp.name }}</strong> [{{ bp.consensus_status }}]: {{ bp.description }}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if profile.strategic_profile.anti_synergies %}
+        <h4>Anti-Synergies</h4>
+        <ul>
+            {% for anti in profile.strategic_profile.anti_synergies %}
+            <li>{{ anti.description }} &mdash; <em>{{ anti.reasoning }}</em></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if profile.strategic_profile.power_indicators %}
+        <h4>Power Level</h4>
+        <p>
+            Bracket {{ profile.strategic_profile.power_indicators.estimated_floor_bracket }}
+            &ndash;
+            {{ profile.strategic_profile.power_indicators.estimated_ceiling_bracket }}
+        </p>
+        <p>{{ profile.strategic_profile.power_indicators.notes }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if profile.behavioral_signals %}
+    <h3>Behavioral Signals</h3>
+    <div class="stats-grid">
+        <div class="stat">
+            <span class="stat-value">{{ profile.behavioral_signals.total_decks_tracked }}</span>
+            <span class="stat-label">Decks Tracked</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">${{ "%.0f"|format(profile.behavioral_signals.average_deck_price_usd) }}</span>
+            <span class="stat-label">Avg Price</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ "%.2f"|format(profile.behavioral_signals.average_cmc) }}</span>
+            <span class="stat-label">Avg CMC</span>
+        </div>
+        {% if profile.behavioral_signals.tournament_win_rate %}
+        <div class="stat">
+            <span class="stat-value">{{ "%.1f"|format(profile.behavioral_signals.tournament_win_rate * 100) }}%</span>
+            <span class="stat-label">Tournament WR</span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if profile.behavioral_signals.edhrec_themes %}
+    <h4>Themes</h4>
+    <p>{{ profile.behavioral_signals.edhrec_themes|join(', ') }}</p>
+    {% endif %}
+    {% endif %}
+
+    {% if profile.community_signals %}
+    <h3>Community Signals</h3>
+    {% if profile.community_signals.named_archetypes %}
+    <p><strong>Archetypes:</strong> {{ profile.community_signals.named_archetypes|join(', ') }}</p>
+    {% endif %}
+    {% if profile.community_signals.emerging_strategies %}
+    <p><strong>Emerging:</strong> {{ profile.community_signals.emerging_strategies|join(', ') }}</p>
+    {% endif %}
+    {% endif %}
+</section>
+{% else %}
+<section class="profile-section">
+    <p>No profile generated yet. Use the CLI or generate a deck to create one.</p>
+    <form method="post" action="{{ url_for('main.generate_deck') }}">
+        <input type="hidden" name="commander_id" value="{{ commander_id }}">
+        <input type="hidden" name="budget" value="200">
+        <input type="hidden" name="power" value="3">
+        <button type="submit">Generate Deck (creates profile)</button>
+    </form>
+</section>
+{% endif %}
+
+{% if edhrec %}
+<section class="edhrec-section">
+    <h2>EDHREC Data</h2>
+    {% if edhrec.themes %}
+    <p><strong>Themes:</strong> {{ edhrec.themes|join(', ') }}</p>
+    {% endif %}
+    {% if edhrec.deck_count %}
+    <p><strong>Deck Count:</strong> {{ edhrec.deck_count }}</p>
+    {% endif %}
+    {% if edhrec.top_cards %}
+    <h3>Top Cards</h3>
+    <table>
+        <thead>
+            <tr><th>Card</th><th>Inclusion %</th></tr>
+        </thead>
+        <tbody>
+            {% for tc in edhrec.top_cards[:20] %}
+            <tr>
+                <td>{{ tc.card_name if tc.card_name is defined else tc.name }}</td>
+                <td>{{ tc.inclusion_pct if tc.inclusion_pct is defined else '?' }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+{% endif %}
+
+{% endif %}
+{% endblock %}

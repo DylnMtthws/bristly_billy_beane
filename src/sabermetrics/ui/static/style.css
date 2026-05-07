@@ -1,0 +1,416 @@
+/* Sabermetrics - Minimal CSS */
+/* Clean and comprehensible, per project guidelines */
+
+:root {
+    --bg: #1a1a2e;
+    --bg-card: #16213e;
+    --bg-input: #0f3460;
+    --text: #e0e0e0;
+    --text-muted: #a0a0b0;
+    --accent: #e94560;
+    --accent-hover: #ff6b81;
+    --border: #2a2a4a;
+    --success: #4caf50;
+    --warning: #ff9800;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* Navigation */
+.nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+}
+
+.nav-brand {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.nav-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    margin-left: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.nav-links a:hover {
+    color: var(--accent-hover);
+}
+
+/* Container */
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* Typography */
+h1 { font-size: 1.8rem; margin-bottom: 1rem; color: var(--text); }
+h2 { font-size: 1.4rem; margin: 1.5rem 0 0.75rem; color: var(--text); }
+h3 { font-size: 1.1rem; margin: 1rem 0 0.5rem; color: var(--text-muted); }
+h4 { font-size: 1rem; margin: 0.75rem 0 0.5rem; color: var(--text-muted); }
+
+/* Search form */
+.search-form {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.search-form input[type="text"] {
+    flex: 1;
+    padding: 0.6rem 1rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+/* Buttons */
+button, .btn {
+    padding: 0.6rem 1.2rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+button:hover, .btn:hover {
+    background: var(--accent-hover);
+}
+
+/* Cards grid */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.card-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.card-item h3 {
+    color: var(--text);
+    margin-top: 0;
+}
+
+.type-line {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.card-actions a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.card-actions a:hover {
+    color: var(--accent-hover);
+}
+
+/* Mana symbols */
+.mana {
+    display: inline-block;
+    width: 1.4rem;
+    height: 1.4rem;
+    line-height: 1.4rem;
+    text-align: center;
+    border-radius: 50%;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-right: 2px;
+}
+
+.mana-W { background: #f9faf4; color: #333; }
+.mana-U { background: #0e68ab; color: white; }
+.mana-B { background: #150b00; color: #ccc; border: 1px solid #444; }
+.mana-R { background: #d3202a; color: white; }
+.mana-G { background: #00733e; color: white; }
+
+/* Stats grid */
+.stats-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.stat {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem 1.25rem;
+    text-align: center;
+    min-width: 100px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.stat-warning .stat-value {
+    color: var(--warning);
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.5rem 0;
+}
+
+th, td {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+th {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+td {
+    font-size: 0.9rem;
+}
+
+tr:hover {
+    background: rgba(233, 69, 96, 0.05);
+}
+
+/* Card table */
+.card-table .reasoning {
+    max-width: 300px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Details / Accordion */
+details {
+    margin: 0.5rem 0;
+}
+
+summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text);
+    padding: 0.5rem 0;
+}
+
+summary:hover {
+    color: var(--accent);
+}
+
+/* Forms */
+.form-group {
+    margin: 0.5rem 0;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"] {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 0.9rem;
+}
+
+/* Inline form */
+.inline-form {
+    margin-top: 0.5rem;
+}
+
+/* Oracle text */
+.oracle-text {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.75rem;
+    font-style: italic;
+    white-space: pre-wrap;
+    margin: 0.5rem 0;
+}
+
+/* Card image */
+.card-image {
+    max-width: 250px;
+    border-radius: 10px;
+    margin: 0.5rem 0;
+}
+
+/* Result cards (reference search) */
+.result-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 0.75rem 0;
+}
+
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.result-source {
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.result-score {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.result-content {
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+/* Mana curve */
+.mana-curve {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 120px;
+    margin: 0.5rem 0;
+}
+
+.curve-bar {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+}
+
+.curve-bar .bar {
+    background: var(--accent);
+    width: 100%;
+    border-radius: 2px 2px 0 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    font-size: 0.7rem;
+    padding-top: 2px;
+    min-height: 1px;
+}
+
+.cmc-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* Alerts */
+.alert {
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.alert-error {
+    background: rgba(233, 69, 96, 0.15);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+}
+
+/* Generated note */
+.generated-note {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Key cards */
+.key-cards {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Profile section */
+.profile-section {
+    margin: 1.5rem 0;
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+}
+
+/* Links */
+a {
+    color: var(--accent);
+}
+
+a:hover {
+    color: var(--accent-hover);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .nav {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
+    .stats-grid {
+        justify-content: center;
+    }
+}

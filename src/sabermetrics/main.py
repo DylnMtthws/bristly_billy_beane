@@ -175,7 +175,10 @@ def search_rules(query: str, top_k: int) -> None:
 @click.option("--host", default="127.0.0.1", help="Server host.")
 def serve(port: int, host: str) -> None:
     """Start the Flask UI server."""
-    click.echo("Not implemented yet")
+    from sabermetrics.ui.app import run_server
+
+    db_path = _default_db_path()
+    run_server(host=host, port=port, db_path=db_path)
 
 
 @cli.command()

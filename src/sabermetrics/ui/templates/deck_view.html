@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Deck: {{ deck.commander_name if deck else 'Not Found' }}{% endblock %}
+
+{% block content %}
+{% if error is defined and error %}
+<h1>{{ error }}</h1>
+{% elif deck %}
+
+<h1>{{ deck.commander_name }}</h1>
+
+<div class="deck-meta">
+    <div class="stats-grid">
+        <div class="stat">
+            <span class="stat-value">${{ "%.0f"|format(deck.budget_usd or 0) }}</span>
+            <span class="stat-label">Budget</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ deck.power_target }}</span>
+            <span class="stat-label">Power Target</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ deck.estimated_bracket }}</span>
+            <span class="stat-label">Est. Bracket</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ deck.cards|length }}</span>
+            <span class="stat-label">Cards</span>
+        </div>
+    </div>
+    <p class="generated-note">Generated: {{ deck.generated_at[:16] }}</p>
+</div>
+
+{% if deck.rationale and deck.rationale.narrative %}
+<section class="narrative">
+    <h2>Game Plan</h2>
+    <p>{{ deck.rationale.narrative.game_plan }}</p>
+
+    {% if deck.rationale.narrative.key_synergies %}
+    <h3>Key Synergies</h3>
+    <ul>
+        {% for syn in deck.rationale.narrative.key_synergies %}
+        <li>{{ syn }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if deck.rationale.narrative.weaknesses %}
+    <h3>Weaknesses</h3>
+    <ul>
+        {% for w in deck.rationale.narrative.weaknesses %}
+        <li>{{ w }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if deck.rationale.narrative.suggested_play_pattern %}
+    <h3>Play Pattern</h3>
+    <p>{{ deck.rationale.narrative.suggested_play_pattern }}</p>
+    {% endif %}
+</section>
+{% endif %}
+
+{% if deck.rationale and deck.rationale.composition %}
+<section class="composition">
+    <h2>Composition</h2>
+    <div class="stats-grid">
+        {% set comp = deck.rationale.composition %}
+        <div class="stat">
+            <span class="stat-value">${{ "%.2f"|format(comp.total_price_usd) }}</span>
+            <span class="stat-label">Total Price</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ "%.2f"|format(comp.average_cmc) }}</span>
+            <span class="stat-label">Avg CMC</span>
+        </div>
+    </div>
+
+    {% if comp.component_counts %}
+    <h3>Components</h3>
+    <div class="stats-grid">
+        <div class="stat">
+            <span class="stat-value">{{ comp.component_counts.ramp }}</span>
+            <span class="stat-label">Ramp</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ comp.component_counts.draw }}</span>
+            <span class="stat-label">Draw</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ comp.component_counts.removal }}</span>
+            <span class="stat-label">Removal</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ comp.component_counts.board_wipes }}</span>
+            <span class="stat-label">Wipes</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ comp.component_counts.tutors }}</span>
+            <span class="stat-label">Tutors</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{{ comp.component_counts.win_conditions }}</span>
+            <span class="stat-label">Win Cons</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if comp.mana_curve %}
+    <h3>Mana Curve</h3>
+    <div class="mana-curve">
+        {% for count in comp.mana_curve %}
+        <div class="curve-bar">
+            <div class="bar" style="height: {{ (count / ([1] + comp.mana_curve)|max * 100)|int }}%">
+                {{ count }}
+            </div>
+            <span class="cmc-label">{{ loop.index0 if loop.index0 < 7 else '7+' }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+
+<section class="card-list">
+    <h2>Card List</h2>
+    <p><strong>Commander:</strong> {{ deck.commander_name }}</p>
+
+    {% set role_order = ['land', 'ramp', 'draw', 'removal', 'wincon', 'utility', 'other'] %}
+    {% set role_labels = {'land': 'Lands', 'ramp': 'Ramp', 'draw': 'Card Draw', 'removal': 'Removal', 'wincon': 'Win Conditions', 'utility': 'Utility', 'other': 'Other'} %}
+
+    {% for role in role_order %}
+    {% if deck.cards_by_role.get(role) %}
+    <details open>
+        <summary>{{ role_labels.get(role, role) }} ({{ deck.cards_by_role[role]|length }})</summary>
+        <table class="card-table">
+            <thead>
+                <tr>
+                    <th>Card</th>
+                    <th>Type</th>
+                    <th>CMC</th>
+                    <th>Fit</th>
+                    <th>Reasoning</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for card in deck.cards_by_role[role]|sort(attribute='name') %}
+                <tr>
+                    <td>{{ card.name }}</td>
+                    <td>{{ card.type_line or '' }}</td>
+                    <td>{{ card.cmc or '' }}</td>
+                    <td>{{ card.fit_score or '' }}/10</td>
+                    <td class="reasoning">{{ card.reasoning or '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </details>
+    {% endif %}
+    {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

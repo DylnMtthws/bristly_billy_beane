@@ -412,11 +412,11 @@ Track progress here. Update as phases complete.
 
 ```yaml
 status:
-  current_phase: "Phase 7 - Testing & Polish"
-  completed_phases: ["P1", "P2", "P3", "P4", "P5", "P6"]
+  current_phase: "Phase 8 - Automation"
+  completed_phases: ["P1", "P2", "P3", "P4", "P5", "P6", "P7"]
   in_progress: []
   blocked: []
-  notes: "Phase 1-6 complete. Pipeline integration: 10-step deck builder orchestrator, slot-aware assembler with target compositions per power level, 4 output formatters (JSON/text/Moxfield/Archidekt), CLI build command wired. 76 tests passing."
+  notes: "Phase 1-7 complete. Local UI: Flask app (127.0.0.1 only), 6 routes, 6 templates, dark-theme CSS, commander search/profile/deck view/rules search/cost report. CLI serve command wired. 89 tests passing."
 ```
 
 </context>

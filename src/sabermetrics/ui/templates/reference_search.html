@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Rules Search{% endblock %}
+
+{% block content %}
+<h1>Reference Search</h1>
+
+<form method="get" action="{{ url_for('main.reference_search') }}" class="search-form">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search rules, e.g. 'color identity' or 'ward ability'..." autofocus>
+    <button type="submit">Search</button>
+</form>
+
+{% if results %}
+<section class="results">
+    <p>{{ results|length }} results for "{{ query }}"</p>
+
+    {% for r in results %}
+    <div class="result-card">
+        <div class="result-header">
+            <span class="result-source">{{ r.document }} / {{ r.section }}</span>
+            <span class="result-score">{{ r.score }}</span>
+        </div>
+        <div class="result-content">{{ r.content }}</div>
+    </div>
+    {% endfor %}
+</section>
+{% elif query %}
+<p>No results found for "{{ query }}".</p>
+{% endif %}
+{% endblock %}

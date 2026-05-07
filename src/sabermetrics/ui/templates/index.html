@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Sabermetrics - Home{% endblock %}
+
+{% block content %}
+<h1>Commander Search</h1>
+
+<form method="get" action="{{ url_for('main.index') }}" class="search-form">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search for a commander..." autofocus>
+    <button type="submit">Search</button>
+</form>
+
+{% if commanders %}
+<section class="results">
+    <h2>Commanders ({{ commanders|length }})</h2>
+    <div class="card-grid">
+        {% for cmdr in commanders %}
+        <div class="card-item">
+            <h3>{{ cmdr.name }}</h3>
+            <p class="type-line">{{ cmdr.type_line }}</p>
+            <p class="color-id">
+                {% for c in cmdr.color_identity %}
+                <span class="mana mana-{{ c }}">{{ c }}</span>
+                {% endfor %}
+            </p>
+            <div class="card-actions">
+                <a href="{{ url_for('main.commander_profile', name=cmdr.name) }}">View Profile</a>
+            </div>
+
+            <form method="post" action="{{ url_for('main.generate_deck') }}" class="inline-form">
+                <input type="hidden" name="commander_id" value="{{ cmdr.id }}">
+                <details>
+                    <summary>Build Deck</summary>
+                    <div class="form-group">
+                        <label>Budget ($)</label>
+                        <input type="number" name="budget" value="200" step="10" min="10">
+                    </div>
+                    <div class="form-group">
+                        <label>Power (1-5)</label>
+                        <input type="number" name="power" value="3" min="1" max="5">
+                    </div>
+                    <div class="form-group">
+                        <label>Strategy</label>
+                        <input type="text" name="strategy" placeholder="e.g., aggro, combo">
+                    </div>
+                    <div class="form-group">
+                        <label>Build Direction</label>
+                        <input type="text" name="user_intent" placeholder="Optional intent">
+                    </div>
+                    <button type="submit">Generate</button>
+                </details>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% elif query %}
+<p>No commanders found matching "{{ query }}".</p>
+{% endif %}
+
+{% if recent_decks %}
+<section class="recent">
+    <h2>Recent Decks</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Commander</th>
+                <th>Budget</th>
+                <th>Power</th>
+                <th>Bracket</th>
+                <th>Generated</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for deck in recent_decks %}
+            <tr>
+                <td>{{ deck.commander_name }}</td>
+                <td>${{ "%.0f"|format(deck.budget_usd or 0) }}</td>
+                <td>{{ deck.power_target }}</td>
+                <td>{{ deck.estimated_bracket }}</td>
+                <td>{{ deck.generated_at[:16] }}</td>
+                <td><a href="{{ url_for('main.view_deck', deck_id=deck.id) }}">View</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+{% endblock %}
