@@ -31,6 +31,10 @@
                 <details>
                     <summary>Build Deck</summary>
                     <div class="form-group">
+                        <label>Deck Name</label>
+                        <input type="text" name="deck_name" placeholder="e.g., Combo Build, Budget Aggro">
+                    </div>
+                    <div class="form-group">
                         <label>Budget ($)</label>
                         <input type="number" name="budget" value="200" step="10" min="10">
                     </div>
@@ -57,6 +61,17 @@
 <p>No commanders found matching "{{ query }}".</p>
 {% endif %}
 
+<!-- Loading overlay for deck generation -->
+<div id="loading-overlay" class="loading-overlay" style="display:none">
+    <div class="loading-content">
+        <h2 class="loading-commander" id="loading-commander"></h2>
+        <div class="loading-bar-track">
+            <div class="loading-bar-fill" id="loading-bar"></div>
+        </div>
+        <p class="loading-text" id="loading-text">Preparing...</p>
+    </div>
+</div>
+
 {% if recent_decks %}
 <section class="recent">
     <h2>Recent Decks</h2>
@@ -64,6 +79,7 @@
         <thead>
             <tr>
                 <th>Commander</th>
+                <th>Deck Name</th>
                 <th>Budget</th>
                 <th>Power</th>
                 <th>Bracket</th>
@@ -75,15 +91,117 @@
             {% for deck in recent_decks %}
             <tr>
                 <td>{{ deck.commander_name }}</td>
+                <td>{{ deck.deck_name or '—' }}</td>
                 <td>${{ "%.0f"|format(deck.budget_usd or 0) }}</td>
                 <td>{{ deck.power_target }}</td>
                 <td>{{ deck.estimated_bracket }}</td>
                 <td>{{ deck.generated_at[:16] }}</td>
-                <td><a href="{{ url_for('main.view_deck', deck_id=deck.id) }}">View</a></td>
+                <td>
+                    <a href="{{ url_for('main.view_deck', deck_id=deck.id) }}">View</a>
+                    <form method="post" action="{{ url_for('main.delete_deck', deck_id=deck.id) }}" style="display:inline" onsubmit="return confirm('Delete this deck?')">
+                        <button type="submit" class="btn-delete">Delete</button>
+                    </form>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </section>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var flavorTexts = [
+        "Summoning the commander...",
+        "Scouting the multiverse for candidates...",
+        "Crunching the numbers... hold my mana rock",
+        "Asking the AI to judge 50 cards...",
+        "Assembling the 99... budget is a feature",
+        "Writing the game plan...",
+        "Calculating power level..."
+    ];
+
+    var overlay = document.getElementById('loading-overlay');
+    var bar = document.getElementById('loading-bar');
+    var text = document.getElementById('loading-text');
+    var cmdrEl = document.getElementById('loading-commander');
+    var progressTimer = null;
+    var flavorTimer = null;
+
+    function showOverlay(commanderName) {
+        cmdrEl.textContent = commanderName;
+        bar.style.width = '0%';
+        text.textContent = flavorTexts[0];
+        overlay.style.display = 'flex';
+
+        var progress = 0;
+        var flavorIndex = 0;
+
+        progressTimer = setInterval(function() {
+            var remaining = 90 - progress;
+            progress += remaining * 0.04;
+            bar.style.width = progress + '%';
+        }, 500);
+
+        flavorTimer = setInterval(function() {
+            flavorIndex = (flavorIndex + 1) % flavorTexts.length;
+            text.textContent = flavorTexts[flavorIndex];
+        }, 4000);
+    }
+
+    function hideOverlay() {
+        clearInterval(progressTimer);
+        clearInterval(flavorTimer);
+        overlay.style.display = 'none';
+    }
+
+    function finishOverlay(deckUrl) {
+        clearInterval(progressTimer);
+        clearInterval(flavorTimer);
+        bar.style.width = '100%';
+        text.textContent = 'Done! Redirecting...';
+        setTimeout(function() {
+            window.location.href = deckUrl;
+        }, 600);
+    }
+
+    document.addEventListener('submit', function(e) {
+        var form = e.target;
+        if (!form.classList.contains('inline-form')) return;
+
+        e.preventDefault();
+
+        var cardItem = form.closest('.card-item');
+        var commanderName = cardItem ? cardItem.querySelector('h3').textContent : 'Commander';
+        var formData = new FormData(form);
+
+        showOverlay(commanderName);
+
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(resp) {
+            return resp.json().then(function(data) {
+                return { ok: resp.ok, data: data };
+            });
+        })
+        .then(function(result) {
+            if (result.ok && result.data.deck_url) {
+                finishOverlay(result.data.deck_url);
+            } else {
+                hideOverlay();
+                alert(result.data.error || 'Deck generation failed.');
+            }
+        })
+        .catch(function(err) {
+            hideOverlay();
+            alert('Deck generation failed: ' + err.message);
+        });
+    });
+})();
+</script>
 {% endblock %}

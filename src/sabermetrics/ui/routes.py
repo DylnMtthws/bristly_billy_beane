@@ -14,7 +14,7 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from flask import Blueprint, current_app, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
 
 bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
@@ -53,7 +53,8 @@ def index():
         # Recent generated decks
         cursor = conn.execute(
             "SELECT gd.id, gd.commander_id, gd.budget_usd, gd.power_target, "
-            "gd.estimated_bracket, gd.generated_at, c.name as commander_name "
+            "gd.estimated_bracket, gd.generated_at, gd.deck_name, "
+            "c.name as commander_name "
             "FROM generated_decks gd "
             "JOIN cards c ON gd.commander_id = c.id "
             "ORDER BY gd.generated_at DESC LIMIT 10"
@@ -154,8 +155,13 @@ def generate_deck():
     power = int(request.form.get("power", 3))
     strategy = request.form.get("strategy") or None
     user_intent = request.form.get("user_intent") or None
+    deck_name = request.form.get("deck_name") or None
+
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
     if not commander_id:
+        if is_ajax:
+            return jsonify({"error": "No commander selected"}), 400
         return redirect(url_for("main.index"))
 
     try:
@@ -168,12 +174,19 @@ def generate_deck():
             power_target=power,
             strategy=strategy,
             user_intent=user_intent,
+            deck_name=deck_name,
         )
         result = builder.build(req)
-        return redirect(url_for("main.view_deck", deck_id=result.deck.id))
+        deck_url = url_for("main.view_deck", deck_id=result.deck.id)
+
+        if is_ajax:
+            return jsonify({"deck_url": deck_url})
+        return redirect(deck_url)
 
     except Exception as e:
         logger.error("Deck generation failed: %s", e)
+        if is_ajax:
+            return jsonify({"error": f"Deck generation failed: {e}"}), 500
         return render_template(
             "index.html",
             query="",
@@ -181,6 +194,19 @@ def generate_deck():
             recent_decks=[],
             error=f"Deck generation failed: {e}",
         )
+
+
+@bp.route("/deck/<deck_id>/delete", methods=["POST"])
+def delete_deck(deck_id: str):
+    """Delete a generated deck."""
+    db_path = _db_path()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("DELETE FROM generated_decks WHERE id = ?", (deck_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for("main.index"))
 
 
 @bp.route("/deck/<deck_id>")
@@ -225,6 +251,22 @@ def view_deck(deck_id: str):
             for card_entry in deck_data["cards"]:
                 full = card_lookup.get(card_entry.get("card_id", ""), {})
                 card_entry.update(full)
+
+            # Get latest prices
+            price_cursor = conn.execute(
+                f"SELECT card_id, price_usd FROM card_prices "
+                f"WHERE card_id IN ({placeholders}) "
+                f"ORDER BY snapshot_date DESC",
+                card_ids,
+            )
+            price_lookup: dict[str, float] = {}
+            for r in price_cursor:
+                if r["card_id"] not in price_lookup:
+                    price_lookup[r["card_id"]] = r["price_usd"] or 0.0
+            for card_entry in deck_data["cards"]:
+                card_entry["price_usd"] = price_lookup.get(
+                    card_entry.get("card_id", ""), 0.0
+                )
 
         # Group cards by role
         by_role: dict[str, list] = {}
@@ -277,7 +319,97 @@ def view_deck(deck_id: str):
     finally:
         conn.close()
 
-    return render_template("deck_view.html", deck=deck_data)
+    # --- Compute chart data for dashboard ---
+    from sabermetrics.pipeline.mana_base import count_color_pips, parse_land_colors
+    from sabermetrics.pipeline.slot_assigner import get_target_composition
+
+    rationale = deck_data.get("rationale", {})
+    comp = rationale.get("composition", {})
+    component_counts = comp.get("component_counts", {})
+    commander_colors = deck_data.get("color_identity", [])
+    power_target = deck_data.get("power_target", 3)
+
+    # Average CVAR
+    cvar_values = [
+        c.get("cvar_score", 0)
+        for c in deck_data["cards"]
+        if c.get("cvar_score") is not None
+    ]
+    avg_cvar = round(
+        sum(cvar_values) / len(cvar_values), 2
+    ) if cvar_values else 0.0
+
+    # Radar chart: actual component counts vs targets
+    target_comp = get_target_composition(power_target)
+    wipe_targets = {1: 2, 2: 2, 3: 3, 4: 3, 5: 4}
+    tutor_targets = {1: 0, 2: 1, 3: 2, 4: 3, 5: 5}
+    chart_components = {
+        "labels": ["Ramp", "Draw", "Removal", "Wipes", "Tutors", "Win Cons"],
+        "actual": [
+            component_counts.get("ramp", 0),
+            component_counts.get("draw", 0),
+            component_counts.get("removal", 0),
+            component_counts.get("board_wipes", 0),
+            component_counts.get("tutors", 0),
+            component_counts.get("win_conditions", 0),
+        ],
+        "target": [
+            target_comp.get("ramp", 0),
+            target_comp.get("draw", 0),
+            target_comp.get("removal", 0),
+            wipe_targets.get(power_target, 3),
+            tutor_targets.get(power_target, 2),
+            target_comp.get("wincon", 0),
+        ],
+    }
+
+    # Pip counts vs mana sources per commander color
+    pip_counts = count_color_pips(deck_data["cards"])
+    source_counts: dict[str, int] = {c: 0 for c in commander_colors}
+    for card in deck_data["cards"]:
+        tl = (card.get("type_line") or "").lower()
+        if "land" in tl:
+            info = parse_land_colors(
+                card.get("oracle_text") or "",
+                card.get("type_line") or "",
+                commander_colors,
+            )
+            for color in info.colors_produced:
+                if color in source_counts:
+                    source_counts[color] += 1
+
+    chart_pip_vs_sources = {
+        "colors": commander_colors,
+        "pips": [
+            pip_counts.get(c, {}).get("total_pips", 0)
+            for c in commander_colors
+        ],
+        "sources": [source_counts.get(c, 0) for c in commander_colors],
+    }
+
+    # Value scatter: CVAR vs price for non-land cards
+    chart_value_scatter = []
+    for card in deck_data["cards"]:
+        tl = (card.get("type_line") or "").lower()
+        if "land" in tl:
+            continue
+        chart_value_scatter.append({
+            "name": card.get("name", "Unknown"),
+            "cvar": round(card.get("cvar_score", 0), 2),
+            "price": round(card.get("price_usd", 0) or 0, 2),
+            "role": card.get("slot_role", "other"),
+        })
+
+    return render_template(
+        "deck_view.html",
+        deck=deck_data,
+        avg_cvar=avg_cvar,
+        chart_mana_curve=comp.get("mana_curve", [0] * 8),
+        chart_type_dist=comp.get("type_distribution", {}),
+        chart_components=chart_components,
+        chart_pip_vs_sources=chart_pip_vs_sources,
+        chart_value_scatter=chart_value_scatter,
+    )
 
 
 @bp.route("/reference/search")

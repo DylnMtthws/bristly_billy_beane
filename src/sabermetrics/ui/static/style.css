@@ -345,7 +345,7 @@ summary:hover {
     line-height: 1.5;
 }
 
-/* Mana curve */
+/* Mana curve (legacy CSS bars) */
 .mana-curve {
     display: flex;
     align-items: flex-end;
@@ -378,6 +378,99 @@ summary:hover {
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-top: 4px;
+}
+
+/* Dashboard metrics row */
+.dashboard-metrics {
+    display: flex;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.metric-card {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    text-align: center;
+}
+
+.metric-value {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.metric-label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Chart grid */
+.chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.chart-card h3 {
+    margin: 0 0 0.5rem;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.chart-full {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.chart-full h3 {
+    margin: 0 0 0.5rem;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+/* Collapsible deck sections */
+.deck-section {
+    margin: 1.5rem 0;
+}
+
+.deck-section > summary {
+    font-size: 1.3rem;
+    padding: 0.75rem 0;
+}
+
+/* Delete button */
+.btn-delete {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+}
+
+.btn-delete:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
 }
 
 /* Alerts */
@@ -429,6 +522,54 @@ a:hover {
     color: var(--accent-hover);
 }
 
+/* Loading overlay */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 10, 20, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.loading-content {
+    text-align: center;
+    width: 400px;
+    max-width: 90vw;
+}
+
+.loading-commander {
+    font-size: 1.4rem;
+    color: var(--text);
+    margin-bottom: 1.5rem;
+}
+
+.loading-bar-track {
+    width: 100%;
+    height: 12px;
+    background: var(--bg-input);
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.loading-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+    border-radius: 6px;
+    transition: width 0.5s ease-out;
+}
+
+.loading-text {
+    margin-top: 1.25rem;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    font-style: italic;
+    min-height: 1.6em;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .nav {
@@ -440,5 +581,14 @@ a:hover {
     }
     .stats-grid {
         justify-content: center;
+    }
+    .dashboard-metrics {
+        flex-wrap: wrap;
+    }
+    .metric-card {
+        flex: 1 1 45%;
+    }
+    .chart-grid {
+        grid-template-columns: 1fr;
     }
 }
