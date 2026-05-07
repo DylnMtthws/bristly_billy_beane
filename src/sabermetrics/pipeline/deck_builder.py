@@ -373,6 +373,32 @@ class DeckBuilder:
                     engine_keywords.extend(dep.engine_card_traits)
                     output_keywords.extend(dep.dependent_outputs)
 
+        # Load EDHREC top cards for this commander
+        edhrec_top_cards: dict[str, float] = {}
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT top_cards FROM edhrec_commander_data "
+                "WHERE commander_id = ?",
+                (commander.id,),
+            )
+            row = cursor.fetchone()
+            if row and row["top_cards"]:
+                for entry in json.loads(row["top_cards"]):
+                    name = (entry.get("card_name") or "").lower()
+                    pct = float(entry.get("inclusion_pct", 0))
+                    if name and pct > 0:
+                        edhrec_top_cards[name] = pct
+            conn.close()
+            if edhrec_top_cards:
+                logger.info(
+                    "Loaded %d EDHREC top cards for %s",
+                    len(edhrec_top_cards), commander.name,
+                )
+        except Exception as e:
+            logger.warning("Failed to load EDHREC data: %s", e)
+
         context = ScoringContext(
             commander_id=commander.id,
             commander_name=commander.name,
@@ -383,6 +409,7 @@ class DeckBuilder:
             referenced_mechanics=ref_mechanics,
             engine_keywords=[kw.lower() for kw in engine_keywords],
             output_keywords=[kw.lower() for kw in output_keywords],
+            edhrec_top_cards=edhrec_top_cards,
             weights_synergy=weights.synergy,
             weights_mana_efficiency=weights.mana_efficiency,
             weights_replacement_value=weights.replacement_value,
@@ -392,6 +419,11 @@ class DeckBuilder:
 
         scored: list[tuple[dict, float]] = []
         for card in candidates:
+            # Annotate with EDHREC inclusion % for the LLM fit scorer
+            card_name_lower = (card.get("name") or "").lower()
+            card["edhrec_inclusion_pct"] = edhrec_top_cards.get(
+                card_name_lower, 0.0
+            )
             result = compute_cvar(card, context, self.db_path)
             card["_cvar_result"] = result.model_dump()
             card["_cvar_score"] = result.composite_score
@@ -434,6 +466,27 @@ class DeckBuilder:
                 logger.info(
                     "Promoted %d keyword-matching cards into LLM pool",
                     promoted,
+                )
+
+        # EDHREC candidate pool guarantee: promote cards with >=20%
+        # inclusion that fell below the CVAR cutoff. Proven picks
+        # deserve LLM evaluation regardless of CVAR ranking.
+        if edhrec_top_cards:
+            edhrec_promoted = 0
+            for card, _ in scored[keep:]:
+                if id(card) in top_card_ids:
+                    continue
+                if "land" in (card.get("type_line") or "").lower():
+                    continue
+                card_name_lower = (card.get("name") or "").lower()
+                if edhrec_top_cards.get(card_name_lower, 0.0) >= 20.0:
+                    top_cards.append(card)
+                    top_card_ids.add(id(card))
+                    edhrec_promoted += 1
+            if edhrec_promoted:
+                logger.info(
+                    "Promoted %d EDHREC high-inclusion cards into LLM pool",
+                    edhrec_promoted,
                 )
 
         return top_cards

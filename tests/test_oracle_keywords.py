@@ -781,3 +781,90 @@ def test_fallback_mechanic_patterns_korvold_unchanged() -> None:
     score = compute_synergy_score(sac_outlet, korvold_ctx)
     # "sacrifice" pattern should match in both oracle texts
     assert score >= 0.1
+
+
+# ---------------------------------------------------------------------------
+# EDHREC corroboration synergy tests
+# ---------------------------------------------------------------------------
+
+
+def test_edhrec_corroboration_boosts_synergy() -> None:
+    """Card with 50%+ EDHREC inclusion gets +0.2 synergy bonus."""
+    ctx = ScoringContext(
+        commander_id="test-id",
+        commander_name="Test Commander",
+        commander_colors=["G"],
+        commander_keywords=[],
+        commander_oracle_text="Some text.",
+        edhrec_top_cards={"sol ring": 65.0, "arcane signet": 50.0},
+    )
+    card = _make_card(
+        "Sol Ring",
+        oracle_text="{T}: Add {C}{C}.",
+        type_line="Artifact",
+        color_identity=[],
+    )
+    score_with = compute_synergy_score(card, ctx)
+
+    ctx_without = ScoringContext(
+        commander_id="test-id",
+        commander_name="Test Commander",
+        commander_colors=["G"],
+        commander_keywords=[],
+        commander_oracle_text="Some text.",
+    )
+    score_without = compute_synergy_score(card, ctx_without)
+    # 65% inclusion -> min(0.2, 0.65*0.4) = 0.2
+    assert score_with >= score_without + 0.19
+
+
+def test_edhrec_corroboration_scales_with_inclusion() -> None:
+    """25% inclusion gives ~0.1, 10% gives ~0.04."""
+    ctx_25 = ScoringContext(
+        commander_id="test-id",
+        commander_name="Test Commander",
+        commander_colors=["G"],
+        commander_keywords=[],
+        commander_oracle_text="Some text.",
+        edhrec_top_cards={"test card": 25.0},
+    )
+    ctx_10 = ScoringContext(
+        commander_id="test-id",
+        commander_name="Test Commander",
+        commander_colors=["G"],
+        commander_keywords=[],
+        commander_oracle_text="Some text.",
+        edhrec_top_cards={"test card": 10.0},
+    )
+    card = _make_card("Test Card", type_line="Creature", color_identity=[])
+
+    score_25 = compute_synergy_score(card, ctx_25)
+    score_10 = compute_synergy_score(card, ctx_10)
+    assert score_25 > score_10
+
+
+def test_edhrec_corroboration_absent_card_no_bonus() -> None:
+    """Card not in EDHREC top cards gets no bonus (backward compatible)."""
+    ctx = ScoringContext(
+        commander_id="test-id",
+        commander_name="Test Commander",
+        commander_colors=["G"],
+        commander_keywords=[],
+        commander_oracle_text="Some text.",
+        edhrec_top_cards={"sol ring": 65.0},
+    )
+    card = _make_card(
+        "Random Bear",
+        type_line="Creature — Bear",
+        color_identity=["G"],
+    )
+    ctx_empty = ScoringContext(
+        commander_id="test-id",
+        commander_name="Test Commander",
+        commander_colors=["G"],
+        commander_keywords=[],
+        commander_oracle_text="Some text.",
+    )
+    score_with = compute_synergy_score(card, ctx)
+    score_without = compute_synergy_score(card, ctx_empty)
+    assert score_with == score_without

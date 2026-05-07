@@ -196,6 +196,29 @@ def test_mana_efficiency_low_cmc_better() -> None:
     assert compute_mana_efficiency_score(low) > compute_mana_efficiency_score(high)
 
 
+def test_mana_efficiency_morph_creature_scores_higher() -> None:
+    """Morph creature scores higher than plain creature with same printed CMC.
+
+    A 6-CMC morph creature has effective CMC 3 (face-down for {3}),
+    so it should score significantly better than a plain 6-CMC creature.
+    """
+    morph_6cmc = {
+        "cmc": 6,
+        "type_line": "Creature — Beast",
+        "oracle_text": "Morph {4}{G}\nWhen this is turned face up, destroy target artifact.",
+    }
+    plain_6cmc = {
+        "cmc": 6,
+        "type_line": "Creature — Beast",
+        "oracle_text": "When this enters the battlefield, destroy target artifact.",
+    }
+    morph_score = compute_mana_efficiency_score(morph_6cmc)
+    plain_score = compute_mana_efficiency_score(plain_6cmc)
+    # Morph effective CMC = 3 -> 0.75, plain CMC 6 -> 0.3
+    assert morph_score > plain_score
+    assert morph_score >= 0.7  # Effective CMC 3 -> base 0.75
+
+
 def test_price_efficiency() -> None:
     """Cheaper cards score higher for price efficiency."""
     cheap = {"price_usd": 0.25}

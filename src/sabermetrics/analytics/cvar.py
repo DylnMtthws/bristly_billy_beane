@@ -39,6 +39,7 @@ class ScoringContext(BaseModel):
     referenced_mechanics: list[str] = Field(default_factory=list)
     engine_keywords: list[str] = Field(default_factory=list)
     output_keywords: list[str] = Field(default_factory=list)
+    edhrec_top_cards: dict[str, float] = Field(default_factory=dict)  # card_name_lower -> inclusion_pct
     weights_synergy: float = 0.35
     weights_mana_efficiency: float = 0.25
     weights_replacement_value: float = 0.25
@@ -126,6 +127,12 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
         if "creature" in type_line:
             score += 0.1
 
+    # EDHREC behavioral corroboration (ADR-005: triangulation, not authority)
+    card_name = (card.get("name") or "").lower()
+    inclusion_pct = context.edhrec_top_cards.get(card_name, 0.0)
+    if inclusion_pct > 0:
+        score += min(0.2, inclusion_pct / 100.0 * 0.4)
+
     return min(1.0, score)
 
 
@@ -134,9 +141,13 @@ def compute_mana_efficiency_score(card: dict) -> float:
 
     Heuristic: cards with CMC 0-2 get high scores, 3-5 medium, 6+ low.
     Modified by card type (instants/sorceries at low CMC are especially good).
+    Uses effective CMC (considers morph, evoke, dash, etc.) when lower
+    than printed CMC.
     Range: 0.0 to 1.0.
     """
-    cmc = float(card.get("cmc", 0))
+    from sabermetrics.analytics.effective_cost import compute_effective_cmc
+
+    cmc = compute_effective_cmc(card)
     type_line = (card.get("type_line") or "").lower()
     oracle_text = (card.get("oracle_text") or "").lower()
 
