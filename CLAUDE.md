@@ -412,11 +412,11 @@ Track progress here. Update as phases complete.
 
 ```yaml
 status:
-  current_phase: "Phase 6 - Deck Assembly"
-  completed_phases: ["P1", "P2", "P3", "P4", "P5"]
+  current_phase: "Phase 7 - Testing & Polish"
+  completed_phases: ["P1", "P2", "P3", "P4", "P5", "P6"]
   in_progress: []
   blocked: []
-  notes: "Phase 1-5 complete. LLM reasoning layer: Anthropic client with cost tracking/caching/ceiling, 4 prompt templates, evidence aggregator, profile manager with cache, per-card fit scorer, deck synthesizer. 55 tests passing."
+  notes: "Phase 1-6 complete. Pipeline integration: 10-step deck builder orchestrator, slot-aware assembler with target compositions per power level, 4 output formatters (JSON/text/Moxfield/Archidekt), CLI build command wired. 76 tests passing."
 ```
 
 </context>

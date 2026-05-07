@@ -87,7 +87,58 @@ def build(
     output_format: str | None,
 ) -> None:
     """Generate an optimized deck for a commander."""
-    click.echo("Not implemented yet")
+    import sqlite3
+
+    from sabermetrics.config import settings
+
+    db_path = _default_db_path()
+
+    # Resolve commander by name
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.execute(
+        "SELECT id, name FROM cards WHERE name LIKE ? AND is_legal_commander = 1 LIMIT 1",
+        (f"%{commander_name}%",),
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        click.echo(f"Commander not found: {commander_name}")
+        return
+
+    commander_id, full_name = row
+    click.echo(f"Building deck for {full_name}...")
+
+    from sabermetrics.pipeline.deck_builder import DeckBuildRequest, DeckBuilder
+    from sabermetrics.pipeline.formatters import format_deck
+
+    builder = DeckBuilder(db_path)
+    request = DeckBuildRequest(
+        commander_id=commander_id,
+        budget_usd=budget or settings.user.default_budget_usd,
+        power_target=power or settings.user.default_power_target,
+        strategy=strategy,
+        user_intent=user_intent,
+    )
+
+    try:
+        result = builder.build(request)
+
+        # Display summary
+        click.echo(f"\nDeck generated: {len(result.deck.cards)} cards + commander")
+        click.echo(f"Total price: ${result.deck.composition.total_price_usd:.2f}")
+        click.echo(f"Bracket: {result.deck.classification.estimated_bracket}")
+        click.echo(f"Time: {result.total_time_seconds:.1f}s")
+        click.echo(f"Cost: ${result.total_cost_usd:.4f}")
+
+        # Output in requested format
+        fmt = output_format or settings.output.deck_format
+        output = format_deck(result.deck, fmt)
+        click.echo(f"\n{output}")
+
+    except Exception as e:
+        click.echo(f"Deck generation failed: {e}")
+        raise
 
 
 @cli.command(name="refresh-set")
