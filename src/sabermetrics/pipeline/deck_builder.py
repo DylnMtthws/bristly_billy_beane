@@ -52,6 +52,7 @@ class DeckBuildRequest(BaseModel):
     strategy: str | None = None
     weights: CVARWeights | None = None
     user_intent: str | None = None
+    deck_name: str | None = None
 
 
 class DeckBuildResult(BaseModel):
@@ -709,6 +710,7 @@ class DeckBuilder:
                 power_target=request.power_target,
                 strategy=request.strategy,
                 weights=weights,
+                deck_name=request.deck_name,
             ),
             cards=deck_cards,
             composition=composition,
@@ -747,8 +749,8 @@ class DeckBuilder:
                 "INSERT OR REPLACE INTO generated_decks "
                 "(id, commander_id, profile_id, budget_usd, power_target, "
                 "strategy, cards_json, rationale, cvar_score, "
-                "estimated_bracket, generated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "estimated_bracket, generated_at, deck_name) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     deck.id,
                     deck.commander.id,
@@ -762,6 +764,7 @@ class DeckBuilder:
                     if deck.cards else 0.0,
                     deck.classification.estimated_bracket,
                     deck.generated_at.isoformat(),
+                    deck.parameters.deck_name,
                 ),
             )
             conn.commit()

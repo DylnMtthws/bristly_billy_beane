@@ -54,6 +54,7 @@ class DeckParameters(BaseModel):
     power_target: int
     strategy: Optional[str] = None
     weights: CVARWeights
+    deck_name: Optional[str] = None
 
 
 class ComponentCounts(BaseModel):

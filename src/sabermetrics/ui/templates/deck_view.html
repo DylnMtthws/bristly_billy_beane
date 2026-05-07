@@ -6,124 +6,68 @@
 <h1>{{ error }}</h1>
 {% elif deck %}
 
-<h1>{{ deck.commander_name }}</h1>
+{% set comp = deck.rationale.composition if deck.rationale and deck.rationale.composition else {} %}
 
-<div class="deck-meta">
-    <div class="stats-grid">
-        <div class="stat">
-            <span class="stat-value">${{ "%.0f"|format(deck.budget_usd or 0) }}</span>
-            <span class="stat-label">Budget</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ deck.power_target }}</span>
-            <span class="stat-label">Power Target</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ deck.estimated_bracket }}</span>
-            <span class="stat-label">Est. Bracket</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ deck.cards|length }}</span>
-            <span class="stat-label">Cards</span>
-        </div>
+<h1>{{ deck.commander_name }}{% if deck.deck_name %} — {{ deck.deck_name }}{% endif %}</h1>
+<p class="generated-note">Generated: {{ deck.generated_at[:16] }}</p>
+
+<!-- Hero: 5 key metric cards -->
+<div class="dashboard-metrics">
+    <div class="metric-card">
+        <span class="metric-value">{{ deck.estimated_bracket }}</span>
+        <span class="metric-label">Power Bracket</span>
     </div>
-    <p class="generated-note">Generated: {{ deck.generated_at[:16] }}</p>
+    <div class="metric-card">
+        <span class="metric-value">${{ "%.0f"|format(comp.total_price_usd or 0) }}</span>
+        <span class="metric-label">Total Price</span>
+    </div>
+    <div class="metric-card">
+        <span class="metric-value">{{ "%.2f"|format(comp.average_cmc or 0) }}</span>
+        <span class="metric-label">Avg CMC</span>
+    </div>
+    <div class="metric-card">
+        <span class="metric-value">{{ "%.2f"|format(avg_cvar or 0) }}</span>
+        <span class="metric-label">Avg CVAR</span>
+    </div>
+    <div class="metric-card">
+        <span class="metric-value">{{ deck.cards|length }}</span>
+        <span class="metric-label">Cards</span>
+    </div>
 </div>
 
-{% if deck.rationale and deck.rationale.narrative %}
-<section class="narrative">
-    <h2>Game Plan</h2>
-    <p>{{ deck.rationale.narrative.game_plan }}</p>
-
-    {% if deck.rationale.narrative.key_synergies %}
-    <h3>Key Synergies</h3>
-    <ul>
-        {% for syn in deck.rationale.narrative.key_synergies %}
-        <li>{{ syn }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-
-    {% if deck.rationale.narrative.weaknesses %}
-    <h3>Weaknesses</h3>
-    <ul>
-        {% for w in deck.rationale.narrative.weaknesses %}
-        <li>{{ w }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-
-    {% if deck.rationale.narrative.suggested_play_pattern %}
-    <h3>Play Pattern</h3>
-    <p>{{ deck.rationale.narrative.suggested_play_pattern }}</p>
-    {% endif %}
-</section>
-{% endif %}
-
-{% if deck.rationale and deck.rationale.composition %}
-<section class="composition">
-    <h2>Composition</h2>
-    <div class="stats-grid">
-        {% set comp = deck.rationale.composition %}
-        <div class="stat">
-            <span class="stat-value">${{ "%.2f"|format(comp.total_price_usd) }}</span>
-            <span class="stat-label">Total Price</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ "%.2f"|format(comp.average_cmc) }}</span>
-            <span class="stat-label">Avg CMC</span>
-        </div>
+<!-- Chart row 1: Mana Curve + Type Distribution -->
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>Mana Curve</h3>
+        <canvas id="chart-mana-curve"></canvas>
     </div>
-
-    {% if comp.component_counts %}
-    <h3>Components</h3>
-    <div class="stats-grid">
-        <div class="stat">
-            <span class="stat-value">{{ comp.component_counts.ramp }}</span>
-            <span class="stat-label">Ramp</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ comp.component_counts.draw }}</span>
-            <span class="stat-label">Draw</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ comp.component_counts.removal }}</span>
-            <span class="stat-label">Removal</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ comp.component_counts.board_wipes }}</span>
-            <span class="stat-label">Wipes</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ comp.component_counts.tutors }}</span>
-            <span class="stat-label">Tutors</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ comp.component_counts.win_conditions }}</span>
-            <span class="stat-label">Win Cons</span>
-        </div>
+    <div class="chart-card">
+        <h3>Type Distribution</h3>
+        <canvas id="chart-type-dist"></canvas>
     </div>
-    {% endif %}
+</div>
 
-    {% if comp.mana_curve %}
-    <h3>Mana Curve</h3>
-    <div class="mana-curve">
-        {% for count in comp.mana_curve %}
-        <div class="curve-bar">
-            <div class="bar" style="height: {{ (count / ([1] + comp.mana_curve)|max * 100)|int }}%">
-                {{ count }}
-            </div>
-            <span class="cmc-label">{{ loop.index0 if loop.index0 < 7 else '7+' }}</span>
-        </div>
-        {% endfor %}
+<!-- Chart row 2: Component Radar + Color Pips vs Sources -->
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>Component Balance</h3>
+        <canvas id="chart-radar"></canvas>
     </div>
-    {% endif %}
-</section>
-{% endif %}
+    <div class="chart-card">
+        <h3>Color Pips vs Sources</h3>
+        <canvas id="chart-pips"></canvas>
+    </div>
+</div>
 
-<section class="card-list">
-    <h2>Card List</h2>
-    <p><strong>Commander:</strong> {{ deck.commander_name }}</p>
+<!-- Chart row 3: Value Map (full width) -->
+<div class="chart-full">
+    <h3>Value Map &mdash; CVAR Score vs Price</h3>
+    <canvas id="chart-value" height="100"></canvas>
+</div>
+
+<!-- Card List (collapsible) -->
+<details class="deck-section">
+    <summary>Card List ({{ deck.cards|length }})</summary>
 
     <div class="view-tabs">
         <button class="tab-btn active" onclick="switchView('type')">By Type</button>
@@ -147,6 +91,8 @@
                     <th>Card</th>
                     <th>Mana Cost</th>
                     <th>CMC</th>
+                    <th>CVAR</th>
+                    <th>Price</th>
                 </tr>
             </thead>
             <tbody>
@@ -156,6 +102,8 @@
                     <td>{{ card.name }}</td>
                     <td>{{ card.mana_cost or '' }}</td>
                     <td>{{ card.cmc or '' }}</td>
+                    <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
+                    <td>${{ "%.2f"|format(card.price_usd or 0) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -181,6 +129,7 @@
                     <th>Type</th>
                     <th>CMC</th>
                     <th>Fit</th>
+                    <th>CVAR</th>
                     <th>Reasoning</th>
                 </tr>
             </thead>
@@ -191,6 +140,7 @@
                     <td>{{ card.type_line or '' }}</td>
                     <td>{{ card.cmc or '' }}</td>
                     <td>{{ card.fit_score or '' }}/10</td>
+                    <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
                     <td class="reasoning">{{ card.reasoning or '' }}</td>
                 </tr>
                 {% endfor %}
@@ -200,9 +150,226 @@
     {% endif %}
     {% endfor %}
     </div>
-</section>
+</details>
 
+<!-- Narrative (collapsed) -->
+{% if deck.rationale and deck.rationale.narrative %}
+<details class="deck-section">
+    <summary>Strategy & Narrative</summary>
+
+    <h3>Game Plan</h3>
+    <p>{{ deck.rationale.narrative.game_plan }}</p>
+
+    {% if deck.rationale.narrative.key_synergies %}
+    <h3>Key Synergies</h3>
+    <ul>
+        {% for syn in deck.rationale.narrative.key_synergies %}
+        <li>{{ syn }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if deck.rationale.narrative.weaknesses %}
+    <h3>Weaknesses</h3>
+    <ul>
+        {% for w in deck.rationale.narrative.weaknesses %}
+        <li>{{ w }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if deck.rationale.narrative.suggested_play_pattern %}
+    <h3>Play Pattern</h3>
+    <p>{{ deck.rationale.narrative.suggested_play_pattern }}</p>
+    {% endif %}
+</details>
+{% endif %}
+
+<!-- Chart.js (deck page only) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+// Dark theme defaults
+Chart.defaults.color = '#e0e0e0';
+Chart.defaults.borderColor = '#2a2a4a';
+
+const ROLE_COLORS = {
+    ramp: '#00733e',
+    draw: '#0e68ab',
+    removal: '#d3202a',
+    wincon: '#e94560',
+    utility: '#ff9800',
+    other: '#a0a0b0',
+    land: '#666'
+};
+
+const MTG_COLORS = {
+    W: '#f9faf4', U: '#0e68ab', B: '#666',
+    R: '#d3202a', G: '#00733e'
+};
+
+// 1. Mana Curve — bar chart
+const manaCurve = {{ chart_mana_curve | tojson }};
+new Chart(document.getElementById('chart-mana-curve'), {
+    type: 'bar',
+    data: {
+        labels: manaCurve.map((_, i) => i < 7 ? String(i) : '7+'),
+        datasets: [{
+            label: 'Cards',
+            data: manaCurve,
+            backgroundColor: '#e94560',
+            borderRadius: 3,
+        }]
+    },
+    options: {
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+            x: { grid: { display: false } }
+        }
+    }
+});
+
+// 2. Type Distribution — doughnut chart
+const typeDist = {{ chart_type_dist | tojson }};
+const typeLabels = Object.keys(typeDist);
+const typeData = Object.values(typeDist);
+const typePalette = [
+    '#e94560', '#0e68ab', '#ff9800', '#a0a0b0',
+    '#00733e', '#f9faf4', '#9c27b0', '#666'
+];
+new Chart(document.getElementById('chart-type-dist'), {
+    type: 'doughnut',
+    data: {
+        labels: typeLabels,
+        datasets: [{
+            data: typeData,
+            backgroundColor: typePalette.slice(0, typeLabels.length),
+            borderColor: '#1a1a2e',
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        plugins: {
+            legend: { position: 'right', labels: { boxWidth: 12, padding: 8 } }
+        }
+    }
+});
+
+// 3. Component Radar — actual vs target
+const compData = {{ chart_components | tojson }};
+new Chart(document.getElementById('chart-radar'), {
+    type: 'radar',
+    data: {
+        labels: compData.labels,
+        datasets: [
+            {
+                label: 'Actual',
+                data: compData.actual,
+                backgroundColor: 'rgba(233, 69, 96, 0.2)',
+                borderColor: '#e94560',
+                pointBackgroundColor: '#e94560',
+            },
+            {
+                label: 'Target',
+                data: compData.target,
+                backgroundColor: 'rgba(14, 104, 171, 0.1)',
+                borderColor: '#0e68ab',
+                borderDash: [4, 4],
+                pointBackgroundColor: '#0e68ab',
+            }
+        ]
+    },
+    options: {
+        scales: {
+            r: {
+                beginAtZero: true,
+                ticks: { stepSize: 2 },
+                grid: { color: '#2a2a4a' },
+                angleLines: { color: '#2a2a4a' },
+                pointLabels: { color: '#e0e0e0' }
+            }
+        },
+        plugins: { legend: { position: 'bottom' } }
+    }
+});
+
+// 4. Color Pips vs Sources — grouped bar chart
+const pipData = {{ chart_pip_vs_sources | tojson }};
+const colorNames = { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' };
+new Chart(document.getElementById('chart-pips'), {
+    type: 'bar',
+    data: {
+        labels: pipData.colors.map(c => colorNames[c] || c),
+        datasets: [
+            {
+                label: 'Colored Pips',
+                data: pipData.pips,
+                backgroundColor: pipData.colors.map(c => MTG_COLORS[c] || '#888'),
+                borderRadius: 3,
+            },
+            {
+                label: 'Mana Sources',
+                data: pipData.sources,
+                backgroundColor: pipData.colors.map(c => {
+                    const hex = MTG_COLORS[c] || '#888';
+                    return hex + '88';  // 50% opacity
+                }),
+                borderRadius: 3,
+            }
+        ]
+    },
+    options: {
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 5 } },
+            x: { grid: { display: false } }
+        }
+    }
+});
+
+// 5. Value Map — scatter plot (CVAR vs price)
+const scatterData = {{ chart_value_scatter | tojson }};
+const roleGroups = {};
+scatterData.forEach(d => {
+    if (!roleGroups[d.role]) roleGroups[d.role] = [];
+    roleGroups[d.role].push({ x: d.price, y: d.cvar, label: d.name });
+});
+const scatterDatasets = Object.entries(roleGroups).map(([role, points]) => ({
+    label: role.charAt(0).toUpperCase() + role.slice(1),
+    data: points,
+    backgroundColor: ROLE_COLORS[role] || '#888',
+    pointRadius: 5,
+    pointHoverRadius: 8,
+}));
+new Chart(document.getElementById('chart-value'), {
+    type: 'scatter',
+    data: { datasets: scatterDatasets },
+    options: {
+        scales: {
+            x: {
+                title: { display: true, text: 'Price ($)' },
+                beginAtZero: true,
+            },
+            y: {
+                title: { display: true, text: 'CVAR Score' },
+                beginAtZero: true,
+            }
+        },
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: ctx => {
+                        const pt = ctx.raw;
+                        return `${pt.label}: CVAR ${pt.y}, $${pt.x}`;
+                    }
+                }
+            },
+            legend: { position: 'bottom' }
+        }
+    }
+});
+
+// Card list view toggle
 function switchView(view) {
     document.getElementById('view-type').style.display = view === 'type' ? '' : 'none';
     document.getElementById('view-role').style.display = view === 'role' ? '' : 'none';
@@ -210,5 +377,6 @@ function switchView(view) {
     event.target.classList.add('active');
 }
 </script>
+
 {% endif %}
 {% endblock %}
