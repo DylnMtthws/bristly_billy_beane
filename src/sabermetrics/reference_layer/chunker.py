@@ -213,6 +213,174 @@ class DocumentChunker:
         )
         return chunks
 
+    def chunk_mechanics_article(self, article_path: Path) -> list[Chunk]:
+        """Chunk a WotC set mechanics article by mechanic sections.
+
+        Mechanics articles describe keyword abilities and set mechanics.
+        Each mechanic heading gets its own chunk when possible, preserving
+        the full explanation for that mechanic. Falls back to paragraph
+        clustering for articles without clear mechanic headings.
+
+        Tier 2 = strategic reference (these define how mechanics work).
+
+        Args:
+            article_path: Path to the mechanics article text file.
+
+        Returns:
+            List of Chunks with mechanic-aware boundaries.
+        """
+        if not article_path.exists():
+            logger.warning("Mechanics article not found: %s", article_path)
+            return []
+
+        text = article_path.read_text(encoding="utf-8", errors="replace")
+        doc_name = article_path.stem  # e.g. "mechanics_kaldheim"
+
+        # Extract set name from header if present
+        set_name = doc_name
+        if text.startswith("Set Mechanics Article:"):
+            first_line = text.split("\n", 1)[0]
+            set_name = first_line.replace("Set Mechanics Article:", "").strip()
+
+        # Try to split by mechanic headings (all-caps lines or lines that
+        # look like section headers: short lines followed by longer content)
+        sections = self._split_mechanics_by_heading(text)
+
+        if len(sections) > 1:
+            return self._chunk_mechanic_sections(
+                sections, doc_name, set_name
+            )
+
+        # Fallback: use standard article chunking at tier 2
+        return self.chunk_article(article_path, tier=2)
+
+    def _split_mechanics_by_heading(
+        self, text: str
+    ) -> list[tuple[str, str]]:
+        """Split mechanics article text into (heading, body) pairs.
+
+        Detects headings by looking for short lines (< 60 chars) that
+        are followed by longer explanatory text, or lines in ALL CAPS.
+
+        Returns:
+            List of (heading, body) tuples. If no headings found,
+            returns a single ("", full_text) entry.
+        """
+        lines = text.split("\n")
+        sections: list[tuple[str, str]] = []
+        current_heading = ""
+        current_body: list[str] = []
+
+        for line in lines:
+            stripped = line.strip()
+            # Skip header metadata
+            if stripped.startswith("Set Mechanics Article:"):
+                continue
+            if stripped.startswith("Source:"):
+                continue
+            if stripped == "---":
+                continue
+
+            # Detect heading: short line, not empty, followed by content
+            is_heading = (
+                len(stripped) > 2
+                and len(stripped) < 60
+                and not stripped.endswith(".")
+                and not stripped.endswith(",")
+                and (
+                    stripped.isupper()
+                    or (stripped[0].isupper() and stripped.count(" ") < 8)
+                )
+                and not any(
+                    stripped.lower().startswith(w)
+                    for w in ("the ", "a ", "an ", "if ", "when ", "for ")
+                )
+            )
+
+            if is_heading and current_body:
+                body_text = "\n".join(current_body).strip()
+                if body_text:
+                    sections.append((current_heading, body_text))
+                current_heading = stripped
+                current_body = []
+            elif is_heading and not current_body:
+                current_heading = stripped
+            else:
+                current_body.append(line)
+
+        # Last section
+        if current_body:
+            body_text = "\n".join(current_body).strip()
+            if body_text:
+                sections.append((current_heading, body_text))
+
+        return sections
+
+    def _chunk_mechanic_sections(
+        self,
+        sections: list[tuple[str, str]],
+        doc_name: str,
+        set_name: str,
+    ) -> list[Chunk]:
+        """Create chunks from mechanic sections, merging small ones.
+
+        Args:
+            sections: List of (heading, body) pairs.
+            doc_name: Document identifier for the chunk.
+            set_name: Human-readable set name for context.
+
+        Returns:
+            List of Chunks at tier 2.
+        """
+        target_chars = int(self.TARGET_CHUNK_TOKENS * self.CHARS_PER_TOKEN)
+        chunks: list[Chunk] = []
+
+        pending_content: list[str] = []
+        pending_section: str | None = None
+        pending_length = 0
+
+        for heading, body in sections:
+            section_text = f"{heading}\n\n{body}" if heading else body
+            context_text = f"[{set_name}] {section_text}"
+
+            if pending_length + len(context_text) > target_chars and pending_content:
+                # Flush pending
+                chunks.append(
+                    Chunk(
+                        id=str(uuid.uuid4()),
+                        document=doc_name,
+                        section=pending_section,
+                        tier=2,
+                        content="\n\n".join(pending_content),
+                    )
+                )
+                pending_content = []
+                pending_length = 0
+                pending_section = None
+
+            pending_content.append(context_text)
+            pending_length += len(context_text)
+            if pending_section is None and heading:
+                pending_section = heading
+
+        # Flush remaining
+        if pending_content:
+            chunks.append(
+                Chunk(
+                    id=str(uuid.uuid4()),
+                    document=doc_name,
+                    section=pending_section,
+                    tier=2,
+                    content="\n\n".join(pending_content),
+                )
+            )
+
+        logger.info(
+            "Chunked mechanics article '%s' into %d chunks",
+            doc_name, len(chunks),
+        )
+        return chunks
+
     def chunk_game_changers(self, yaml_path: Path) -> list[Chunk]:
         """Create reference chunk from game changers list.
 

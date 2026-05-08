@@ -1,0 +1,202 @@
+# WotC Set Mechanics Articles
+# URL pattern: https://magic.wizards.com/en/news/feature/{slug}-mechanics
+# These are official Wizards of the Coast articles explaining each set's
+# keyword abilities, mechanics, and rules changes.
+# Tier 2: High-value reference material for understanding card mechanics.
+#
+# Refresh: quarterly (when new sets release)
+
+articles:
+  # --- 2026 ---
+  - slug: secrets-of-strixhaven
+    url: https://magic.wizards.com/en/news/feature/secrets-of-strixhaven-mechanics
+    set_name: "Secrets of Strixhaven"
+    release_year: 2026
+
+  - slug: lorwyn-eclipsed
+    url: https://magic.wizards.com/en/news/feature/lorwyn-eclipsed-mechanics
+    set_name: "Lorwyn Eclipsed"
+    release_year: 2026
+
+  - slug: teenage-mutant-ninja-turtles
+    url: https://magic.wizards.com/en/news/feature/teenage-mutant-ninja-turtles-mechanics
+    set_name: "Teenage Mutant Ninja Turtles"
+    release_year: 2026
+
+  # --- 2025 ---
+  - slug: edge-of-eternities
+    url: https://magic.wizards.com/en/news/feature/edge-of-eternities-mechanics
+    set_name: "Edge of Eternities"
+    release_year: 2025
+
+  - slug: tarkir-dragonstorm
+    url: https://magic.wizards.com/en/news/feature/tarkir-dragonstorm-mechanics
+    set_name: "Tarkir: Dragonstorm"
+    release_year: 2025
+
+  - slug: final-fantasy
+    url: https://magic.wizards.com/en/news/feature/final-fantasy-mechanics
+    set_name: "FINAL FANTASY"
+    release_year: 2025
+
+  - slug: aetherdrift
+    url: https://magic.wizards.com/en/news/feature/aetherdrift-mechanics
+    set_name: "Aetherdrift"
+    release_year: 2025
+
+  # --- 2024 ---
+  - slug: foundations
+    url: https://magic.wizards.com/en/news/feature/foundations-mechanics
+    set_name: "Foundations"
+    release_year: 2024
+
+  - slug: duskmourn
+    url: https://magic.wizards.com/en/news/feature/duskmourn-house-of-horror-mechanics
+    set_name: "Duskmourn: House of Horror"
+    release_year: 2024
+
+  - slug: bloomburrow
+    url: https://magic.wizards.com/en/news/feature/bloomburrow-mechanics
+    set_name: "Bloomburrow"
+    release_year: 2024
+
+  - slug: assassins-creed
+    url: https://magic.wizards.com/en/news/feature/assassins-creed-mechanics
+    set_name: "Assassin's Creed"
+    release_year: 2024
+
+  - slug: modern-horizons-3
+    url: https://magic.wizards.com/en/news/feature/modern-horizons-3-mechanics
+    set_name: "Modern Horizons 3"
+    release_year: 2024
+
+  - slug: outlaws-of-thunder-junction
+    url: https://magic.wizards.com/en/news/feature/outlaws-of-thunder-junction-mechanics
+    set_name: "Outlaws of Thunder Junction"
+    release_year: 2024
+
+  - slug: fallout
+    url: https://magic.wizards.com/en/news/feature/magic-the-gathering-fallout-mechanics
+    set_name: "Fallout"
+    release_year: 2024
+
+  - slug: murders-at-karlov-manor
+    url: https://magic.wizards.com/en/news/feature/murders-at-karlov-manor-mechanics
+    set_name: "Murders at Karlov Manor"
+    release_year: 2024
+
+  # --- 2023 ---
+  - slug: lost-caverns-of-ixalan
+    url: https://magic.wizards.com/en/news/feature/the-lost-caverns-of-ixalan-mechanics
+    set_name: "The Lost Caverns of Ixalan"
+    release_year: 2023
+
+  - slug: doctor-who
+    url: https://magic.wizards.com/en/news/feature/magic-the-gathering-doctor-who-mechanics
+    set_name: "Doctor Who"
+    release_year: 2023
+
+  - slug: wilds-of-eldraine
+    url: https://magic.wizards.com/en/news/feature/wilds-of-eldraine-mechanics
+    set_name: "Wilds of Eldraine"
+    release_year: 2023
+
+  - slug: lord-of-the-rings
+    url: https://magic.wizards.com/en/news/feature/the-lord-of-the-rings-tales-of-middle-earth-mechanics
+    set_name: "The Lord of the Rings: Tales of Middle-earth"
+    release_year: 2023
+
+  - slug: march-of-the-machine
+    url: https://magic.wizards.com/en/news/feature/march-of-the-machine-mechanics
+    set_name: "March of the Machine"
+    release_year: 2023
+
+  - slug: phyrexia-all-will-be-one
+    url: https://magic.wizards.com/en/news/feature/phyrexia-all-will-be-one-mechanics
+    set_name: "Phyrexia: All Will Be One"
+    release_year: 2023
+
+  # --- 2022 ---
+  - slug: brothers-war
+    url: https://magic.wizards.com/en/news/feature/the-brothers-war-mechanics
+    set_name: "The Brothers' War"
+    release_year: 2022
+
+  - slug: dominaria-united
+    url: https://magic.wizards.com/en/news/feature/dominaria-united-mechanics
+    set_name: "Dominaria United"
+    release_year: 2022
+
+  - slug: streets-of-new-capenna
+    url: https://magic.wizards.com/en/news/feature/streets-of-new-capenna-mechanics
+    set_name: "Streets of New Capenna"
+    release_year: 2022
+
+  - slug: kamigawa-neon-dynasty
+    url: https://magic.wizards.com/en/news/feature/kamigawa-neon-dynasty-mechanics-2022-01-27
+    set_name: "Kamigawa: Neon Dynasty"
+    release_year: 2022
+
+  # --- 2021 ---
+  - slug: innistrad-crimson-vow
+    url: https://magic.wizards.com/en/news/feature/innistrad-crimson-vow-mechanics-2021-10-28
+    set_name: "Innistrad: Crimson Vow"
+    release_year: 2021
+
+  - slug: innistrad-midnight-hunt
+    url: https://magic.wizards.com/en/news/feature/innistrad-midnight-hunt-mechanics
+    set_name: "Innistrad: Midnight Hunt"
+    release_year: 2021
+
+  - slug: adventures-forgotten-realms
+    url: https://magic.wizards.com/en/news/feature/adventures-forgotten-realms-mechanics-2021-07-02
+    set_name: "Adventures in the Forgotten Realms"
+    release_year: 2021
+
+  - slug: strixhaven
+    url: https://magic.wizards.com/en/news/feature/strixhaven-school-mages-mechanics-2021-03-25
+    set_name: "Strixhaven: School of Mages"
+    release_year: 2021
+
+  - slug: kaldheim
+    url: https://magic.wizards.com/en/news/feature/kaldheim-mechanics-2021-01-07
+    set_name: "Kaldheim"
+    release_year: 2021
+
+  # --- 2020 ---
+  - slug: zendikar-rising
+    url: https://magic.wizards.com/en/news/feature/zendikar-rising-mechanics-2020-09-01
+    set_name: "Zendikar Rising"
+    release_year: 2020
+
+  - slug: ikoria
+    url: https://magic.wizards.com/en/news/feature/ikoria-lair-behemoths-mechanics-2020-04-02
+    set_name: "Ikoria: Lair of Behemoths"
+    release_year: 2020
+
+  - slug: theros-beyond-death
+    url: https://magic.wizards.com/en/news/feature/theros-beyond-death-mechanics-2019-12-12
+    set_name: "Theros Beyond Death"
+    release_year: 2020
+
+  # --- 2019 ---
+  - slug: throne-of-eldraine
+    url: https://magic.wizards.com/en/news/feature/throne-eldraine-mechanics-2019-09-04
+    set_name: "Throne of Eldraine"
+    release_year: 2019
+
+  - slug: modern-horizons
+    url: https://magic.wizards.com/en/news/feature/modern-horizons-mechanics-2019-05-31
+    set_name: "Modern Horizons"
+    release_year: 2019
+
+  - slug: war-of-the-spark
+    url: https://magic.wizards.com/en/news/feature/war-spark-mechanics-2019-03-31
+    set_name: "War of the Spark"
+    release_year: 2019
+
+  # --- Older (2017-2018) ---
+  - slug: worldwake
+    url: https://magic.wizards.com/en/news/feature/worldwake-mechanics
+    set_name: "Worldwake"
+    release_year: 2010

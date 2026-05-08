@@ -141,6 +141,88 @@ class ReferenceIngestion:
 
         return saved
 
+    def fetch_set_mechanics_articles(self, config_path: Path) -> list[Path]:
+        """Fetch WotC set mechanics articles.
+
+        Downloads mechanics articles from magic.wizards.com and caches
+        them locally. Uses politeness rate limiting (1 req/sec).
+
+        Args:
+            config_path: Path to set_mechanics_articles.yaml config file.
+
+        Returns:
+            List of paths to saved article files.
+        """
+        if not config_path.exists():
+            logger.warning(
+                "No set_mechanics_articles.yaml found at %s", config_path
+            )
+            return []
+
+        with open(config_path) as f:
+            config = yaml.safe_load(f) or {}
+
+        articles = config.get("articles", [])
+        saved: list[Path] = []
+        failed: list[str] = []
+
+        for article in articles:
+            url = article.get("url", "")
+            slug = article.get("slug", "")
+            set_name = article.get("set_name", slug)
+            if not url or not slug:
+                continue
+
+            output_path = self.reference_dir / f"mechanics_{slug}.txt"
+            if output_path.exists() and output_path.stat().st_size > 500:
+                saved.append(output_path)
+                continue
+
+            try:
+                self._rate_limiter.wait()
+                resp = httpx.get(
+                    url,
+                    timeout=30,
+                    follow_redirects=True,
+                    headers={
+                        "User-Agent": "Sabermetrics/1.0 (personal research)",
+                    },
+                )
+                if resp.status_code == 404:
+                    logger.warning(
+                        "Mechanics article not found (404): %s", slug
+                    )
+                    failed.append(slug)
+                    continue
+                resp.raise_for_status()
+                text = self._extract_text_from_html(resp.text)
+
+                # Prepend set name header for context in RAG chunks
+                header = (
+                    f"Set Mechanics Article: {set_name}\n"
+                    f"Source: {url}\n"
+                    f"---\n\n"
+                )
+                output_path.write_text(header + text, encoding="utf-8")
+                saved.append(output_path)
+                logger.info(
+                    "Saved mechanics article '%s' (%d bytes)",
+                    slug, len(text),
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to fetch mechanics article '%s': %s", slug, e
+                )
+                failed.append(slug)
+
+        logger.info(
+            "Mechanics articles: %d saved, %d failed", len(saved), len(failed)
+        )
+        if failed:
+            logger.warning("Failed slugs: %s", ", ".join(failed))
+
+        return saved
+
     @staticmethod
     def _extract_text_from_html(html: str) -> str:
         """Extract readable text from HTML content.

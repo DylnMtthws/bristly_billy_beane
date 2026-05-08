@@ -267,6 +267,45 @@ def build_kb(skip_ingest: bool, skip_fetch: bool) -> None:
         click.echo("Knowledge base built successfully.")
 
 
+@cli.command(name="index-mechanics")
+@click.option("--skip-download", is_flag=True, help="Use cached article files.")
+@click.option("--force-reindex", is_flag=True, help="Delete existing and re-index all.")
+def index_mechanics(skip_download: bool, force_reindex: bool) -> None:
+    """Scrape and index WotC set mechanics articles into RAG."""
+    import subprocess
+    import sys
+
+    scripts_dir = Path(__file__).resolve().parent.parent.parent / "scripts"
+    script = scripts_dir / "index_set_mechanics.py"
+
+    if not script.exists():
+        click.echo(f"Script not found: {script}")
+        return
+
+    db_path = _default_db_path()
+    data_dir = db_path.parent
+
+    cmd = [
+        sys.executable, str(script),
+        "--db-path", str(db_path),
+        "--data-dir", str(data_dir),
+    ]
+    if skip_download:
+        cmd.append("--skip-download")
+    if force_reindex:
+        cmd.append("--force-reindex")
+
+    click.echo("Indexing set mechanics articles...")
+    result = subprocess.run(
+        cmd,
+        env={**__import__("os").environ, "PYTHONPATH": str(scripts_dir.parent / "src")},
+    )
+    if result.returncode != 0:
+        click.echo("Mechanics indexing completed with errors (check logs)")
+    else:
+        click.echo("Set mechanics articles indexed successfully.")
+
+
 @cli.command()
 @click.option("--source", default=None, help="Specific source to sync.")
 @click.option("--full", is_flag=True, help="Full refresh instead of incremental.")

@@ -47,3 +47,5 @@ class EvidencePackage(BaseModel):
     primer_articles: List[PrimerArticle]
     reference_chunks: List[ReferenceChunk]
     user_intent: Optional[str] = None
+    referenced_keywords: List[str] = []
+    referenced_mechanics: List[str] = []
