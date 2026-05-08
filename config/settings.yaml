@@ -14,7 +14,7 @@ llm:
   refresh_model: "claude-haiku-4-5"
   max_candidates_for_llm_fit: 50
   prompt_caching: true
-  monthly_cost_ceiling_usd: 5.0
+  monthly_cost_ceiling_usd: 8.0
 
 embeddings:
   model: "sentence-transformers/all-MiniLM-L6-v2"

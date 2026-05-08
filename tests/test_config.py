@@ -14,7 +14,7 @@ def test_settings_load_from_yaml() -> None:
     assert settings.user.default_power_target == 3
     assert settings.llm.profile_model == "claude-sonnet-4-6"
     assert settings.llm.fit_model == "claude-haiku-4-5"
-    assert settings.llm.monthly_cost_ceiling_usd == 5.0
+    assert settings.llm.monthly_cost_ceiling_usd == 8.0
     assert settings.pipeline.hard_filter_target == 3000
     assert settings.output.deck_format == "json"
 

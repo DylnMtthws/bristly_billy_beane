@@ -454,6 +454,9 @@ class DeckBuilder:
         # Pareto filter within each role
         kept: list[dict] = []
         removed = 0
+        # Minimum candidates to keep per non-land role (ensures enough
+        # diversity for infrastructure generators and differentiator fill)
+        min_per_role = 30
 
         for role, group in role_groups.items():
             if role == "land":
@@ -482,24 +485,44 @@ class DeckBuilder:
                 else:
                     removed += 1
 
+            # Ensure minimum per-role diversity: if frontier is too small,
+            # re-add top CVAR cards that were dominated
+            if len(frontier) < min_per_role and len(group) > len(frontier):
+                frontier_ids = {id(c) for c in frontier}
+                for card in group:
+                    if len(frontier) >= min_per_role:
+                        break
+                    if id(card) not in frontier_ids:
+                        frontier.append(card)
+                        frontier_ids.add(id(card))
+
             kept.extend(frontier)
 
-        # Ensure we keep enough candidates
-        min_keep = max(
+        # Global floor: ensure enough non-land candidates total
+        non_land_kept = [
+            c for c in kept
+            if "land" not in (c.get("type_line") or "").lower()
+        ]
+        min_non_land = max(
             settings.pipeline.structural_filter_target,
-            settings.llm.max_candidates_for_llm_fit,
+            settings.llm.max_candidates_for_llm_fit * 3,
         )
-        if len(kept) < min_keep and removed > 0:
-            # Re-add removed cards sorted by CVAR
-            all_sorted = sorted(
-                candidates, key=lambda c: c.get("_cvar_score", 0), reverse=True
+        if len(non_land_kept) < min_non_land:
+            # Re-add top non-land cards by CVAR
+            non_land_all = [
+                c for c in candidates
+                if "land" not in (c.get("type_line") or "").lower()
+            ]
+            non_land_all.sort(
+                key=lambda c: c.get("_cvar_score", 0), reverse=True
             )
             kept_ids = {id(c) for c in kept}
-            for card in all_sorted:
-                if len(kept) >= min_keep:
+            for card in non_land_all:
+                if len(non_land_kept) >= min_non_land:
                     break
                 if id(card) not in kept_ids:
                     kept.append(card)
+                    non_land_kept.append(card)
                     kept_ids.add(id(card))
 
         logger.info(
@@ -670,7 +693,7 @@ class DeckBuilder:
             results = scorer.score_cards(
                 cards=to_score,
                 profile_summary=profile_summary,
-                archetype_definition=profile_result.strategic_profile.primary_archetype,
+                archetype_definition=profile_result.profile.strategic_profile.primary_archetype,
                 partial_deck=[a.card for a in infrastructure],
                 slot_intents=slot_intents,
             )
@@ -880,19 +903,22 @@ class DeckBuilder:
 
     def _build_profile_summary(self, profile_result) -> str:
         """Build the profile summary string for LLM fit scoring."""
+        # Unwrap: profile_result is ProfileResult, .profile is CommanderProfile
+        profile = profile_result.profile
+        sp = profile.strategic_profile
         profile_summary = (
-            f"Commander: {profile_result.commander_name}\n"
-            f"Archetype: {profile_result.strategic_profile.primary_archetype}\n"
-            f"Game Plan: {profile_result.strategic_profile.game_plan_summary}\n"
+            f"Commander: {profile.commander_name}\n"
+            f"Archetype: {sp.primary_archetype}\n"
+            f"Game Plan: {sp.game_plan_summary}\n"
             f"Win Conditions: "
             + ", ".join(
-                wc.description for wc in profile_result.strategic_profile.win_conditions
+                wc.description for wc in sp.win_conditions
             )
         )
 
         # Add value inversions
-        if profile_result.strategic_profile.value_inversions:
-            inversions = profile_result.strategic_profile.value_inversions
+        if sp.value_inversions:
+            inversions = sp.value_inversions
             inversion_text = (
                 "\n\nVALUE INVERSIONS "
                 "(cards with these traits are stronger than they appear):\n"
@@ -906,8 +932,8 @@ class DeckBuilder:
             profile_summary += inversion_text
 
         # Add engine dependencies
-        if hasattr(profile_result.strategic_profile, "engine_dependencies"):
-            deps = profile_result.strategic_profile.engine_dependencies
+        if hasattr(sp, "engine_dependencies"):
+            deps = sp.engine_dependencies
             if deps:
                 dep_text = (
                     "\n\nENGINE DEPENDENCIES "
@@ -926,8 +952,8 @@ class DeckBuilder:
                 profile_summary += dep_text
 
         # Add mispriced card examples
-        if hasattr(profile_result.strategic_profile, "mispriced_card_examples"):
-            examples = profile_result.strategic_profile.mispriced_card_examples
+        if hasattr(sp, "mispriced_card_examples"):
+            examples = sp.mispriced_card_examples
             if examples:
                 example_text = (
                     "\n\nMISPRICED CARDS "
@@ -945,10 +971,12 @@ class DeckBuilder:
 
     def _synthesize_narrative(self, profile_result, assembly, request):
         """Generate deck narrative via Sonnet."""
+        profile = profile_result.profile
+        sp = profile.strategic_profile
         profile_summary = (
-            f"Commander: {profile_result.commander_name}\n"
-            f"Archetype: {profile_result.strategic_profile.primary_archetype}\n"
-            f"Game Plan: {profile_result.strategic_profile.game_plan_summary}"
+            f"Commander: {profile.commander_name}\n"
+            f"Archetype: {sp.primary_archetype}\n"
+            f"Game Plan: {sp.game_plan_summary}"
         )
 
         deck_cards_with_reasoning = []
@@ -980,10 +1008,10 @@ class DeckBuilder:
         except Exception as e:
             logger.warning("Narrative synthesis failed: %s", e)
             narrative = DeckNarrative(
-                game_plan=profile_result.strategic_profile.game_plan_summary,
+                game_plan=profile_result.profile.strategic_profile.game_plan_summary,
                 key_synergies=[
                     wc.description
-                    for wc in profile_result.strategic_profile.win_conditions
+                    for wc in profile_result.profile.strategic_profile.win_conditions
                 ],
                 weaknesses=["Unable to generate narrative — LLM unavailable."],
                 suggested_play_pattern="Follow the core game plan.",
