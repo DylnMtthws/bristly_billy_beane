@@ -75,7 +75,8 @@ def filter_by_budget(rows: list[dict], max_price: float) -> list[dict]:
     """Remove cards that exceed the per-card budget threshold.
 
     Uses a per-card ceiling of max_price / 10 (no single card should
-    consume more than 10% of total budget). Cards without prices pass.
+    consume more than 10% of total budget). Cards without prices are
+    treated as floor-priced ($0.05).
 
     Args:
         rows: Card dicts; price looked up from 'price_usd' key.
@@ -84,11 +85,15 @@ def filter_by_budget(rows: list[dict], max_price: float) -> list[dict]:
     Returns:
         Filtered list of card dicts.
     """
+    from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
+
     per_card_ceiling = max_price / 10.0
     result = []
     for row in rows:
         price = row.get("price_usd")
-        if price is None or float(price) <= per_card_ceiling:
+        if price is None:
+            price = PRICE_FLOOR_USD
+        if float(price) <= per_card_ceiling:
             result.append(row)
     return result
 

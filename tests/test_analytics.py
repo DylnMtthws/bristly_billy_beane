@@ -241,6 +241,32 @@ def test_price_efficiency() -> None:
     assert compute_price_efficiency(cheap) > compute_price_efficiency(expensive)
 
 
+def test_price_efficiency_none_uses_floor() -> None:
+    """Cards with no price get the same score as floor-priced cards."""
+    from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
+
+    none_card = {}
+    floor_card = {"price_usd": PRICE_FLOOR_USD}
+
+    assert compute_price_efficiency(none_card) == compute_price_efficiency(floor_card)
+
+
+def test_price_efficiency_zero_uses_floor() -> None:
+    """Cards with $0 price get floor-price score, not the old special-case 1.0."""
+    from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
+
+    zero_card = {"price_usd": 0}
+    floor_card = {"price_usd": PRICE_FLOOR_USD}
+
+    # $0 and floor-priced cards must produce identical scores
+    assert compute_price_efficiency(zero_card) == compute_price_efficiency(floor_card)
+
+    # At a higher avg_price where floor doesn't saturate to 1.0,
+    # verify the floor is actually applied (not treated as $0 → division by zero)
+    score = compute_price_efficiency(zero_card, avg_price=0.06)
+    assert 0.0 < score <= 1.0
+
+
 # --- Component tests (A4.6) ---
 
 def test_count_ramp_spells() -> None:

@@ -16,6 +16,8 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
 
+from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
+
 bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
 
@@ -263,10 +265,10 @@ def view_deck(deck_id: str):
             price_lookup: dict[str, float] = {}
             for r in price_cursor:
                 if r["card_id"] not in price_lookup:
-                    price_lookup[r["card_id"]] = r["price_usd"] or 0.0
+                    price_lookup[r["card_id"]] = r["price_usd"] or PRICE_FLOOR_USD
             for card_entry in deck_data["cards"]:
                 card_entry["price_usd"] = price_lookup.get(
-                    card_entry.get("card_id", ""), 0.0
+                    card_entry.get("card_id", ""), PRICE_FLOOR_USD
                 )
 
         # Group cards by role

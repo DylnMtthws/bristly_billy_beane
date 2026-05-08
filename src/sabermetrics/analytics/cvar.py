@@ -15,6 +15,10 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# Minimum price for any card — even basic lands cost ~$0.05.
+# Prevents $0 display and perfect-efficiency scores for unpriced cards.
+PRICE_FLOOR_USD = 0.05
+
 
 class CVARResult(BaseModel):
     """Result of CVAR composite scoring."""
@@ -230,15 +234,12 @@ def compute_price_efficiency(
 ) -> float:
     """Score price efficiency: cheaper cards relative to average score higher.
 
-    Range: 0.0 to 1.0. Cards without prices get 0.5 (neutral).
+    Range: 0.0 to 1.0. Cards without prices are treated as floor-priced.
     """
     price = card.get("price_usd") or card.get("current_price_usd")
     if price is None:
-        return 0.5
-
-    price = float(price)
-    if price <= 0:
-        return 1.0
+        price = PRICE_FLOOR_USD
+    price = max(float(price), PRICE_FLOOR_USD)
 
     # Ratio-based scoring: cards at average price get 0.5
     # Cards at half price get ~0.75, double price get ~0.25
