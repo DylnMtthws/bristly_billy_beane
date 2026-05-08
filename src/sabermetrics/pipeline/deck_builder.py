@@ -1,12 +1,12 @@
-"""Deck builder orchestrator (D6.2, restructured for 6.5.5).
+"""Deck builder orchestrator (D6.2, restructured for synergy optimizer).
 
 8-stage pipeline:
 1. Hard filters + role tag loading
 2. Pareto filter (remove dominated cards per role)
 3. Template derivation (profile-driven composition)
 4. Infrastructure fill (4 deterministic generators)
-5. Category coverage analysis
-6. Differentiator fill (deck-context-aware LLM scoring)
+5. Role targets + synergy matrix computation
+6. Greedy optimizer + swap refinement + LLM safety net
 7. Budget redistribution (upgrade/downgrade passes)
 8. Synthesis + classify + persist
 """
@@ -131,29 +131,23 @@ class DeckBuilder:
             len(infrastructure), budget_used,
         )
 
-        # --- Stage 5: Category Coverage ---
+        # --- Stage 5+6: Synergy optimizer (role targets + matrix + greedy + swap) ---
         t = time.time()
-        from sabermetrics.pipeline.category_coverage import analyze_category_coverage
-
-        slot_intents = analyze_category_coverage(
-            profile=profile,
-            partial_deck=[a.card for a in infrastructure],
-            remaining_slots=template.differentiator_slots,
-            remaining_budget=request.budget_usd - budget_used,
-        )
-        metrics["7_coverage"] = time.time() - t
-
-        # --- Stage 6: Differentiator Fill (LLM scoring) ---
-        t = time.time()
-        all_assignments, fit_cost = self._fill_differentiators(
+        all_assignments, opt_metrics = self._optimize_differentiators(
             candidates, infrastructure, profile_result, commander,
-            request, template, slot_intents, budget_used,
+            request, template, budget_used,
         )
-        total_cost += fit_cost
-        metrics["8_differentiator"] = time.time() - t
+        total_cost += opt_metrics.get("llm_safety_cost", 0.0)
+        metrics["7_optimizer"] = time.time() - t
+        metrics.update({
+            f"opt_{k}": v for k, v in opt_metrics.items()
+            if k != "role_targets"
+        })
         logger.info(
-            "Stage 6: %d total cards, $%.4f LLM cost",
-            len(all_assignments), fit_cost,
+            "Stage 5+6: %d total cards, %d swaps, obj=%.4f",
+            len(all_assignments),
+            opt_metrics.get("cards_swapped", 0),
+            opt_metrics.get("objective_score", 0),
         )
 
         # --- Stage 7: Budget Redistribution ---
@@ -653,129 +647,176 @@ class DeckBuilder:
 
         return all_assignments, budget_used
 
-    def _fill_differentiators(
+    def _optimize_differentiators(
         self, candidates, infrastructure, profile_result, commander,
-        request, template, slot_intents, budget_used,
-    ) -> tuple[list, float]:
-        """Stage 6: LLM-score differentiator candidates with deck context.
+        request, template, budget_used,
+    ) -> tuple[list, dict]:
+        """Stage 5+6: Synergy-aware greedy optimization.
+
+        Replaces category_coverage + _fill_differentiators with:
+        1. Compute role targets (hypergeometric reliability)
+        2. Build synergy matrix (rules + co-occurrence + embeddings)
+        3. Greedy fill differentiator slots
+        4. Swap refinement (infrastructure cards eligible)
+        5. LLM safety net on weakest picks
 
         Returns:
-            Tuple of (all assignments including infrastructure, LLM cost).
+            Tuple of (all_assignments including infrastructure, optimizer_metrics).
         """
-        from sabermetrics.config import settings
+        from sabermetrics.analytics.role_targets import compute_role_targets
+        from sabermetrics.analytics.synergy_matrix import build_synergy_matrix
+        from sabermetrics.pipeline.greedy_optimizer import (
+            deck_objective,
+            greedy_fill,
+            swap_refine,
+        )
         from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
-        # Build profile summary (same as v1)
-        profile_summary = self._build_profile_summary(profile_result)
+        profile = profile_result.profile
 
-        # Identify non-land, non-infrastructure candidates
-        infra_names = {a.card.get("name", "") for a in infrastructure}
-        diff_candidates = [
-            c for c in candidates
-            if c.get("name", "") not in infra_names
-            and "land" not in (c.get("type_line") or "").lower()
-        ]
+        # 1. Compute role targets
+        role_targets = compute_role_targets(profile, template)
 
-        # Sort by CVAR and take top N for LLM scoring
-        diff_candidates.sort(
-            key=lambda c: c.get("_cvar_score", 0), reverse=True,
+        # 2. Build synergy matrix
+        synergy = build_synergy_matrix(
+            candidates, commander.id, self.db_path,
         )
-        max_llm = settings.llm.max_candidates_for_llm_fit
-        to_score = diff_candidates[:max_llm]
 
+        # 3. Greedy fill
+        diff_assignments = greedy_fill(
+            shell=infrastructure,
+            candidates=candidates,
+            synergy=synergy,
+            role_targets=role_targets,
+            budget_remaining=request.budget_usd - budget_used,
+            slots_remaining=template.differentiator_slots,
+        )
+        all_assignments = list(infrastructure) + diff_assignments
+
+        # 4. Swap refinement (infrastructure cards eligible for swap)
+        all_assignments, swaps = swap_refine(
+            deck=all_assignments,
+            candidates=candidates,
+            synergy=synergy,
+            role_targets=role_targets,
+            budget=request.budget_usd,
+            protect_lands=True,
+        )
+
+        # 5. Reduced LLM safety net: score weakest picks via Haiku
+        llm_cost = 0.0
+        try:
+            all_assignments, llm_cost = self._llm_safety_check(
+                all_assignments, candidates, synergy, role_targets,
+                profile_result, request, n_weakest=8,
+            )
+        except Exception as e:
+            logger.warning("LLM safety check failed, skipping: %s", e)
+
+        # Add fit reasoning for cards that lack it
+        for a in all_assignments:
+            if "_fit_reasoning" not in a.card:
+                a.card["_fit_reasoning"] = "Synergy-optimizer selected"
+
+        metrics = {
+            "synergy_matrix_size": len(synergy.card_id_to_index),
+            "role_targets": {r: t.target_count for r, t in role_targets.items()},
+            "cards_swapped": swaps,
+            "llm_safety_cost": llm_cost,
+            "objective_score": deck_objective(
+                [a.card for a in all_assignments], synergy, role_targets, template,
+            ),
+        }
+        return all_assignments, metrics
+
+    def _llm_safety_check(
+        self, deck, candidates, synergy, role_targets,
+        profile_result, request, n_weakest=8,
+    ) -> tuple[list, float]:
+        """Score the N weakest picks via Haiku and swap out poor fits.
+
+        Args:
+            deck: Current deck assignments.
+            candidates: Full candidate pool.
+            synergy: Synergy matrix.
+            role_targets: Role targets.
+            profile_result: Commander profile result.
+            request: Build request.
+            n_weakest: Number of weakest cards to check.
+
+        Returns:
+            Tuple of (possibly-modified deck, LLM cost).
+        """
+        from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+        # Find N weakest non-land cards by score
+        indexed = [
+            (i, a) for i, a in enumerate(deck)
+            if a.slot_role != "land"
+            and "land" not in (a.card.get("type_line") or "").lower()
+        ]
+        indexed.sort(key=lambda x: x[1].score)
+        weakest = indexed[:n_weakest]
+
+        if not weakest:
+            return deck, 0.0
+
+        profile_summary = self._build_profile_summary(profile_result)
         total_cost = 0.0
-        scored: list[tuple[dict, dict]] = []
 
         try:
             from sabermetrics.reasoning.fit import FitScorer
 
             scorer = FitScorer(self.db_path)
+            weak_cards = [deck[i].card for i, _ in weakest]
+
             results = scorer.score_cards(
-                cards=to_score,
+                cards=weak_cards,
                 profile_summary=profile_summary,
                 archetype_definition=profile_result.profile.strategic_profile.primary_archetype,
-                partial_deck=[a.card for a in infrastructure],
-                slot_intents=slot_intents,
+                partial_deck=[a.card for a in deck],
+                slot_intents=[],
             )
 
-            for card, fit_response in results:
+            # Replace cards scored <= 3 with next-best candidate
+            deck_names = {a.card.get("name", "") for a in deck}
+            for (deck_idx, _assignment), (card, fit_response) in zip(weakest, results):
                 card["_fit_reasoning"] = fit_response.reasoning
-                scoring = {
-                    "cvar_score": card.get("_cvar_score", 0.0),
-                    "llm_fit_score": fit_response.fit_score,
-                    "slot_role": fit_response.slot_role,
-                    "reasoning": fit_response.reasoning,
-                }
-                scored.append((card, scoring))
+                if fit_response.fit_score <= 3:
+                    # Find replacement
+                    replacement = None
+                    for c in candidates:
+                        if (
+                            c.get("name", "") not in deck_names
+                            and "land" not in (c.get("type_line") or "").lower()
+                        ):
+                            replacement = c
+                            break
+
+                    if replacement:
+                        old_name = card.get("name", "")
+                        new_name = replacement.get("name", "")
+                        role = _heuristic_role(replacement)
+                        replacement["_fit_reasoning"] = (
+                            f"Replaced {old_name} (LLM score {fit_response.fit_score})"
+                        )
+                        deck[deck_idx] = SlotAssignment(
+                            card=replacement,
+                            slot_role=role,
+                            score=replacement.get("_cvar_score", 0.0),
+                            alternatives=[],
+                        )
+                        deck_names.discard(old_name)
+                        deck_names.add(new_name)
+                        logger.info(
+                            "LLM safety: replaced %s (score %d) with %s",
+                            old_name, fit_response.fit_score, new_name,
+                        )
 
         except Exception as e:
-            logger.warning("LLM fit scoring failed, using CVAR only: %s", e)
-            for card in to_score:
-                card["_fit_reasoning"] = "LLM scoring unavailable; CVAR-only ranking."
-                scoring = {
-                    "cvar_score": card.get("_cvar_score", 0.0),
-                    "llm_fit_score": 5,
-                    "slot_role": _heuristic_role(card),
-                    "reasoning": "LLM scoring unavailable; CVAR-only ranking.",
-                }
-                scored.append((card, scoring))
+            logger.warning("LLM safety net scoring failed: %s", e)
 
-        # Add remaining non-scored candidates
-        for card in diff_candidates[max_llm:]:
-            card["_fit_reasoning"] = "Not LLM-scored; below candidate threshold."
-            scoring = {
-                "cvar_score": card.get("_cvar_score", 0.0),
-                "llm_fit_score": 5,
-                "slot_role": _heuristic_role(card),
-                "reasoning": "Not LLM-scored; below candidate threshold.",
-            }
-            scored.append((card, scoring))
-
-        # Fill differentiator slots from scored candidates
-        diff_assignments: list[SlotAssignment] = []
-        used_names = infra_names.copy()
-        running_price = budget_used
-        target_diff = template.differentiator_slots
-
-        # Sort by combined score
-        scored.sort(
-            key=lambda x: 0.6 * x[1].get("cvar_score", 0)
-            + 0.4 * (x[1].get("llm_fit_score", 5) / 10.0),
-            reverse=True,
-        )
-
-        for card, scoring in scored:
-            if len(diff_assignments) >= target_diff:
-                break
-
-            name = card.get("name", "")
-            if name in used_names:
-                continue
-
-            price = float(card.get("price_usd", 0) or 0)
-            if request.budget_usd and running_price + price > request.budget_usd:
-                continue
-
-            combined = (
-                0.6 * scoring.get("cvar_score", 0)
-                + 0.4 * (scoring.get("llm_fit_score", 5) / 10.0)
-            )
-            role = scoring.get("slot_role", "utility")
-            if role == "land":
-                role = "utility"
-
-            diff_assignments.append(SlotAssignment(
-                card=card,
-                slot_role=role,
-                score=round(combined, 4),
-                alternatives=[],
-            ))
-            used_names.add(name)
-            running_price += price
-
-        # Combine infrastructure + differentiators
-        all_assignments = list(infrastructure) + diff_assignments
-        return all_assignments, total_cost
+        return deck, total_cost
 
     def _redistribute_budget(
         self,
