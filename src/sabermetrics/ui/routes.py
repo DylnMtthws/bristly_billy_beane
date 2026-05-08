@@ -255,7 +255,7 @@ def view_deck(deck_id: str):
                 full = card_lookup.get(card_entry.get("card_id", ""), {})
                 card_entry.update(full)
 
-            # Get latest prices
+            # Get latest prices by card_id
             price_cursor = conn.execute(
                 f"SELECT card_id, price_usd FROM card_prices "
                 f"WHERE card_id IN ({placeholders}) "
@@ -266,9 +266,49 @@ def view_deck(deck_id: str):
             for r in price_cursor:
                 if r["card_id"] not in price_lookup:
                     price_lookup[r["card_id"]] = r["price_usd"] or PRICE_FLOOR_USD
+
+            # Fallback: for cards without prices (promo printings, legacy
+            # decks), look up cheapest price by card name
+            missing_names = set()
             for card_entry in deck_data["cards"]:
-                card_entry["price_usd"] = price_lookup.get(
-                    card_entry.get("card_id", ""), PRICE_FLOOR_USD
+                cid = card_entry.get("card_id", "")
+                if cid not in price_lookup and not cid.startswith("basic-"):
+                    name = card_entry.get("name", "")
+                    if name:
+                        missing_names.add(name)
+
+            name_price_lookup: dict[str, float] = {}
+            if missing_names:
+                name_placeholders = ",".join("?" for _ in missing_names)
+                name_price_cursor = conn.execute(
+                    f"SELECT c.name, MIN(cp.price_usd) as min_price "
+                    f"FROM cards c JOIN card_prices cp ON c.id = cp.card_id "
+                    f"WHERE c.name IN ({name_placeholders}) "
+                    f"AND cp.price_usd IS NOT NULL "
+                    f"GROUP BY c.name",
+                    list(missing_names),
+                )
+                for r in name_price_cursor:
+                    name_price_lookup[r["name"]] = r["min_price"]
+
+            for card_entry in deck_data["cards"]:
+                cid = card_entry.get("card_id", "")
+                if cid in price_lookup:
+                    card_entry["price_usd"] = price_lookup[cid]
+                elif card_entry.get("name", "") in name_price_lookup:
+                    card_entry["price_usd"] = name_price_lookup[
+                        card_entry["name"]
+                    ]
+                else:
+                    card_entry["price_usd"] = PRICE_FLOOR_USD
+
+            # Recalculate total price from corrected per-card prices
+            recalculated_total = sum(
+                float(c.get("price_usd", 0) or 0) for c in deck_data["cards"]
+            )
+            if "rationale" in deck_data and "composition" in deck_data["rationale"]:
+                deck_data["rationale"]["composition"]["total_price_usd"] = round(
+                    recalculated_total, 2
                 )
 
         # Group cards by role

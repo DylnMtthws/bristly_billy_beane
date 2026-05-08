@@ -102,7 +102,13 @@ def filter_singleton_legal(rows: list[dict]) -> list[dict]:
     """Remove cards not legal as singleton (basic lands excepted).
 
     In Commander, each card can only appear once except basic lands.
-    This filter removes duplicates by name, keeping the first occurrence.
+    This filter removes duplicates by name, keeping the cheapest printing.
+
+    When a card has multiple printings, some with NULL prices:
+    - If ANY printing has a real price, the cheapest priced printing is kept
+      and its price is propagated so budget filtering works correctly.
+    - If ALL printings have NULL prices, the card is kept with NULL price
+      (downstream treats as $0.05, which is conservative).
 
     Args:
         rows: Card dicts with 'name' field.
@@ -110,13 +116,28 @@ def filter_singleton_legal(rows: list[dict]) -> list[dict]:
     Returns:
         Deduplicated list of card dicts.
     """
-    rows = sorted(rows, key=lambda r: r.get("price_usd") or float("inf"))
-    seen: set[str] = set()
-    result = []
     basic_lands = {"Plains", "Island", "Swamp", "Mountain", "Forest",
                    "Wastes", "Snow-Covered Plains", "Snow-Covered Island",
                    "Snow-Covered Swamp", "Snow-Covered Mountain",
                    "Snow-Covered Forest"}
+
+    # Group by name, collecting the cheapest known price per card name
+    cheapest_price: dict[str, float | None] = {}
+    for row in rows:
+        name = row.get("name", "")
+        if name in basic_lands:
+            continue
+        price = row.get("price_usd")
+        if price is not None:
+            existing = cheapest_price.get(name)
+            if existing is None or price < existing:
+                cheapest_price[name] = price
+
+    # Sort: prefer printings with real prices (cheapest first), NULLs last
+    rows = sorted(rows, key=lambda r: r.get("price_usd") or float("inf"))
+
+    seen: set[str] = set()
+    result = []
     for row in rows:
         name = row.get("name", "")
         if name in basic_lands:
@@ -124,6 +145,12 @@ def filter_singleton_legal(rows: list[dict]) -> list[dict]:
             continue
         if name not in seen:
             seen.add(name)
+            # Propagate the cheapest known price to whichever printing we keep.
+            # This ensures that if we keep a NULL-priced printing (because
+            # it sorted first for some reason), it still gets the real price.
+            known_price = cheapest_price.get(name)
+            if row.get("price_usd") is None and known_price is not None:
+                row["price_usd"] = known_price
             result.append(row)
     return result
 
