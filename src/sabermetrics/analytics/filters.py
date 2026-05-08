@@ -105,6 +105,7 @@ def filter_singleton_legal(rows: list[dict]) -> list[dict]:
     Returns:
         Deduplicated list of card dicts.
     """
+    rows = sorted(rows, key=lambda r: r.get("price_usd") or float("inf"))
     seen: set[str] = set()
     result = []
     basic_lands = {"Plains", "Island", "Swamp", "Mountain", "Forest",

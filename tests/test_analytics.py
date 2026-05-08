@@ -93,6 +93,20 @@ def test_singleton_filter() -> None:
     assert len(filtered) == 3  # 1 Sol Ring + 2 Forests (basic)
 
 
+def test_singleton_filter_keeps_cheapest_printing() -> None:
+    """Singleton filter keeps the cheapest printing of duplicate cards."""
+    cards = [
+        {"name": "Sol Ring", "price_usd": 3.00},
+        {"name": "Sol Ring", "price_usd": 1.00},
+        {"name": "Arcane Signet", "price_usd": None},
+        {"name": "Arcane Signet", "price_usd": 0.50},
+    ]
+    filtered = filter_singleton_legal(cards)
+    by_name = {c["name"]: c for c in filtered}
+    assert by_name["Sol Ring"]["price_usd"] == 1.00
+    assert by_name["Arcane Signet"]["price_usd"] == 0.50
+
+
 def test_apply_hard_filters_integration() -> None:
     """Integration test: apply_hard_filters reduces card pool (A4.1)."""
     db_path = Path("data/sabermetrics.db")

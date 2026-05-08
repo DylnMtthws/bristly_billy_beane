@@ -39,9 +39,9 @@ def index():
         # Search commanders
         if query:
             cursor = conn.execute(
-                "SELECT id, name, type_line, color_identity, mana_cost "
+                "SELECT MIN(id) as id, name, type_line, color_identity, mana_cost "
                 "FROM cards WHERE name LIKE ? AND is_legal_commander = 1 "
-                "ORDER BY name LIMIT 20",
+                "GROUP BY name ORDER BY name LIMIT 20",
                 (f"%{query}%",),
             )
             commanders = [dict(row) for row in cursor]
@@ -84,7 +84,8 @@ def commander_profile(name: str):
         # Find commander
         cursor = conn.execute(
             "SELECT id, name FROM cards "
-            "WHERE name LIKE ? AND is_legal_commander = 1 LIMIT 1",
+            "WHERE name LIKE ? AND is_legal_commander = 1 "
+            "GROUP BY name LIMIT 1",
             (f"%{name}%",),
         )
         row = cursor.fetchone()
