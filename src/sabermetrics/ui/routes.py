@@ -292,7 +292,7 @@ def view_deck(deck_id: str):
         for name, qty in name_counts.items():
             card = name_info[name]
             type_line = (card.get("type_line") or "").lower()
-            if "land" in type_line:
+            if "land" in type_line or card.get("slot_role") == "land":
                 card_type = "Land"
             elif "creature" in type_line:
                 card_type = "Creature"
