@@ -10,9 +10,15 @@ class CardFitResponse(BaseModel):
 
     fit_score: int = Field(ge=1, le=10)
     reasoning: str
-    slot_role: Literal[
-        "ramp", "draw", "removal", "wincon", "utility", "land", "other"
-    ]
+    slot_role: str = "other"
+
+    def __init__(self, **data):
+        # Normalize slot_role: map unexpected LLM values to canonical roles
+        canonical = {"ramp", "draw", "removal", "wincon", "utility", "land", "other"}
+        role = data.get("slot_role", "other")
+        if role not in canonical:
+            data["slot_role"] = "other"
+        super().__init__(**data)
 
 
 class RelevanceScreenResponse(BaseModel):
