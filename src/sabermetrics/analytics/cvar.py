@@ -141,52 +141,112 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
     return min(1.0, score)
 
 
-def compute_mana_efficiency_score(card: dict) -> float:
-    """Score mana efficiency: lower CMC relative to impact is better.
+# Role-based impact multipliers for mana value scoring.
+# Uses the highest multiplier among all roles a card has.
+_ROLE_IMPACT: dict[str, float] = {
+    "board_wipe": 1.5,
+    "wincon": 1.5,
+    "tutor": 1.4,
+    "removal": 1.3,
+    "draw": 1.3,
+    "recursion": 1.25,
+    "protection": 1.2,
+    "ramp": 1.2,
+    "threat": 1.1,
+    "fixing": 1.0,
+    "utility": 0.85,
+}
 
-    Heuristic: cards with CMC 0-2 get high scores, 3-5 medium, 6+ low.
-    Modified by card type (instants/sorceries at low CMC are especially good).
-    Uses effective CMC (considers morph, evoke, dash, etc.) when lower
-    than printed CMC.
-    Range: 0.0 to 1.0.
+# Oracle text fallback patterns for impact detection (when role tags unavailable)
+_HIGH_IMPACT_PHRASES = [
+    "destroy all", "exile all", "each opponent loses",
+    "extra turn", "you win the game", "each player sacrifices",
+    "all creatures get", "return all",
+]
+_MEDIUM_HIGH_IMPACT_PHRASES = [
+    "destroy target", "exile target", "counter target spell",
+    "draw a card", "draw cards", "draws a card",
+    "search your library", "return target",
+    "deals damage to any target", "deals damage to each",
+    "whenever",
+]
+_RAMP_PHRASES = [
+    "add {", "add one mana", "add mana",
+]
+
+
+def _compute_impact_multiplier(card: dict) -> float:
+    """Estimate card impact from role tags or oracle text.
+
+    Returns a multiplier from 0.7 (low impact) to 1.5 (high impact).
+    """
+    # Try role tags first (pre-computed, more accurate)
+    role_tags = card.get("role_tags")
+    if isinstance(role_tags, str):
+        role_tags = json.loads(role_tags)
+    if role_tags:
+        return max(_ROLE_IMPACT.get(r, 1.0) for r in role_tags)
+
+    # Fallback: oracle text pattern matching
+    oracle_text = (card.get("oracle_text") or "").lower()
+
+    if any(p in oracle_text for p in _HIGH_IMPACT_PHRASES):
+        return 1.5
+    if any(p in oracle_text for p in _MEDIUM_HIGH_IMPACT_PHRASES):
+        return 1.3
+    if any(p in oracle_text for p in _RAMP_PHRASES):
+        return 1.2
+
+    # Low-impact: creatures with short/empty oracle text (vanilla or near-vanilla)
+    type_line = (card.get("type_line") or "").lower()
+    if "creature" in type_line and len(oracle_text) < 40:
+        return 0.7
+
+    return 1.0
+
+
+def compute_mana_efficiency_score(card: dict) -> float:
+    """Score mana value: impact delivered relative to mana spent.
+
+    Combines a Commander-appropriate CMC curve with an impact multiplier
+    derived from role tags or oracle text. Range: 0.0 to 1.0.
     """
     from sabermetrics.analytics.effective_cost import compute_effective_cmc
 
     cmc = compute_effective_cmc(card)
     type_line = (card.get("type_line") or "").lower()
-    oracle_text = (card.get("oracle_text") or "").lower()
 
-    # Base score inversely proportional to CMC
-    if cmc <= 1:
-        base = 1.0
+    # Base score: flattened curve for Commander's slower pace
+    if cmc <= 0:
+        base = 0.65
+    elif cmc <= 1:
+        base = 0.70
     elif cmc <= 2:
-        base = 0.9
-    elif cmc <= 3:
         base = 0.75
+    elif cmc <= 3:
+        base = 0.70
     elif cmc <= 4:
-        base = 0.6
+        base = 0.60
     elif cmc <= 5:
-        base = 0.45
+        base = 0.50
     elif cmc <= 6:
-        base = 0.3
+        base = 0.40
     else:
-        base = max(0.1, 0.3 - (cmc - 6) * 0.05)
+        base = max(0.25, 0.40 - (cmc - 6) * 0.05)
 
-    # Bonus for instants (mana-flexible)
+    # Impact multiplier: high-impact cards score better per mana
+    impact = _compute_impact_multiplier(card)
+
+    # Instant bonus: cheap high-impact instants (Swords to Plowshares,
+    # Counterspell, Path to Exile) get a larger bonus — the combination
+    # of low cost + instant speed + strong effect is premium in Commander.
     if "instant" in type_line:
-        base = min(1.0, base + 0.1)
+        if cmc <= 2 and impact >= 1.2:
+            base = min(1.0, base + 0.3)
+        else:
+            base = min(1.0, base + 0.1)
 
-    # Bonus for cards with mana generation
-    if "add" in oracle_text and ("mana" in oracle_text or "{" in oracle_text):
-        base = min(1.0, base + 0.15)
-
-    # Penalty for high-cost cards without impact keywords
-    impact_words = ["destroy", "exile", "draw", "create", "return",
-                    "each opponent", "all creatures", "win the game"]
-    if cmc >= 5 and not any(w in oracle_text for w in impact_words):
-        base *= 0.7
-
-    return base
+    return min(1.0, max(0.0, base * impact))
 
 
 def compute_replacement_value(

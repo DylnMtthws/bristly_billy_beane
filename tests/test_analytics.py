@@ -422,3 +422,92 @@ def test_embedding_cache() -> None:
     assert cache.size == 3
     assert cache.get("a") is None
     assert cache.get("b") is not None
+
+
+# --- Mana efficiency impact tests ---
+
+def test_mana_efficiency_impact_beats_vanilla() -> None:
+    """A 6-CMC board wipe scores higher than a 2-CMC vanilla creature."""
+    board_wipe = {
+        "cmc": 6,
+        "type_line": "Sorcery",
+        "oracle_text": "Destroy all creatures.",
+    }
+    vanilla = {
+        "cmc": 2,
+        "type_line": "Creature — Bear",
+        "oracle_text": "",
+    }
+    wipe_score = compute_mana_efficiency_score(board_wipe)
+    vanilla_score = compute_mana_efficiency_score(vanilla)
+    assert wipe_score > vanilla_score, (
+        f"Board wipe ({wipe_score:.2f}) should beat vanilla ({vanilla_score:.2f})"
+    )
+
+
+def test_mana_efficiency_role_tags_used() -> None:
+    """Card with role_tags gets impact-appropriate score from tags."""
+    draw_engine = {
+        "cmc": 3,
+        "type_line": "Enchantment",
+        "oracle_text": "Whenever an opponent casts a spell, you may pay {1}. "
+                       "If you don't, that player draws a card.",
+        "role_tags": '["draw"]',
+    }
+    # With draw role tag -> 1.3 multiplier, CMC 3 base 0.70 -> 0.91
+    score = compute_mana_efficiency_score(draw_engine)
+    assert score > 0.85, f"Draw engine with role tag should score >0.85, got {score:.2f}"
+
+    # Same card without role tags falls back to oracle text
+    no_tags = dict(draw_engine)
+    no_tags.pop("role_tags")
+    score_no_tags = compute_mana_efficiency_score(no_tags)
+    # "draws a card" in oracle text -> medium-high 1.3 fallback
+    assert score_no_tags > 0.80, (
+        f"Draw engine via text fallback should score >0.80, got {score_no_tags:.2f}"
+    )
+
+
+def test_mana_efficiency_cheap_instant_premium() -> None:
+    """Cheap high-impact instants get the graduated +0.3 bonus.
+
+    Swords to Plowshares pattern: 1-mana instant exile should score
+    higher than the same effect as a sorcery, and higher than a cheap
+    instant without meaningful impact.
+    """
+    swords = {
+        "cmc": 1,
+        "type_line": "Instant",
+        "oracle_text": "Exile target creature. Its controller gains life "
+                       "equal to its power.",
+    }
+    # Same effect as sorcery
+    sorcery_exile = {
+        "cmc": 1,
+        "type_line": "Sorcery",
+        "oracle_text": "Exile target creature. Its controller gains life "
+                       "equal to its power.",
+    }
+    # Cheap instant without impact
+    weak_instant = {
+        "cmc": 1,
+        "type_line": "Instant",
+        "oracle_text": "Target creature gains first strike until end of turn.",
+    }
+
+    swords_score = compute_mana_efficiency_score(swords)
+    sorcery_score = compute_mana_efficiency_score(sorcery_exile)
+    weak_score = compute_mana_efficiency_score(weak_instant)
+
+    # Swords should beat the sorcery version (instant premium)
+    assert swords_score > sorcery_score, (
+        f"Swords ({swords_score:.2f}) should beat sorcery ({sorcery_score:.2f})"
+    )
+    # Swords should beat weak instant (impact matters)
+    assert swords_score > weak_score, (
+        f"Swords ({swords_score:.2f}) should beat weak instant ({weak_score:.2f})"
+    )
+    # The sorcery version still benefits from impact multiplier
+    assert sorcery_score > weak_score, (
+        f"Sorcery exile ({sorcery_score:.2f}) should beat weak instant ({weak_score:.2f})"
+    )
