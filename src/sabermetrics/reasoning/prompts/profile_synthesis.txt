@@ -88,7 +88,7 @@ Synthesize these evidence streams into a strategic profile. Your reasoning must:
    - **Keyword inversions**: a keyword that is normally a downside becomes upside
      (e.g., Arcades makes defender a benefit, not a limitation)
    - **Cost inversions**: cards with prohibitive costs become efficient
-     (e.g., Agatha makes high activated-ability costs into {1})
+     (e.g., Agatha makes high activated-ability costs into {{1}})
    - **Quantity inversions**: many small effects outperform fewer large ones
      (e.g., Krenko wants many cheap goblins, not one expensive threat)
 
