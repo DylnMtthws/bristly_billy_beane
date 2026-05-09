@@ -7,7 +7,10 @@ and target-type diversity.
 import json
 import logging
 import re
+import sqlite3
 from pathlib import Path
+
+import yaml
 
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
@@ -184,11 +187,93 @@ def _score_removal(
     return final_score
 
 
+def _load_removal_auto_includes() -> tuple[dict, set[str]]:
+    """Load auto-include cards from config.
+
+    Returns:
+        Tuple of (auto_includes_dict, protected_names_set).
+    """
+    config_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "auto_include_cards.yaml"
+    if not config_path.exists():
+        return {}, set()
+    with open(config_path) as f:
+        data = yaml.safe_load(f) or {}
+    protected: set[str] = set()
+    for section_entries in data.values():
+        if not isinstance(section_entries, list):
+            continue
+        for entry in section_entries:
+            if entry.get("protect_from_swap", False):
+                protected.add(entry["name"])
+    return data, protected
+
+
 class RemovalPackageGenerator:
     """Generate the removal + board wipe package for a deck."""
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
+        self.protected_names: set[str] = set()
+
+    def _load_removal_candidates(
+        self,
+        color_identity: list[str],
+    ) -> list[dict]:
+        """Load pre-scored removal candidates from the removal_candidates table.
+
+        Joins with cards table to get full card data. Filters by color identity
+        and Commander legality.
+
+        Args:
+            color_identity: Commander's color identity.
+
+        Returns:
+            List of card dicts augmented with removal_score from removal_candidates.
+        """
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+
+            color_set = set(color_identity)
+            cursor = conn.execute(
+                "SELECT c.id, c.name, c.oracle_text, c.type_line, c.cmc, "
+                "c.color_identity, c.mana_cost, c.role_tags, c.keywords, "
+                "r.removal_type, r.target_type, r.removal_score, r.is_exile, "
+                "r.is_instant, r.is_free_cast, r.flexibility_score "
+                "FROM removal_candidates r "
+                "JOIN cards c ON r.card_id = c.id "
+                "WHERE c.is_legal_in_99 = 1 "
+                "ORDER BY r.removal_score DESC"
+            )
+
+            results: list[dict] = []
+            for row in cursor:
+                card = dict(row)
+                card_colors_raw = card.get("color_identity") or "[]"
+                if isinstance(card_colors_raw, str):
+                    try:
+                        card_colors = json.loads(card_colors_raw)
+                    except (json.JSONDecodeError, TypeError):
+                        card_colors = []
+                else:
+                    card_colors = card_colors_raw
+                if not all(c in color_set for c in card_colors):
+                    continue
+
+                price_row = conn.execute(
+                    "SELECT price_usd FROM card_prices "
+                    "WHERE card_id = ? ORDER BY snapshot_date DESC LIMIT 1",
+                    (card["id"],),
+                ).fetchone()
+                card["price_usd"] = price_row["price_usd"] if price_row else 0.0
+
+                results.append(card)
+
+            conn.close()
+            return results
+        except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+            logger.warning("Failed to load removal_candidates: %s", e)
+            return []
 
     def generate(
         self,
@@ -202,7 +287,11 @@ class RemovalPackageGenerator:
         commander_colors: list[str] | None = None,
         avg_cmc: float | None = None,
     ) -> list[SlotAssignment]:
-        """Generate removal package with role-specific scoring and diversity.
+        """Generate removal package with auto-includes and role-specific scoring.
+
+        Prefers the removal_candidates table (pre-scored, reminder-text-stripped)
+        over the role_tag_pool. Falls back to role_tag_pool if the table is
+        empty or unavailable.
 
         Args:
             color_identity: Commander's color identity.
@@ -221,15 +310,76 @@ class RemovalPackageGenerator:
         colors = commander_colors or color_identity
         deck_avg_cmc = avg_cmc or template.avg_cmc_target
 
+        auto_includes, self.protected_names = _load_removal_auto_includes()
         used_names = {c.get("name", "") for c in already_placed}
         assignments: list[SlotAssignment] = []
         running_price = 0.0
 
-        # Separate board wipes from single-target removal
+        # --- Auto-include removal staples ---
+        auto_removal_names: set[str] = set()
+
+        # Color-gated removal staples
+        color_sections = {
+            "W": "removal_has_white",
+            "U": "removal_has_blue",
+            "B": "removal_has_black",
+            "R": "removal_has_red",
+            "G": "removal_has_green",
+        }
+        for color, section in color_sections.items():
+            if color in color_identity:
+                for entry in auto_includes.get(section, []):
+                    if entry.get("role") == "removal":
+                        auto_removal_names.add(entry["name"])
+
+        # Color-gated board wipe staples
+        wipe_sections = {
+            "W": "wipe_has_white",
+            "R": "wipe_has_red",
+        }
+        for color, section in wipe_sections.items():
+            if color in color_identity:
+                for entry in auto_includes.get(section, []):
+                    if entry.get("role") == "removal":
+                        auto_removal_names.add(entry["name"])
+
+        # Try loading removal_candidates table
+        removal_candidates = self._load_removal_candidates(color_identity)
+        use_candidates_table = len(removal_candidates) > 0
+
+        if use_candidates_table:
+            pool = removal_candidates
+            logger.info("Using removal_candidates table (%d cards)", len(pool))
+        else:
+            pool = role_tag_pool
+            logger.info("Falling back to role_tag_pool (%d cards)", len(pool))
+
+        # Place auto-includes from pool (or role_tag_pool as backup)
+        search_pools = [pool] if use_candidates_table else [role_tag_pool]
+        if use_candidates_table:
+            search_pools.append(role_tag_pool)
+
+        for search_pool in search_pools:
+            for card in search_pool:
+                name = card.get("name", "")
+                if name in auto_removal_names and name not in used_names:
+                    price = float(card.get("price_usd", 0) or 0)
+                    if budget_remaining <= 0 or running_price + price <= budget_remaining:
+                        assignments.append(SlotAssignment(
+                            card=card,
+                            slot_role="removal",
+                            score=0.95,
+                            alternatives=[],
+                        ))
+                        used_names.add(name)
+                        running_price += price
+                        auto_removal_names.discard(name)
+
+        # --- Score and sort remaining candidates ---
         board_wipe_candidates: list[tuple[dict, float]] = []
         single_removal_candidates: list[tuple[dict, float]] = []
 
-        for card in role_tag_pool:
+        for card in pool:
             name = card.get("name", "")
             if name in used_names:
                 continue
@@ -249,9 +399,15 @@ class RemovalPackageGenerator:
             is_board_wipe = "board_wipe" in role_tags or (
                 "destroy all" in oracle or "exile all" in oracle
             )
+            # Also check removal_type from candidates table
+            if card.get("removal_type") == "board_wipe":
+                is_board_wipe = True
 
-            # Score with role-specific function
-            score = _score_removal(card, colors, deck_avg_cmc)
+            # Use pre-computed removal_score if available, otherwise compute
+            if "removal_score" in card and card["removal_score"] is not None:
+                score = float(card["removal_score"])
+            else:
+                score = _score_removal(card, colors, deck_avg_cmc)
 
             # Budget preference
             price = float(card.get("price_usd", 0) or 0)
@@ -291,7 +447,6 @@ class RemovalPackageGenerator:
             running_price += price
 
         # Fill single-target removal
-        # Track target diversity
         target_types = {"creature": 0, "artifact": 0, "enchantment": 0,
                         "planeswalker": 0, "any": 0}
 
@@ -307,9 +462,9 @@ class RemovalPackageGenerator:
             if budget_remaining > 0 and running_price + price > budget_remaining:
                 continue
 
-            # Classify removal target
+            # Use pre-computed target_type or classify
             oracle = (card.get("oracle_text") or "").lower()
-            target = _classify_removal_target(oracle)
+            target = card.get("target_type") or _classify_removal_target(oracle)
 
             # Soft diversity cap
             cap = max(2, (target_count + board_wipe_target) // 3)
@@ -327,7 +482,8 @@ class RemovalPackageGenerator:
             target_types[target] = target_types.get(target, 0) + 1
 
         logger.info(
-            "Removal generator: %d cards (target %d removal + %d wipes), targets: %s",
+            "Removal generator: %d cards (target %d removal + %d wipes), targets: %s, protected: %s",
             len(assignments), target_count, board_wipe_target, target_types,
+            self.protected_names,
         )
         return assignments

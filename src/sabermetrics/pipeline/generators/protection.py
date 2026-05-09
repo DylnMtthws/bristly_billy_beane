@@ -8,7 +8,10 @@ that were previously only available via the greedy optimizer.
 import json
 import logging
 import re
+import sqlite3
 from pathlib import Path
+
+import yaml
 
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
@@ -161,11 +164,93 @@ def _score_protection(
     return final_score
 
 
+def _load_protection_auto_includes() -> tuple[dict, set[str]]:
+    """Load auto-include cards from config.
+
+    Returns:
+        Tuple of (auto_includes_dict, protected_names_set).
+    """
+    config_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "auto_include_cards.yaml"
+    if not config_path.exists():
+        return {}, set()
+    with open(config_path) as f:
+        data = yaml.safe_load(f) or {}
+    protected: set[str] = set()
+    for section_entries in data.values():
+        if not isinstance(section_entries, list):
+            continue
+        for entry in section_entries:
+            if entry.get("protect_from_swap", False):
+                protected.add(entry["name"])
+    return data, protected
+
+
 class ProtectionPackageGenerator:
     """Generate the protection package for a deck."""
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
+        self.protected_names: set[str] = set()
+
+    def _load_protection_candidates(
+        self,
+        color_identity: list[str],
+    ) -> list[dict]:
+        """Load pre-scored protection candidates from the protection_candidates table.
+
+        Joins with cards table to get full card data. Filters by color identity
+        and Commander legality.
+
+        Args:
+            color_identity: Commander's color identity.
+
+        Returns:
+            List of card dicts augmented with protection_score from protection_candidates.
+        """
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+
+            color_set = set(color_identity)
+            cursor = conn.execute(
+                "SELECT c.id, c.name, c.oracle_text, c.type_line, c.cmc, "
+                "c.color_identity, c.mana_cost, c.role_tags, c.keywords, "
+                "p.protection_type, p.protection_score, p.is_board_wide, "
+                "p.is_instant, p.is_free_cast, p.coverage_score "
+                "FROM protection_candidates p "
+                "JOIN cards c ON p.card_id = c.id "
+                "WHERE c.is_legal_in_99 = 1 "
+                "ORDER BY p.protection_score DESC"
+            )
+
+            results: list[dict] = []
+            for row in cursor:
+                card = dict(row)
+                card_colors_raw = card.get("color_identity") or "[]"
+                if isinstance(card_colors_raw, str):
+                    try:
+                        card_colors = json.loads(card_colors_raw)
+                    except (json.JSONDecodeError, TypeError):
+                        card_colors = []
+                else:
+                    card_colors = card_colors_raw
+                if not all(c in color_set for c in card_colors):
+                    continue
+
+                price_row = conn.execute(
+                    "SELECT price_usd FROM card_prices "
+                    "WHERE card_id = ? ORDER BY snapshot_date DESC LIMIT 1",
+                    (card["id"],),
+                ).fetchone()
+                card["price_usd"] = price_row["price_usd"] if price_row else 0.0
+
+                results.append(card)
+
+            conn.close()
+            return results
+        except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+            logger.warning("Failed to load protection_candidates: %s", e)
+            return []
 
     def generate(
         self,
@@ -178,7 +263,11 @@ class ProtectionPackageGenerator:
         commander_colors: list[str] | None = None,
         avg_cmc: float | None = None,
     ) -> list[SlotAssignment]:
-        """Generate protection package with role-specific scoring.
+        """Generate protection package with auto-includes and role-specific scoring.
+
+        Prefers the protection_candidates table (pre-scored, reminder-text-stripped)
+        over the role_tag_pool. Falls back to role_tag_pool if the table is
+        empty or unavailable.
 
         Args:
             color_identity: Commander's color identity.
@@ -196,18 +285,61 @@ class ProtectionPackageGenerator:
         colors = commander_colors or color_identity
         deck_avg_cmc = avg_cmc or template.avg_cmc_target
 
+        auto_includes, self.protected_names = _load_protection_auto_includes()
         used_names = {c.get("name", "") for c in already_placed}
         assignments: list[SlotAssignment] = []
         running_price = 0.0
 
-        # Score all candidates
+        # --- Auto-include protection staples ---
+        auto_prot_names: set[str] = set()
+        for entry in auto_includes.get("protection_always", []):
+            if entry.get("role") == "protection":
+                auto_prot_names.add(entry["name"])
+
+        # Try loading protection_candidates table
+        prot_candidates = self._load_protection_candidates(color_identity)
+        use_candidates_table = len(prot_candidates) > 0
+
+        if use_candidates_table:
+            pool = prot_candidates
+            logger.info("Using protection_candidates table (%d cards)", len(pool))
+        else:
+            pool = role_tag_pool
+            logger.info("Falling back to role_tag_pool (%d cards)", len(pool))
+
+        # Place auto-includes from pool (or role_tag_pool as backup)
+        search_pools = [pool] if use_candidates_table else [role_tag_pool]
+        if use_candidates_table:
+            search_pools.append(role_tag_pool)
+
+        for search_pool in search_pools:
+            for card in search_pool:
+                name = card.get("name", "")
+                if name in auto_prot_names and name not in used_names:
+                    price = float(card.get("price_usd", 0) or 0)
+                    if budget_remaining <= 0 or running_price + price <= budget_remaining:
+                        assignments.append(SlotAssignment(
+                            card=card,
+                            slot_role="protection",
+                            score=0.95,
+                            alternatives=[],
+                        ))
+                        used_names.add(name)
+                        running_price += price
+                        auto_prot_names.discard(name)
+
+        # --- Score remaining candidates ---
         candidates: list[tuple[dict, float]] = []
-        for card in role_tag_pool:
+        for card in pool:
             name = card.get("name", "")
             if name in used_names:
                 continue
 
-            score = _score_protection(card, colors, deck_avg_cmc)
+            # Use pre-computed protection_score if available, otherwise compute
+            if "protection_score" in card and card["protection_score"] is not None:
+                score = float(card["protection_score"])
+            else:
+                score = _score_protection(card, colors, deck_avg_cmc)
 
             # Budget preference
             price = float(card.get("price_usd", 0) or 0)
@@ -234,8 +366,8 @@ class ProtectionPackageGenerator:
             if budget_remaining > 0 and running_price + price > budget_remaining:
                 continue
 
-            # Classify protection type for diversity
-            prot_type = _classify_protection_type(card)
+            # Use pre-computed protection_type or classify
+            prot_type = card.get("protection_type") or _classify_protection_type(card)
 
             # Soft diversity cap (no more than half the slots for one type)
             cap = max(2, target_count // 2)
@@ -253,8 +385,8 @@ class ProtectionPackageGenerator:
             type_counts[prot_type] = type_counts.get(prot_type, 0) + 1
 
         logger.info(
-            "Protection generator: %d cards (target %d), types: %s",
-            len(assignments), target_count, type_counts,
+            "Protection generator: %d cards (target %d), types: %s, protected: %s",
+            len(assignments), target_count, type_counts, self.protected_names,
         )
         return assignments
 

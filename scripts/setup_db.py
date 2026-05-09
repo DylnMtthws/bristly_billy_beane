@@ -259,6 +259,39 @@ DDL_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_ramp_candidates_score ON ramp_candidates(ramp_score DESC)",
+    # 1.11 Removal Candidates (auto-populated by removal_detector)
+    """
+    CREATE TABLE IF NOT EXISTS removal_candidates (
+        card_id TEXT PRIMARY KEY,
+        removal_type TEXT NOT NULL,
+        target_type TEXT,
+        is_exile BOOLEAN,
+        is_instant BOOLEAN,
+        is_free_cast BOOLEAN,
+        flexibility_score REAL,
+        removal_score REAL,
+        detection_version TEXT,
+        computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (card_id) REFERENCES cards(id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_removal_candidates_score ON removal_candidates(removal_score DESC)",
+    # 1.12 Protection Candidates (auto-populated by protection_detector)
+    """
+    CREATE TABLE IF NOT EXISTS protection_candidates (
+        card_id TEXT PRIMARY KEY,
+        protection_type TEXT NOT NULL,
+        is_board_wide BOOLEAN,
+        is_instant BOOLEAN,
+        is_free_cast BOOLEAN,
+        coverage_score REAL,
+        protection_score REAL,
+        detection_version TEXT,
+        computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (card_id) REFERENCES cards(id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_protection_candidates_score ON protection_candidates(protection_score DESC)",
 ]
 
 

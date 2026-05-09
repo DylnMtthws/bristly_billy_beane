@@ -699,3 +699,102 @@ def test_ramp_generator_includes_green_staples_when_green() -> None:
     green_staples = {"Nature's Lore", "Cultivate", "Kodama's Reach"}
     included_green = green_staples & set(names)
     assert len(included_green) >= 1, f"Expected green staples but got: {names}"
+
+
+# --- Removal Generator: auto-includes and protected_names ---
+
+
+def _make_removal_pool_with_staples() -> list[dict]:
+    """Create removal pool including known staples."""
+    return [
+        {"id": "stp", "name": "Swords to Plowshares", "type_line": "Instant",
+         "oracle_text": "Exile target creature. Its controller gains life equal to its power.",
+         "price_usd": 1.0, "cmc": 1, "_cvar_score": 0.9, "role_tags": '["removal"]',
+         "color_identity": '["W"]'},
+        {"id": "beast", "name": "Beast Within", "type_line": "Instant",
+         "oracle_text": "Destroy target permanent. Its controller creates a 3/3 green Beast creature token.",
+         "price_usd": 0.5, "cmc": 3, "_cvar_score": 0.8, "role_tags": '["removal"]',
+         "color_identity": '["G"]'},
+        {"id": "counter", "name": "Counterspell", "type_line": "Instant",
+         "oracle_text": "Counter target spell.",
+         "price_usd": 0.5, "cmc": 2, "_cvar_score": 0.85, "role_tags": '["removal"]',
+         "color_identity": '["U"]'},
+    ] + _make_removal_pool()
+
+
+def test_removal_generator_exposes_protected_names() -> None:
+    """After generate(), protected_names should contain staple cards."""
+    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    pool = _make_removal_pool_with_staples()
+    gen.generate(
+        color_identity=["W", "U", "G"],
+        target_count=6,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=pool,
+        board_wipe_target=2,
+    )
+    # Swords, Beast Within, and Counterspell should be protected (from auto_include_cards.yaml)
+    assert "Swords to Plowshares" in gen.protected_names
+    assert "Beast Within" in gen.protected_names
+    assert "Counterspell" in gen.protected_names
+
+
+def test_removal_auto_includes_swords_for_white() -> None:
+    """White deck gets Swords to Plowshares auto-included."""
+    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    pool = _make_removal_pool_with_staples()
+    result = gen.generate(
+        color_identity=["W", "U"],
+        target_count=6,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=pool,
+        board_wipe_target=2,
+    )
+    names = [a.card["name"] for a in result]
+    assert "Swords to Plowshares" in names
+
+
+# --- Protection Generator: auto-includes and protected_names ---
+
+
+def test_protection_generator_exposes_protected_names() -> None:
+    """After generate(), protected_names should contain Lightning Greaves."""
+    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    pool = _make_protection_pool()
+    # Add Lightning Greaves to pool
+    pool.append({
+        "id": "greaves", "name": "Lightning Greaves",
+        "type_line": "Artifact — Equipment",
+        "oracle_text": "Equipped creature has shroud and haste.\nEquip {0}",
+        "price_usd": 1.0, "cmc": 2, "_cvar_score": 0.7,
+        "role_tags": '["protection"]',
+    })
+    gen.generate(
+        color_identity=["W", "G"],
+        target_count=4,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=pool,
+    )
+    assert "Lightning Greaves" in gen.protected_names
+
+
+def test_protection_auto_includes_boots() -> None:
+    """All decks get Swiftfoot Boots auto-included."""
+    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    pool = _make_protection_pool()
+    result = gen.generate(
+        color_identity=["W", "G"],
+        target_count=4,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=pool,
+    )
+    names = [a.card["name"] for a in result]
+    assert "Swiftfoot Boots" in names

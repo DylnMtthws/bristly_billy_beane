@@ -47,3 +47,69 @@ has_green:
     role: "ramp"
   - name: "Kodama's Reach"
     role: "ramp"
+
+# --- Removal staples (color-gated, budget <$3) ---
+
+removal_has_white:
+  - name: "Swords to Plowshares"
+    role: "removal"
+    protect_from_swap: true
+  - name: "Generous Gift"
+    role: "removal"
+  - name: "Stroke of Midnight"
+    role: "removal"
+
+removal_has_blue:
+  - name: "Counterspell"
+    role: "removal"
+    protect_from_swap: true
+  - name: "Reality Shift"
+    role: "removal"
+  - name: "Rapid Hybridization"
+    role: "removal"
+
+removal_has_black:
+  - name: "Feed the Swarm"
+    role: "removal"
+  - name: "Go for the Throat"
+    role: "removal"
+  - name: "Infernal Grasp"
+    role: "removal"
+
+removal_has_red:
+  - name: "Chaos Warp"
+    role: "removal"
+    protect_from_swap: true
+  - name: "Vandalblast"
+    role: "removal"
+  - name: "Abrade"
+    role: "removal"
+
+removal_has_green:
+  - name: "Beast Within"
+    role: "removal"
+    protect_from_swap: true
+  - name: "Nature's Claim"
+    role: "removal"
+
+# --- Board wipe staples ---
+
+wipe_has_white:
+  - name: "Austere Command"
+    role: "removal"
+  - name: "Day of Judgment"
+    role: "removal"
+
+wipe_has_red:
+  - name: "Blasphemous Act"
+    role: "removal"
+    protect_from_swap: true
+
+# --- Protection staples ---
+
+protection_always:
+  - name: "Swiftfoot Boots"
+    role: "protection"
+  - name: "Lightning Greaves"
+    role: "protection"
+    protect_from_swap: true

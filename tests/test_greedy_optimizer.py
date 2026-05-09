@@ -434,3 +434,41 @@ def test_full_optimizer_produces_correct_count() -> None:
     )
     total = len(shell) + len(assignments)
     assert total == 10, f"Expected 10 cards (5 infra + 5 diff), got {total}"
+
+
+def test_swap_protects_removal_staples() -> None:
+    """Removal staples in protected_names should not be swapped out."""
+    swords = _make_card(
+        card_id="stp", name="Swords to Plowshares",
+        role_tags='["removal"]', cvar_score=0.3,  # Low CVAR to tempt swap
+    )
+    better_removal = _make_card(
+        card_id="better", name="Better Removal",
+        role_tags='["removal"]', cvar_score=0.95,
+    )
+    deck_card = _make_card(card_id="deck1", name="Deck Card", cvar_score=0.5)
+
+    all_cards = [swords, better_removal, deck_card]
+    synergy = _make_synergy(
+        all_cards,
+        scores={("better", "deck1"): 0.9},
+    )
+    role_targets = _make_role_targets(
+        removal=RoleTarget(
+            role="removal", target_count=2, min_count=1,
+            max_count=5, need_by_turn=5, reliability=0.75,
+        ),
+    )
+
+    deck = [
+        SlotAssignment(card=swords, slot_role="removal", score=0.3, alternatives=[]),
+        SlotAssignment(card=deck_card, slot_role="utility", score=0.5, alternatives=[]),
+    ]
+
+    improved_deck, swaps = swap_refine(
+        deck=deck, candidates=all_cards, synergy=synergy,
+        role_targets=role_targets, budget=100.0,
+        protected_names={"Swords to Plowshares"},
+    )
+    names = {a.card.get("name") for a in improved_deck}
+    assert "Swords to Plowshares" in names, "Swords should be protected from swap"

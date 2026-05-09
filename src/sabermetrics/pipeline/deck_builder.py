@@ -638,6 +638,7 @@ class DeckBuilder:
         )
         all_assignments.extend(removal)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in removal)
+        self._protected_names |= removal_gen.protected_names
 
         # 4. Protection (before lands; slots come from differentiator pool)
         protection_pool = _pool_by_role("protection")
@@ -656,6 +657,7 @@ class DeckBuilder:
         )
         all_assignments.extend(protection)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in protection)
+        self._protected_names |= prot_gen.protected_names
 
         # 5. Lands (last, so it knows what spells need color support)
         land_gen = LandPackageGenerator(self.db_path)
