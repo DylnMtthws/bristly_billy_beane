@@ -255,6 +255,33 @@ def view_deck(deck_id: str):
                 full = card_lookup.get(card_entry.get("card_id", ""), {})
                 card_entry.update(full)
 
+            # Enrich basic lands (synthetic IDs not in cards table)
+            basic_names = set()
+            for card_entry in deck_data["cards"]:
+                if card_entry.get("card_id", "").startswith("basic-"):
+                    name = card_entry.get("name", "")
+                    card_entry.setdefault("type_line", f"Basic Land \u2014 {name}")
+                    card_entry.setdefault("mana_cost", "")
+                    card_entry.setdefault("cmc", 0.0)
+                    if name and not card_entry.get("image_uri"):
+                        basic_names.add(name)
+
+            if basic_names:
+                bp = ",".join("?" for _ in basic_names)
+                basic_cursor = conn.execute(
+                    f"SELECT name, image_uri FROM cards "
+                    f"WHERE name IN ({bp}) AND image_uri IS NOT NULL "
+                    f"LIMIT {len(basic_names)}",
+                    list(basic_names),
+                )
+                basic_images = {r["name"]: r["image_uri"] for r in basic_cursor}
+                for card_entry in deck_data["cards"]:
+                    if (card_entry.get("card_id", "").startswith("basic-")
+                            and not card_entry.get("image_uri")):
+                        img = basic_images.get(card_entry.get("name", ""))
+                        if img:
+                            card_entry["image_uri"] = img
+
             # Get latest prices by card_id
             price_cursor = conn.execute(
                 f"SELECT card_id, price_usd FROM card_prices "
