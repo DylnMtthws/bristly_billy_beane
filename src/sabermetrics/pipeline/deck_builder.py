@@ -547,6 +547,7 @@ class DeckBuilder:
         from sabermetrics.pipeline.generators import (
             DrawPackageGenerator,
             LandPackageGenerator,
+            ProtectionPackageGenerator,
             RampPackageGenerator,
             RemovalPackageGenerator,
         )
@@ -591,6 +592,8 @@ class DeckBuilder:
             template=template,
             already_placed=placed_cards(),
             role_tag_pool=_pool_by_role("ramp"),
+            commander_colors=colors,
+            avg_cmc=template.avg_cmc_target,
         )
         all_assignments.extend(ramp)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in ramp)
@@ -628,11 +631,31 @@ class DeckBuilder:
             already_placed=placed_cards(),
             role_tag_pool=deduped_removal,
             board_wipe_target=template.board_wipe_count,
+            commander_colors=colors,
+            avg_cmc=template.avg_cmc_target,
         )
         all_assignments.extend(removal)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in removal)
 
-        # 4. Lands (last, so it knows what spells need color support)
+        # 4. Protection (before lands; slots come from differentiator pool)
+        protection_pool = _pool_by_role("protection")
+        # Default 3 protection slots; role_targets will refine in Stage 5+6
+        protection_target = min(4, max(2, template.differentiator_slots // 10))
+        prot_gen = ProtectionPackageGenerator(self.db_path)
+        protection = prot_gen.generate(
+            color_identity=colors,
+            target_count=protection_target,
+            budget_remaining=request.budget_usd - budget_used,
+            template=template,
+            already_placed=placed_cards(),
+            role_tag_pool=protection_pool,
+            commander_colors=colors,
+            avg_cmc=template.avg_cmc_target,
+        )
+        all_assignments.extend(protection)
+        budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in protection)
+
+        # 5. Lands (last, so it knows what spells need color support)
         land_gen = LandPackageGenerator(self.db_path)
         lands = land_gen.generate(
             color_identity=colors,
@@ -682,14 +705,18 @@ class DeckBuilder:
             candidates, commander.id, self.db_path,
         )
 
-        # 3. Greedy fill
+        # 3. Greedy fill (subtract protection slots already placed in Stage 4)
+        protection_placed = sum(
+            1 for a in infrastructure if a.slot_role == "protection"
+        )
+        diff_slots = max(0, template.differentiator_slots - protection_placed)
         diff_assignments = greedy_fill(
             shell=infrastructure,
             candidates=candidates,
             synergy=synergy,
             role_targets=role_targets,
             budget_remaining=request.budget_usd - budget_used,
-            slots_remaining=template.differentiator_slots,
+            slots_remaining=diff_slots,
         )
         all_assignments = list(infrastructure) + diff_assignments
 

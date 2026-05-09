@@ -8,9 +8,19 @@ from pathlib import Path
 import pytest
 
 from sabermetrics.models.template import DeckTemplate
-from sabermetrics.pipeline.generators.ramp import RampPackageGenerator
+from sabermetrics.pipeline.generators.ramp import (
+    RampPackageGenerator,
+    _score_ramp,
+)
 from sabermetrics.pipeline.generators.draw import DrawPackageGenerator
-from sabermetrics.pipeline.generators.removal import RemovalPackageGenerator
+from sabermetrics.pipeline.generators.removal import (
+    RemovalPackageGenerator,
+    _score_removal,
+)
+from sabermetrics.pipeline.generators.protection import (
+    ProtectionPackageGenerator,
+    _score_protection,
+)
 from sabermetrics.pipeline.generators.lands import LandPackageGenerator
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -111,6 +121,68 @@ def _make_land_pool() -> list[dict]:
     return cards
 
 
+def _make_protection_pool() -> list[dict]:
+    """Create test protection candidates."""
+    return [
+        {
+            "id": "tef-prot", "name": "Teferi's Protection",
+            "type_line": "Instant",
+            "oracle_text": "Until your next turn, your life total can't change and you gain protection from everything. All permanents you control phase out.",
+            "price_usd": 5.0, "cmc": 3, "_cvar_score": 0.9,
+            "role_tags": '["protection"]',
+        },
+        {
+            "id": "heroic-int", "name": "Heroic Intervention",
+            "type_line": "Instant",
+            "oracle_text": "Permanents you control gain hexproof and indestructible until end of turn.",
+            "price_usd": 3.0, "cmc": 2, "_cvar_score": 0.8,
+            "role_tags": '["protection"]',
+        },
+        {
+            "id": "swiftfoot", "name": "Swiftfoot Boots",
+            "type_line": "Artifact — Equipment",
+            "oracle_text": "Equipped creature has hexproof and haste. Equip {1}.",
+            "price_usd": 0.5, "cmc": 2, "_cvar_score": 0.6,
+            "role_tags": '["protection"]',
+        },
+        {
+            "id": "shalai", "name": "Shalai, Voice of Plenty",
+            "type_line": "Legendary Creature — Angel",
+            "oracle_text": "Flying. You, planeswalkers you control, and other creatures you control have hexproof.",
+            "price_usd": 1.0, "cmc": 4, "_cvar_score": 0.5,
+            "role_tags": '["protection"]',
+        },
+        {
+            "id": "defl-swat", "name": "Deflecting Swat",
+            "type_line": "Instant",
+            "oracle_text": "If you control a commander, you may cast this spell without paying its mana cost. You may choose new targets for target spell or ability.",
+            "price_usd": 8.0, "cmc": 3, "_cvar_score": 0.85,
+            "role_tags": '["protection"]',
+        },
+        {
+            "id": "boros-charm", "name": "Boros Charm",
+            "type_line": "Instant",
+            "oracle_text": "Choose one — Boros Charm deals 4 damage to target player or planeswalker; or permanents you control gain indestructible until end of turn; or target creature gains double strike until end of turn.",
+            "price_usd": 0.5, "cmc": 2, "_cvar_score": 0.65,
+            "role_tags": '["protection"]',
+        },
+        {
+            "id": "shelter", "name": "Shelter",
+            "type_line": "Instant",
+            "oracle_text": "Target creature you control gains protection from the color of your choice until end of turn. Draw a card.",
+            "price_usd": 0.10, "cmc": 2, "_cvar_score": 0.3,
+            "role_tags": '["protection"]',
+        },
+        {
+            "id": "unbreakable", "name": "Unbreakable Formation",
+            "type_line": "Instant",
+            "oracle_text": "Creatures you control gain indestructible until end of turn.",
+            "price_usd": 0.25, "cmc": 3, "_cvar_score": 0.4,
+            "role_tags": '["protection"]',
+        },
+    ]
+
+
 # --- Ramp Generator Tests ---
 
 
@@ -174,6 +246,94 @@ def test_ramp_generator_no_duplicates() -> None:
     )
     names = [a.card["name"] for a in result]
     assert len(names) == len(set(names))
+
+
+# --- Ramp Scoring Tests ---
+
+
+def test_score_ramp_penalizes_conditional() -> None:
+    """Conditional mana (discard/sacrifice) scores much lower than unconditional."""
+    unconditional = {
+        "oracle_text": "{T}: Add {G}.",
+        "cmc": 2, "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    conditional = {
+        "oracle_text": "Sacrifice a creature: Add {G}.",
+        "cmc": 2, "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    score_good = _score_ramp(unconditional, ["G"], 3.0)
+    score_bad = _score_ramp(conditional, ["G"], 3.0)
+    assert score_good > score_bad, (
+        f"Unconditional ({score_good:.3f}) should beat conditional ({score_bad:.3f})"
+    )
+
+
+def test_score_ramp_penalizes_restricted() -> None:
+    """'Spend this mana only on...' heavily penalized."""
+    normal = {
+        "oracle_text": "{T}: Add {C}{C}.",
+        "cmc": 3, "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    restricted = {
+        "oracle_text": "{T}: Add {C}{C}. Spend this mana only to cast artifact spells.",
+        "cmc": 3, "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    score_normal = _score_ramp(normal, ["W", "U"], 3.0)
+    score_restricted = _score_ramp(restricted, ["W", "U"], 3.0)
+    assert score_normal > score_restricted, (
+        f"Normal ({score_normal:.3f}) should beat restricted ({score_restricted:.3f})"
+    )
+
+
+def test_score_ramp_prefers_low_cmc() -> None:
+    """2-mana ramp > 3-mana ramp for same output."""
+    cheap = {
+        "oracle_text": "{T}: Add {G}.",
+        "cmc": 2, "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    expensive = {
+        "oracle_text": "{T}: Add {G}.",
+        "cmc": 3, "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    score_cheap = _score_ramp(cheap, ["G"], 3.0)
+    score_expensive = _score_ramp(expensive, ["G"], 3.0)
+    assert score_cheap > score_expensive, (
+        f"Cheap ({score_cheap:.3f}) should beat expensive ({score_expensive:.3f})"
+    )
+
+
+def test_score_ramp_land_ramp_resilience_bonus() -> None:
+    """Land ramp gets durability bonus over artifact ramp."""
+    land_ramp = {
+        "oracle_text": "Search your library for a basic land card, put it onto the battlefield tapped.",
+        "cmc": 2, "type_line": "Sorcery", "_cvar_score": 0.5,
+    }
+    rock = {
+        "oracle_text": "{T}: Add {G}.",
+        "cmc": 2, "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    score_land = _score_ramp(land_ramp, ["G"], 3.0)
+    score_rock = _score_ramp(rock, ["G"], 3.0)
+    assert score_land > score_rock, (
+        f"Land ramp ({score_land:.3f}) should beat rock ({score_rock:.3f})"
+    )
+
+
+def test_score_ramp_powerstone_prodigy_scores_low() -> None:
+    """Powerstone Prodigy: conditional + restricted = near-zero role score."""
+    prodigy = {
+        "oracle_text": "Discard a card: Create a Powerstone token. Spend this mana only to cast nonartifact spells.",
+        "cmc": 3, "type_line": "Creature — Human Wizard", "_cvar_score": 0.6,
+    }
+    sol_ring = {
+        "oracle_text": "{T}: Add {C}{C}.",
+        "cmc": 1, "type_line": "Artifact", "_cvar_score": 0.9,
+    }
+    score_prodigy = _score_ramp(prodigy, ["W", "U", "G"], 3.0)
+    score_sol = _score_ramp(sol_ring, ["W", "U", "G"], 3.0)
+    assert score_sol > score_prodigy * 1.5, (
+        f"Sol Ring ({score_sol:.3f}) should vastly beat Prodigy ({score_prodigy:.3f})"
+    )
 
 
 # --- Draw Generator Tests ---
@@ -249,6 +409,216 @@ def test_removal_generator_includes_board_wipes() -> None:
         if "all" in (a.card.get("oracle_text") or "").lower()
     ]
     assert len(wipes) >= 1
+
+
+# --- Removal Scoring Tests ---
+
+
+def test_score_removal_flexibility() -> None:
+    """'Any permanent' scores much higher than 'creature only'."""
+    flexible = {
+        "oracle_text": "Exile target permanent.",
+        "cmc": 3, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    narrow = {
+        "oracle_text": "Destroy target creature.",
+        "cmc": 3, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    score_flex = _score_removal(flexible, ["W"], 3.0)
+    score_narrow = _score_removal(narrow, ["W"], 3.0)
+    assert score_flex > score_narrow, (
+        f"Flexible ({score_flex:.3f}) should beat narrow ({score_narrow:.3f})"
+    )
+
+
+def test_score_removal_instant_over_sorcery() -> None:
+    """Instant speed removal scores higher than sorcery speed."""
+    instant = {
+        "oracle_text": "Destroy target creature.",
+        "cmc": 2, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    sorcery = {
+        "oracle_text": "Destroy target creature.",
+        "cmc": 2, "type_line": "Sorcery", "_cvar_score": 0.5,
+    }
+    score_instant = _score_removal(instant, ["B"], 3.0)
+    score_sorcery = _score_removal(sorcery, ["B"], 3.0)
+    assert score_instant > score_sorcery, (
+        f"Instant ({score_instant:.3f}) should beat sorcery ({score_sorcery:.3f})"
+    )
+
+
+def test_score_removal_exile_over_destroy() -> None:
+    """Exile effects score higher than destroy effects."""
+    exile = {
+        "oracle_text": "Exile target creature.",
+        "cmc": 3, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    destroy = {
+        "oracle_text": "Destroy target creature.",
+        "cmc": 3, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    score_exile = _score_removal(exile, ["W"], 3.0)
+    score_destroy = _score_removal(destroy, ["W"], 3.0)
+    assert score_exile > score_destroy, (
+        f"Exile ({score_exile:.3f}) should beat destroy ({score_destroy:.3f})"
+    )
+
+
+def test_score_removal_free_cast_bonus() -> None:
+    """Free-cast spells (Deadly Rollick pattern) get large bonus."""
+    free = {
+        "oracle_text": "If you control a commander, you may cast this spell without paying its mana cost. Exile target creature.",
+        "cmc": 4, "type_line": "Instant", "_cvar_score": 0.7,
+    }
+    paid = {
+        "oracle_text": "Exile target creature.",
+        "cmc": 2, "type_line": "Instant", "_cvar_score": 0.7,
+    }
+    score_free = _score_removal(free, ["B"], 3.0)
+    score_paid = _score_removal(paid, ["B"], 3.0)
+    assert score_free > score_paid, (
+        f"Free ({score_free:.3f}) should beat paid ({score_paid:.3f})"
+    )
+
+
+# --- Protection Scoring Tests ---
+
+
+def test_score_protection_phasing_best() -> None:
+    """Phasing scores highest among protection types."""
+    phasing = {
+        "oracle_text": "All permanents you control phase out.",
+        "cmc": 3, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    hexproof = {
+        "oracle_text": "Target creature gains hexproof until end of turn.",
+        "cmc": 1, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    score_phasing = _score_protection(phasing, ["W"], 3.0)
+    score_hexproof = _score_protection(hexproof, ["W"], 3.0)
+    assert score_phasing > score_hexproof, (
+        f"Phasing ({score_phasing:.3f}) should beat hexproof ({score_hexproof:.3f})"
+    )
+
+
+def test_score_protection_instant_required() -> None:
+    """Sorcery-speed protection is actively penalized."""
+    instant = {
+        "oracle_text": "Target creature gains indestructible until end of turn.",
+        "cmc": 2, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    sorcery = {
+        "oracle_text": "Target creature gains indestructible until end of turn.",
+        "cmc": 2, "type_line": "Sorcery", "_cvar_score": 0.5,
+    }
+    score_instant = _score_protection(instant, ["W"], 3.0)
+    score_sorcery = _score_protection(sorcery, ["W"], 3.0)
+    assert score_instant > score_sorcery, (
+        f"Instant ({score_instant:.3f}) should beat sorcery ({score_sorcery:.3f})"
+    )
+
+
+def test_score_protection_free_cast_premium() -> None:
+    """Free-cast protection spells score highest."""
+    free = {
+        "oracle_text": "If you control a commander, you may cast this spell without paying its mana cost. You may choose new targets for target spell or ability.",
+        "cmc": 3, "type_line": "Instant", "_cvar_score": 0.7,
+    }
+    paid = {
+        "oracle_text": "You may choose new targets for target spell or ability.",
+        "cmc": 3, "type_line": "Instant", "_cvar_score": 0.7,
+    }
+    score_free = _score_protection(free, ["R"], 3.0)
+    score_paid = _score_protection(paid, ["R"], 3.0)
+    assert score_free > score_paid, (
+        f"Free ({score_free:.3f}) should beat paid ({score_paid:.3f})"
+    )
+
+
+def test_score_protection_board_wide_bonus() -> None:
+    """Board-wide protection scores higher than single-target."""
+    board = {
+        "oracle_text": "Permanents you control gain hexproof and indestructible until end of turn.",
+        "cmc": 2, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    single = {
+        "oracle_text": "Target creature gains hexproof and indestructible until end of turn.",
+        "cmc": 2, "type_line": "Instant", "_cvar_score": 0.5,
+    }
+    score_board = _score_protection(board, ["G"], 3.0)
+    score_single = _score_protection(single, ["G"], 3.0)
+    assert score_board > score_single, (
+        f"Board ({score_board:.3f}) should beat single ({score_single:.3f})"
+    )
+
+
+# --- Protection Generator Tests ---
+
+
+def test_protection_generator_fills_slots() -> None:
+    """Protection generator produces target count of cards."""
+    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    result = gen.generate(
+        color_identity=["W", "G"],
+        target_count=4,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=_make_protection_pool(),
+    )
+    assert len(result) > 0
+    assert len(result) <= 4
+    assert all(isinstance(a, SlotAssignment) for a in result)
+    assert all(a.slot_role == "protection" for a in result)
+
+
+def test_protection_generator_no_duplicates() -> None:
+    """No duplicate card names in protection output."""
+    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    result = gen.generate(
+        color_identity=["W", "G"],
+        target_count=4,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=_make_protection_pool(),
+    )
+    names = [a.card["name"] for a in result]
+    assert len(names) == len(set(names))
+
+
+def test_protection_generator_respects_budget() -> None:
+    """Protection generator should not exceed budget."""
+    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    result = gen.generate(
+        color_identity=["W", "G"],
+        target_count=4,
+        budget_remaining=2.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=_make_protection_pool(),
+    )
+    total_price = sum(float(a.card.get("price_usd", 0) or 0) for a in result)
+    assert total_price <= 2.0
+
+
+def test_protection_generator_excludes_already_placed() -> None:
+    """Cards already in deck should not be placed again."""
+    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    pool = _make_protection_pool()
+    already = [{"name": "Teferi's Protection"}, {"name": "Heroic Intervention"}]
+    result = gen.generate(
+        color_identity=["W", "G"],
+        target_count=4,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=already,
+        role_tag_pool=pool,
+    )
+    names = [a.card["name"] for a in result]
+    assert "Teferi's Protection" not in names
+    assert "Heroic Intervention" not in names
 
 
 # --- Land Generator Tests ---

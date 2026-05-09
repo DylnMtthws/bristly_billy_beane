@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-SlotRole = Literal["ramp", "draw", "removal", "wincon", "utility", "land", "other"]
+SlotRole = Literal["ramp", "draw", "removal", "protection", "wincon", "utility", "land", "other"]
 
 # Basic land names mapped to their color identity
 BASIC_LANDS: dict[str, str] = {

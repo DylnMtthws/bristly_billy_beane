@@ -26,18 +26,23 @@ class DeckTemplate(BaseModel):
 
     def to_composition(self) -> dict[str, int]:
         """Convert to legacy composition dict for backward compatibility."""
+        # Protection slots carved from differentiator pool
+        protection_count = min(4, max(2, self.differentiator_slots // 10))
         infra = (
             self.ramp_count + self.draw_count
             + self.removal_count + self.board_wipe_count
+            + protection_count
         )
-        remaining = 99 - self.land_count - infra - self.differentiator_slots
+        diff_remaining = self.differentiator_slots - protection_count
+        remaining = 99 - self.land_count - infra - diff_remaining
         return {
             "land": self.land_count,
             "ramp": self.ramp_count,
             "draw": self.draw_count,
             "removal": self.removal_count + self.board_wipe_count,
-            "wincon": max(3, self.differentiator_slots // 5),
-            "utility": self.differentiator_slots - max(3, self.differentiator_slots // 5),
+            "protection": protection_count,
+            "wincon": max(3, diff_remaining // 5),
+            "utility": diff_remaining - max(3, diff_remaining // 5),
             "other": max(0, remaining),
         }
 

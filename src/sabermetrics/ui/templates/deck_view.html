@@ -85,7 +85,7 @@
 
             <!-- Text By Type view (default) -->
             <div id="view-type" class="card-view">
-            {% set type_order = ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Battle', 'Land'] %}
+            {% set type_order = ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Battle', 'Land', 'Other'] %}
             {% for card_type in type_order %}
             {% if deck.cards_by_type.get(card_type) %}
             {% set type_cards = deck.cards_by_type[card_type] %}
@@ -421,9 +421,9 @@ let hoverTimer = null;
 let expandedStackCard = null;
 
 // --- Helpers ---
-function getTypeCategory(typeLine) {
+function getTypeCategory(typeLine, slotRole) {
     const tl = (typeLine || '').toLowerCase();
-    if (tl.includes('land')) return 'Land';
+    if (tl.includes('land') || slotRole === 'land') return 'Land';
     if (tl.includes('creature')) return 'Creature';
     if (tl.includes('instant')) return 'Instant';
     if (tl.includes('sorcery')) return 'Sorcery';
@@ -449,7 +449,7 @@ function buildCardIndex(cards) {
 function groupCards(cards, groupBy) {
     const groups = {};
     cards.forEach(c => {
-        const key = groupBy === 'type' ? getTypeCategory(c.type_line) : (c.slot_role || 'other');
+        const key = groupBy === 'type' ? getTypeCategory(c.type_line, c.slot_role) : (c.slot_role || 'other');
         if (!groups[key]) groups[key] = [];
         groups[key].push(c);
     });

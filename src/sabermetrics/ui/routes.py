@@ -269,18 +269,26 @@ def view_deck(deck_id: str):
             if basic_names:
                 bp = ",".join("?" for _ in basic_names)
                 basic_cursor = conn.execute(
-                    f"SELECT name, image_uri FROM cards "
+                    f"SELECT name, MIN(image_uri) as image_uri FROM cards "
                     f"WHERE name IN ({bp}) AND image_uri IS NOT NULL "
-                    f"LIMIT {len(basic_names)}",
+                    f"GROUP BY name",
                     list(basic_names),
                 )
                 basic_images = {r["name"]: r["image_uri"] for r in basic_cursor}
                 for card_entry in deck_data["cards"]:
                     if (card_entry.get("card_id", "").startswith("basic-")
                             and not card_entry.get("image_uri")):
-                        img = basic_images.get(card_entry.get("name", ""))
+                        name = card_entry.get("name", "")
+                        img = basic_images.get(name)
                         if img:
                             card_entry["image_uri"] = img
+                        elif name:
+                            # Scryfall named-card image fallback
+                            safe = name.replace(" ", "+")
+                            card_entry["image_uri"] = (
+                                f"https://api.scryfall.com/cards/named"
+                                f"?exact={safe}&format=image&version=normal"
+                            )
 
             # Get latest prices by card_id
             price_cursor = conn.execute(
