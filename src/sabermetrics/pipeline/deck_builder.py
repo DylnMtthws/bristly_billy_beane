@@ -152,8 +152,10 @@ class DeckBuilder:
 
         # --- Stage 7: Budget Redistribution ---
         t = time.time()
+        protected = getattr(self, "_protected_names", None) or set()
         all_assignments = self._redistribute_budget(
             all_assignments, request.budget_usd, candidates,
+            protected_names=protected,
         )
         metrics["9_budget"] = time.time() - t
 
@@ -425,8 +427,22 @@ class DeckBuilder:
 
         A card is dominated if another card in the same role has both
         a higher CVAR score and a lower price.
+
+        Auto-include staples (from auto_include_cards.yaml) are never
+        eliminated, even if dominated — they are kept unconditionally
+        so infrastructure generators can find them.
         """
         from sabermetrics.config import settings
+        from sabermetrics.pipeline.generators.ramp import _load_auto_includes
+
+        # Load auto-include names to protect from Pareto elimination
+        auto_includes, _ = _load_auto_includes()
+        auto_include_names: set[str] = set()
+        for section_entries in auto_includes.values():
+            if not isinstance(section_entries, list):
+                continue
+            for entry in section_entries:
+                auto_include_names.add(entry["name"])
 
         # Group by primary role
         role_groups: dict[str, list[dict]] = {}
@@ -461,8 +477,14 @@ class DeckBuilder:
             group.sort(key=lambda c: c.get("_cvar_score", 0), reverse=True)
 
             # Keep card if no other card strictly dominates it
+            # Auto-include staples are never eliminated
             frontier: list[dict] = []
             for card in group:
+                card_name = card.get("name", "")
+                if card_name in auto_include_names:
+                    frontier.append(card)
+                    continue
+
                 cvar = card.get("_cvar_score", 0)
                 price = float(card.get("price_usd", 0) or 0)
 
@@ -742,6 +764,7 @@ class DeckBuilder:
             all_assignments, llm_cost = self._llm_safety_check(
                 all_assignments, candidates, synergy, role_targets,
                 profile_result, request, n_weakest=8,
+                protected_names=protected,
             )
         except Exception as e:
             logger.warning("LLM safety check failed, skipping: %s", e)
@@ -765,6 +788,7 @@ class DeckBuilder:
     def _llm_safety_check(
         self, deck, candidates, synergy, role_targets,
         profile_result, request, n_weakest=8,
+        protected_names: set[str] | None = None,
     ) -> tuple[list, float]:
         """Score the N weakest picks via Haiku and swap out poor fits.
 
@@ -776,17 +800,21 @@ class DeckBuilder:
             profile_result: Commander profile result.
             request: Build request.
             n_weakest: Number of weakest cards to check.
+            protected_names: Card names that cannot be replaced (staple protection).
 
         Returns:
             Tuple of (possibly-modified deck, LLM cost).
         """
         from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
-        # Find N weakest non-land cards by score
+        protected = protected_names or set()
+
+        # Find N weakest non-land, non-protected cards by score
         indexed = [
             (i, a) for i, a in enumerate(deck)
             if a.slot_role != "land"
             and "land" not in (a.card.get("type_line") or "").lower()
+            and a.card.get("name", "") not in protected
         ]
         indexed.sort(key=lambda x: x[1].score)
         weakest = indexed[:n_weakest]
@@ -856,12 +884,16 @@ class DeckBuilder:
         deck: list,
         budget: float,
         candidate_pool: list[dict],
+        protected_names: set[str] | None = None,
     ) -> list:
         """Stage 7: Two-pass budget optimization.
 
         Pass 1 — Upgrade: if budget remains, replace weak cards with better ones.
         Pass 2 — Downgrade: if over budget, replace expensive cards with cheaper ones.
+
+        Cards in protected_names are never replaced.
         """
+        protected = protected_names or set()
         from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
         total_price = sum(
@@ -895,6 +927,8 @@ class DeckBuilder:
             indexed.sort(key=lambda x: x[1].score)
 
             for idx, assignment in indexed[:5]:  # Check 5 weakest
+                if assignment.card.get("name", "") in protected:
+                    continue
                 role = assignment.slot_role
                 if role not in pool_by_role:
                     continue
@@ -940,6 +974,8 @@ class DeckBuilder:
                 if total_price <= budget:
                     break
 
+                if assignment.card.get("name", "") in protected:
+                    continue
                 role = assignment.slot_role
                 if role not in pool_by_role:
                     continue
