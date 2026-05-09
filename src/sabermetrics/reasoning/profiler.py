@@ -278,7 +278,7 @@ class ProfileManager:
                 "anti_synergies": [{"description": "str", "cards_to_avoid": ["str"], "reasoning": "str"}],
                 "strategic_constraints": {"mana_base_requirements": "str", "interaction_density": "high|medium|low", "speed_tier": "fast|midrange|slow"},
                 "power_indicators": {"estimated_ceiling_bracket": "1-5", "estimated_floor_bracket": "1-5", "notes": "str"},
-                "value_inversions": [{"normal_heuristic": "str", "inverted_value": "str", "desired_characteristics": ["str"], "evaluation_guidance": "str"}],
+                "value_inversions": [{"normal_heuristic": "str", "inverted_value": "str", "desired_characteristics": ["str"], "undesired_characteristics": ["str (traits that lose value)"], "evaluation_guidance": "str"}],
                 "engine_dependencies": [{"engine": "str (what the deck must build around)", "engine_card_traits": ["str (oracle text patterns / card types that feed the engine)"], "dependent_outputs": ["str (effects the engine produces)"], "false_synergy_warning": "str (why cards matching outputs but not engine are traps)"}],
                 "mispriced_card_examples": [{"card_name": "str (exact Scryfall name)", "why_undervalued": "str (one sentence)"}],
             },

@@ -1,0 +1,119 @@
+{
+  "commander_id": "eriette-charmed-001",
+  "commander_name": "Eriette of the Charmed Apple",
+  "generated_at": "2025-01-15T12:00:00",
+  "set_version": "WOE",
+  "schema_version": "1.0",
+  "card_analysis": {
+    "mana_cost": "{1}{W}{B}",
+    "color_identity": ["W", "B"],
+    "core_mechanic": "Each opponent loses X life and you gain X life, where X is the number of Auras you control",
+    "triggered_abilities": ["At the beginning of your end step, each opponent loses X life and you gain X life, where X is the number of Auras you control"],
+    "activated_abilities": [],
+    "static_abilities": [],
+    "evasion_or_protection": null
+  },
+  "behavioral_signals": {
+    "total_decks_tracked": 3200,
+    "edhrec_themes": ["Auras", "Enchantress", "Voltron"],
+    "most_included_cards": [
+      {"card_name": "All That Glitters", "inclusion_pct": 85.0},
+      {"card_name": "Dead Weight", "inclusion_pct": 62.0},
+      {"card_name": "Ethereal Armor", "inclusion_pct": 80.0},
+      {"card_name": "Hateful Eidolon", "inclusion_pct": 58.0},
+      {"card_name": "Kaya's Ghostform", "inclusion_pct": 55.0}
+    ],
+    "average_deck_price_usd": 65.0,
+    "average_cmc": 2.5,
+    "tournament_win_rate": null,
+    "tournament_sample_size": 0
+  },
+  "community_signals": {
+    "reddit_thread_count": 30,
+    "named_archetypes": ["Aura Drain", "Enchantress Stax"],
+    "primer_articles_referenced": [],
+    "emerging_strategies": ["Curse tribal as Aura subtype synergy"]
+  },
+  "strategic_profile": {
+    "primary_archetype": "Aura Engine Drain",
+    "game_plan_summary": "Accumulate Auras to scale Eriette's drain trigger. The engine is Aura count — every card evaluated by whether it increases your Aura count on the battlefield. The deck inverts aura cost evaluation: cheap, low-impact auras that would be bad in generic voltron are excellent because they maximize Aura count per mana spent.",
+    "win_conditions": [
+      {
+        "description": "Drain opponents for lethal via end-step trigger with high Aura count",
+        "key_cards": ["Eriette of the Charmed Apple", "All That Glitters", "Ethereal Armor"],
+        "reliability": "primary"
+      },
+      {
+        "description": "Voltron kill with Aura-stacked Eriette",
+        "key_cards": ["All That Glitters", "Ethereal Armor", "Battle Mastery"],
+        "reliability": "secondary"
+      }
+    ],
+    "build_paths": [
+      {
+        "name": "Aura Drain",
+        "description": "Maximize cheap auras to scale the drain trigger",
+        "consensus_status": "mainstream",
+        "key_card_categories": ["Cheap auras", "Aura recursion", "Enchantress draw"]
+      }
+    ],
+    "synergy_priorities": {
+      "high": ["Auras with CMC <= 2", "Aura recursion", "Enchantress effects"],
+      "medium": ["Creature auras that also serve as removal", "Token generators for Aura targets"],
+      "low": ["Generic lifegain", "Non-aura enchantments"]
+    },
+    "anti_synergies": [
+      {
+        "description": "Non-aura enchantments don't increase Aura count",
+        "cards_to_avoid": ["Smothering Tithe", "Phyrexian Arena"],
+        "reasoning": "These are generically powerful but don't feed Eriette's Aura count engine"
+      }
+    ],
+    "strategic_constraints": {
+      "mana_base_requirements": "Two-color, low curve, needs early white",
+      "interaction_density": "medium",
+      "speed_tier": "midrange"
+    },
+    "power_indicators": {
+      "estimated_ceiling_bracket": 3,
+      "estimated_floor_bracket": 2,
+      "notes": "Consistent drain clock but vulnerable to enchantment removal"
+    },
+    "value_inversions": [
+      {
+        "normal_heuristic": "Auras are evaluated by the quality of the effect they grant — bigger buffs or stronger keywords are better",
+        "inverted_value": "Eriette counts Auras, not their effects. A 1-mana aura that grants +0/+1 and a 4-mana aura that grants +4/+4 both count as one Aura for the drain trigger",
+        "desired_characteristics": ["low mana cost aura", "aura with CMC 1-2", "aura that enchants any permanent", "curse"],
+        "undesired_characteristics": ["expensive auras", "auras with CMC >= 4", "non-aura enchantments"],
+        "evaluation_guidance": "Rate auras by mana-cost-to-Aura-count ratio. A 1-mana aura is worth roughly the same as a 4-mana aura for Eriette's engine. Always prefer cheaper."
+      }
+    ],
+    "engine_dependencies": [
+      {
+        "engine": "Auras you control on the battlefield",
+        "engine_card_traits": ["aura", "enchant creature", "enchant permanent", "bestow", "curse"],
+        "dependent_outputs": ["life drain", "creature lockdown", "voltron damage"],
+        "false_synergy_warning": "Lifegain cards (e.g., Ajani's Pridemate) that don't increase Aura count are false synergies — they replicate the drain output without feeding the engine"
+      }
+    ],
+    "mispriced_card_examples": [
+      {"card_name": "Dead Weight", "why_undervalued": "Bad removal spell becomes a 1-mana aura that feeds the drain engine AND removes small threats"},
+      {"card_name": "Kaya's Ghostform", "why_undervalued": "Niche protection aura becomes a 1-mana engine piece that also protects Eriette from removal"},
+      {"card_name": "Minion's Return", "why_undervalued": "Mediocre reanimation becomes a cheap aura that feeds drain AND provides death-trigger value"}
+    ]
+  },
+  "user_intent": {
+    "provided": false,
+    "description": null,
+    "divergence_from_consensus": null
+  },
+  "sources": {
+    "rules_chunks_referenced": ["CR 303.4 (Auras)"],
+    "articles_referenced": [],
+    "evidence_freshness": {
+      "edhrec_last_updated": null,
+      "topdeck_last_updated": null,
+      "reddit_last_searched": null
+    }
+  }
+}

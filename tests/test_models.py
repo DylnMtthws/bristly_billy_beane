@@ -6,6 +6,7 @@ from datetime import datetime
 from sabermetrics.models.card import Card, CardRuling
 from sabermetrics.models.deck import CVARWeights, DeckParameters
 from sabermetrics.models.llm_responses import CardFitResponse, RelevanceScreenResponse
+from sabermetrics.models.profile import ValueInversion
 
 
 def test_card_model_from_db_row() -> None:
@@ -120,3 +121,27 @@ def test_relevance_screen_response() -> None:
         reason="Enables a new combo line",
     )
     assert resp.affects_strategy is True
+
+
+def test_value_inversion_with_undesired_characteristics() -> None:
+    """ValueInversion supports the undesired_characteristics field."""
+    inv = ValueInversion(
+        normal_heuristic="Higher power is better",
+        inverted_value="Toughness deals damage instead",
+        desired_characteristics=["high toughness", "defender"],
+        undesired_characteristics=["high power", "power-based triggers"],
+        evaluation_guidance="Rate by toughness-to-mana, not power-to-mana",
+    )
+    assert inv.undesired_characteristics == ["high power", "power-based triggers"]
+    assert inv.desired_characteristics == ["high toughness", "defender"]
+
+
+def test_value_inversion_undesired_defaults_empty() -> None:
+    """ValueInversion defaults undesired_characteristics to empty list."""
+    inv = ValueInversion(
+        normal_heuristic="Higher power is better",
+        inverted_value="Toughness deals damage instead",
+        desired_characteristics=["high toughness"],
+        evaluation_guidance="Rate by toughness-to-mana",
+    )
+    assert inv.undesired_characteristics == []

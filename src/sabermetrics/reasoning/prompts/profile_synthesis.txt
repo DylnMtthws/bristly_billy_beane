@@ -74,11 +74,28 @@ Synthesize these evidence streams into a strategic profile. Your reasoning must:
 7. **Use rulings** when they clarify edge-case interactions relevant to the commander's strategy.
 
 8. **Identify value inversions** — If this commander transforms normally-weak
-   card characteristics into strengths (e.g., defender creatures becoming
-   attackers, high-CMC spells becoming cheap, sacrifice becoming an upside),
-   articulate the inversion explicitly: what characteristics become valuable,
-   why, and what card selection criteria follow from it. Include a
-   "desired_card_characteristics" list specifying the traits to look for.
+   card characteristics into strengths, articulate each inversion with:
+   - **normal_heuristic**: the conventional wisdom being broken
+   - **inverted_value**: what the commander does to break it
+   - **desired_characteristics**: traits that become MORE valuable
+   - **undesired_characteristics**: traits that become LESS valuable or irrelevant
+     (Card Characteristic Reframing — what normally-strong traits lose value)
+   - **evaluation_guidance**: how to apply this when scoring cards
+
+   Categorize inversions by type:
+   - **Stat inversions**: a stat that normally doesn't matter becomes primary
+     (e.g., Arcades makes toughness matter more than power)
+   - **Keyword inversions**: a keyword that is normally a downside becomes upside
+     (e.g., Arcades makes defender a benefit, not a limitation)
+   - **Cost inversions**: cards with prohibitive costs become efficient
+     (e.g., Agatha makes high activated-ability costs into {1})
+   - **Quantity inversions**: many small effects outperform fewer large ones
+     (e.g., Krenko wants many cheap goblins, not one expensive threat)
+
+   If the commander does NOT invert conventional heuristics, set
+   value_inversions to an empty array and note in game_plan_summary that
+   this commander follows standard card evaluation. Do not force inversions
+   that don't exist.
 
 9. **Map engine dependencies** — Identify the commander's core mechanical
    engine (the thing the deck must accumulate or activate) and distinguish
@@ -115,9 +132,9 @@ Synthesize these evidence streams into a strategic profile. Your reasoning must:
     - Flamewave Invoker for Agatha ({{8}} ability becomes {{1}} with power 7+)
 
     If the commander does NOT invert conventional heuristics (e.g., a tribal
-    lord that just wants the best creatures of its type), explicitly set
-    mispriced_card_examples to an empty array. Do not force mispriced cards
-    that don't exist.
+    lord that just wants the best creatures of its type), set both
+    value_inversions and mispriced_card_examples to empty arrays. Do not
+    force mispriced cards or inversions that don't exist.
 </task>
 
 <output_format>
@@ -125,7 +142,11 @@ Output JSON matching this schema exactly:
 
 {profile_schema}
 
-The strategic_profile object includes a "mispriced_card_examples" array of objects with "card_name" and "why_undervalued" fields. Include 5-10 entries for value-inversion commanders, or an empty array if the commander doesn't invert heuristics.
+The strategic_profile object includes:
+- "value_inversions" with "undesired_characteristics" (traits that lose value) alongside "desired_characteristics" (traits that gain value)
+- "mispriced_card_examples" array of objects with "card_name" and "why_undervalued" fields
+
+Include 5-10 mispriced examples for value-inversion commanders, or empty arrays for both value_inversions and mispriced_card_examples if the commander doesn't invert heuristics.
 
 Be specific. Avoid generic statements like "this commander is good." Every claim should be tied to evidence.
 </output_format>

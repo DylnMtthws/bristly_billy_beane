@@ -1,0 +1,112 @@
+{
+  "commander_id": "krenko-mob-boss-001",
+  "commander_name": "Krenko, Mob Boss",
+  "generated_at": "2025-01-15T12:00:00",
+  "set_version": "M13",
+  "schema_version": "1.0",
+  "card_analysis": {
+    "mana_cost": "{2}{R}{R}",
+    "color_identity": ["R"],
+    "core_mechanic": "Tap to create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control",
+    "triggered_abilities": [],
+    "activated_abilities": ["{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control"],
+    "static_abilities": [],
+    "evasion_or_protection": null
+  },
+  "behavioral_signals": {
+    "total_decks_tracked": 12000,
+    "edhrec_themes": ["Goblins", "Tokens", "Tribal"],
+    "most_included_cards": [
+      {"card_name": "Goblin Chieftain", "inclusion_pct": 88.0},
+      {"card_name": "Skirk Prospector", "inclusion_pct": 82.0},
+      {"card_name": "Goblin Recruiter", "inclusion_pct": 80.0},
+      {"card_name": "Haste enablers", "inclusion_pct": 78.0},
+      {"card_name": "Purphoros, God of the Forge", "inclusion_pct": 75.0}
+    ],
+    "average_deck_price_usd": 120.0,
+    "average_cmc": 2.2,
+    "tournament_win_rate": null,
+    "tournament_sample_size": 0
+  },
+  "community_signals": {
+    "reddit_thread_count": 60,
+    "named_archetypes": ["Goblin Tribal", "Goblin Combo"],
+    "primer_articles_referenced": [],
+    "emerging_strategies": ["Goblin storm with Skirk Prospector loops"]
+  },
+  "strategic_profile": {
+    "primary_archetype": "Goblin Token Swarm",
+    "game_plan_summary": "Flood the board with cheap goblins to exponentially scale Krenko's tap ability. The deck inverts quantity vs quality — many cheap goblins outperform fewer expensive threats because Krenko doubles the count each activation. A 1-mana 1/1 goblin is more valuable than a 4-mana 4/4 non-goblin.",
+    "win_conditions": [
+      {
+        "description": "Overwhelm opponents with exponentially growing goblin tokens",
+        "key_cards": ["Krenko, Mob Boss", "Goblin Chieftain", "Purphoros, God of the Forge"],
+        "reliability": "primary"
+      },
+      {
+        "description": "Combo kill via Skirk Prospector + Goblin Recruiter loops",
+        "key_cards": ["Skirk Prospector", "Goblin Recruiter", "Goblin Warchief"],
+        "reliability": "secondary"
+      }
+    ],
+    "build_paths": [
+      {
+        "name": "Goblin Swarm",
+        "description": "Maximize goblin count for explosive Krenko activations",
+        "consensus_status": "mainstream",
+        "key_card_categories": ["Cheap goblins (CMC 1-2)", "Haste enablers", "Goblin lords"]
+      }
+    ],
+    "synergy_priorities": {
+      "high": ["Goblin creatures with CMC <= 2", "Haste enablers", "Goblin token generators"],
+      "medium": ["Sacrifice outlets for goblin tokens", "ETB damage effects"],
+      "low": ["Generic red removal", "Non-goblin creatures"]
+    },
+    "anti_synergies": [
+      {
+        "description": "Board wipes you control hurt you more than opponents since you have the widest board",
+        "cards_to_avoid": ["Blasphemous Act", "Chain Reaction"],
+        "reasoning": "Your board is wider than opponents; sweepers destroy your exponential advantage"
+      }
+    ],
+    "strategic_constraints": {
+      "mana_base_requirements": "Mono-red, low curve, wants 4 mana by turn 3-4",
+      "interaction_density": "low",
+      "speed_tier": "fast"
+    },
+    "power_indicators": {
+      "estimated_ceiling_bracket": 4,
+      "estimated_floor_bracket": 3,
+      "notes": "Explosive when uncontested; fragile to repeated board wipes and commander removal"
+    },
+    "value_inversions": [
+      {
+        "normal_heuristic": "Creatures are evaluated by individual card quality — bigger stats, better abilities, and standalone impact are preferred",
+        "inverted_value": "Krenko doubles goblin count, so each additional goblin body multiplies exponentially. Quantity of goblins matters more than individual card quality",
+        "desired_characteristics": ["goblin creature type", "low mana cost", "token generator", "creates goblin tokens"],
+        "undesired_characteristics": ["high mana cost creatures", "non-goblin creature types", "individually powerful but non-synergistic threats"],
+        "evaluation_guidance": "Prefer cheap goblin bodies over individually powerful creatures. A 1-mana 1/1 goblin feeds Krenko's doubling better than a 5-mana 5/5 non-goblin."
+      }
+    ],
+    "engine_dependencies": [],
+    "mispriced_card_examples": [
+      {"card_name": "Skirk Prospector", "why_undervalued": "1/1 for 1 looks terrible but is a combo enabler and mana accelerant with Krenko's tokens"},
+      {"card_name": "Goblin Instigator", "why_undervalued": "A 1/1 that makes a 1/1 is two goblin bodies for Krenko to double — outperforms 'better' creatures"},
+      {"card_name": "Mogg War Marshal", "why_undervalued": "Generates 3 total goblin bodies across zones for 2 mana, exponential fuel for Krenko"}
+    ]
+  },
+  "user_intent": {
+    "provided": false,
+    "description": null,
+    "divergence_from_consensus": null
+  },
+  "sources": {
+    "rules_chunks_referenced": [],
+    "articles_referenced": [],
+    "evidence_freshness": {
+      "edhrec_last_updated": null,
+      "topdeck_last_updated": null,
+      "reddit_last_searched": null
+    }
+  }
+}

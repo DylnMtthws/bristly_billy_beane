@@ -1,0 +1,119 @@
+{
+  "commander_id": "arcades-strategist-001",
+  "commander_name": "Arcades, the Strategist",
+  "generated_at": "2025-01-15T12:00:00",
+  "set_version": "M19",
+  "schema_version": "1.0",
+  "card_analysis": {
+    "mana_cost": "{1}{G}{W}{U}",
+    "color_identity": ["G", "W", "U"],
+    "core_mechanic": "Defender creatures can attack as though they didn't have defender, and they assign combat damage using toughness",
+    "triggered_abilities": ["Whenever a creature with defender enters the battlefield under your control, draw a card"],
+    "activated_abilities": [],
+    "static_abilities": ["Defender creatures can attack as though they didn't have defender", "Each creature you control with defender assigns combat damage equal to its toughness"],
+    "evasion_or_protection": "Flying"
+  },
+  "behavioral_signals": {
+    "total_decks_tracked": 8500,
+    "edhrec_themes": ["Defender", "Walls", "Toughness Matters"],
+    "most_included_cards": [
+      {"card_name": "Wall of Denial", "inclusion_pct": 82.0},
+      {"card_name": "Wall of Omens", "inclusion_pct": 78.0},
+      {"card_name": "Assault Formation", "inclusion_pct": 75.0},
+      {"card_name": "High Alert", "inclusion_pct": 73.0},
+      {"card_name": "Axebane Guardian", "inclusion_pct": 70.0}
+    ],
+    "average_deck_price_usd": 85.0,
+    "average_cmc": 2.8,
+    "tournament_win_rate": null,
+    "tournament_sample_size": 0
+  },
+  "community_signals": {
+    "reddit_thread_count": 45,
+    "named_archetypes": ["Walls", "High Toughness Beatdown"],
+    "primer_articles_referenced": [],
+    "emerging_strategies": ["Toughness-based combo with Sidar Kondo"]
+  },
+  "strategic_profile": {
+    "primary_archetype": "Defender Beatdown",
+    "game_plan_summary": "Deploy cheap, high-toughness defender creatures that Arcades transforms into efficient attackers. Each defender ETB draws a card, creating a card-advantage engine. The deck inverts the stat line — toughness IS power here. Cards evaluated on their toughness, not their power stat.",
+    "win_conditions": [
+      {
+        "description": "Swing with a board of walls that deal damage equal to their toughness",
+        "key_cards": ["Arcades, the Strategist", "High Alert", "Assault Formation"],
+        "reliability": "primary"
+      },
+      {
+        "description": "Infinite mana via Axebane Guardian + Freed from the Real with many defenders",
+        "key_cards": ["Axebane Guardian", "Freed from the Real"],
+        "reliability": "secondary"
+      }
+    ],
+    "build_paths": [
+      {
+        "name": "Wall Aggro",
+        "description": "Maximize cheap defenders with high toughness for a fast clock",
+        "consensus_status": "mainstream",
+        "key_card_categories": ["Defenders with toughness >= 4", "Mass evasion", "Toughness pumps"]
+      }
+    ],
+    "synergy_priorities": {
+      "high": ["Creatures with defender and toughness >= 4", "Cards that let defenders attack"],
+      "medium": ["Card draw on ETB", "Toughness-based removal"],
+      "low": ["Generic ramp", "Counterspells"]
+    },
+    "anti_synergies": [
+      {
+        "description": "Power-based damage effects are anti-synergy since most creatures have 0-1 power",
+        "cards_to_avoid": ["Warstorm Surge", "Terror of the Peaks"],
+        "reasoning": "These trigger on power, which is near-zero for defenders"
+      }
+    ],
+    "strategic_constraints": {
+      "mana_base_requirements": "Three-color with early green for ramp",
+      "interaction_density": "low",
+      "speed_tier": "fast"
+    },
+    "power_indicators": {
+      "estimated_ceiling_bracket": 3,
+      "estimated_floor_bracket": 2,
+      "notes": "Consistent card draw and cheap threats, but fragile to board wipes and commander removal"
+    },
+    "value_inversions": [
+      {
+        "normal_heuristic": "Creatures are evaluated primarily by power — higher power means more damage",
+        "inverted_value": "Arcades makes creatures deal damage equal to toughness, so toughness IS the damage stat",
+        "desired_characteristics": ["high toughness", "low mana cost", "toughness >= 4"],
+        "undesired_characteristics": ["high power", "power matters", "power-based triggered abilities"],
+        "evaluation_guidance": "Evaluate creatures by toughness-to-mana ratio, not power-to-mana ratio. A 0/5 for 2 mana is a 5-damage threat for 2 mana."
+      },
+      {
+        "normal_heuristic": "Defender is a downside keyword that prevents attacking",
+        "inverted_value": "Arcades lets defenders attack AND draws a card when they ETB — defender becomes an upside keyword",
+        "desired_characteristics": ["defender", "wall", "creature with defender"],
+        "undesired_characteristics": ["creatures without defender that have similar stats", "non-creature walls"],
+        "evaluation_guidance": "Prefer defender creatures over equivalent non-defenders. A 0/4 defender for 2 draws a card; a 2/4 for 2 without defender does not."
+      }
+    ],
+    "engine_dependencies": [],
+    "mispriced_card_examples": [
+      {"card_name": "Wall of Denial", "why_undervalued": "0/8 flying shroud defender for 3 mana is an 8-damage unblockable-ish threat with Arcades"},
+      {"card_name": "Steel Wall", "why_undervalued": "0/4 for 1 mana is a 4-power creature that cantrips for 1 with Arcades"},
+      {"card_name": "Fortified Area", "why_undervalued": "Gives all walls +1/+0 and banding — toughness pump is actually a power pump here"}
+    ]
+  },
+  "user_intent": {
+    "provided": false,
+    "description": null,
+    "divergence_from_consensus": null
+  },
+  "sources": {
+    "rules_chunks_referenced": ["CR 702.3 (Defender)"],
+    "articles_referenced": [],
+    "evidence_freshness": {
+      "edhrec_last_updated": null,
+      "topdeck_last_updated": null,
+      "reddit_last_searched": null
+    }
+  }
+}

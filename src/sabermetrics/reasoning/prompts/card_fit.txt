@@ -21,6 +21,10 @@ could score 8-9 if the commander turns defenders into attackers.
 When the profile specifies desired card characteristics, prioritize cards that
 match those characteristics over generically "good" cards.
 
+If the profile lists "undesired_characteristics" on a value inversion, cards
+matching those traits should score LOWER than generic heuristics suggest (2-4),
+even if they appear generically powerful.
+
 ENGINE vs. OUTPUT: When the profile lists "engine_dependencies," the commander's
 strategy has a causal chain: ENGINE → OUTPUT. A card that produces the commander's
 OUTPUT (e.g., life drain) without feeding the ENGINE (e.g., Aura count) is a

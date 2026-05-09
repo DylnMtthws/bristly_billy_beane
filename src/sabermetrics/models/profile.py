@@ -77,6 +77,7 @@ class ValueInversion(BaseModel):
     normal_heuristic: str
     inverted_value: str
     desired_characteristics: List[str]
+    undesired_characteristics: List[str] = Field(default_factory=list)
     evaluation_guidance: str
 
 
