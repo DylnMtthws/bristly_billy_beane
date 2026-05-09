@@ -145,6 +145,15 @@ _ETB_TAPPED_UPSIDE = re.compile(
 _FETCH_PATTERN = re.compile(
     r"[Ss]earch your library for (?:a|an)\s+(.*?)(?:\s+card)", re.IGNORECASE
 )
+_RESTRICTED_MANA = re.compile(
+    r"spend this mana only (?:to cast|on)", re.IGNORECASE
+)
+_CHECKLAND_CONDITION = re.compile(
+    r"unless you control (?:a |an )?(.*?)(?:\.|$)", re.IGNORECASE
+)
+_FASTLAND_CONDITION = re.compile(
+    r"unless you control (?:two|2) or fewer other lands", re.IGNORECASE
+)
 
 
 @dataclass
@@ -154,6 +163,10 @@ class LandInfo:
     card: dict
     colors_produced: list[str] = field(default_factory=list)
     enters_tapped: bool = False
+    is_conditional_tapped: bool = False
+    check_basic_types: list[str] = field(default_factory=list)
+    is_fastland: bool = False
+    has_mana_restriction: bool = False
     is_fetch: bool = False
     fetch_targets: list[str] = field(default_factory=list)
     is_basic: bool = False
@@ -209,9 +222,25 @@ def parse_land_colors(
         else:
             colors.update(["W", "U", "B", "R", "G"])
 
-    # ETB tapped detection
+    # ETB tapped detection (with conditional classification)
     if _ETB_TAPPED.search(oracle):
-        info.enters_tapped = True
+        fastland_match = _FASTLAND_CONDITION.search(oracle)
+        check_match = _CHECKLAND_CONDITION.search(oracle)
+        if fastland_match:
+            info.is_fastland = True
+            info.is_conditional_tapped = True
+        elif check_match:
+            info.is_conditional_tapped = True
+            condition_text = check_match.group(1).lower()
+            for basic_type in BASIC_TYPE_COLORS:
+                if basic_type in condition_text:
+                    info.check_basic_types.append(basic_type.title())
+        else:
+            info.enters_tapped = True  # Always tapped (no condition)
+
+    # Restricted mana detection
+    if _RESTRICTED_MANA.search(oracle):
+        info.has_mana_restriction = True
 
     # Fetch land detection
     fetch_match = _FETCH_PATTERN.search(oracle)
@@ -341,6 +370,7 @@ def _score_land(
     land_info: LandInfo,
     color_deficit: dict[str, float],
     commander_colors: list[str],
+    avg_cmc: float = 3.0,
 ) -> float:
     """Score a nonbasic land by how well it fills color gaps.
 
@@ -348,6 +378,7 @@ def _score_land(
         land_info: Parsed land data.
         color_deficit: Remaining sources needed per color (can go negative).
         commander_colors: Commander's color identity.
+        avg_cmc: Average CMC of non-land spells (for tempo-sensitive penalty).
 
     Returns:
         Numeric score (higher = better fit for current needs).
@@ -377,13 +408,23 @@ def _score_land(
     if land_info.is_fetch:
         score *= 1.1
 
-    # ETB tapped penalty
+    # Restricted mana penalty (usually not real color sources)
+    if land_info.has_mana_restriction:
+        score *= 0.15
+
+    # ETB tapped penalty (additive, scaled by tempo sensitivity)
     if land_info.enters_tapped:
+        tapped_penalty = 4.0 if avg_cmc <= 2.5 else 3.0 if avg_cmc <= 3.5 else 2.0
         oracle = (land_info.card.get("oracle_text") or "").lower()
         if _ETB_TAPPED_UPSIDE.search(oracle):
-            score *= 0.85  # Tapped but with upside
-        else:
-            score *= 0.8
+            tapped_penalty *= 0.6  # Scry/life partially compensates
+        score -= tapped_penalty
+    elif land_info.is_conditional_tapped:
+        # Conditional lands get a small penalty (usually untapped by mid-game)
+        score -= 0.5
+        # Checklands synergize with basics — bonus when deck has enough basics
+        if land_info.check_basic_types:
+            score += 1.0  # De-facto untapped dual with 8-10 basics
 
     return score
 
@@ -415,6 +456,13 @@ def build_mana_base(
     if not commander_colors:
         commander_colors = ["C"]  # Colorless commander
 
+    # Compute avg CMC from spells for tempo-sensitive ETB penalty
+    if spells:
+        cmcs = [float(s.get("cmc", 0) or 0) for s in spells if float(s.get("cmc", 0) or 0) > 0]
+        computed_avg_cmc = sum(cmcs) / len(cmcs) if cmcs else 3.0
+    else:
+        computed_avg_cmc = 3.0
+
     # Step 1: Parse all land candidates
     parsed_lands: list[tuple[LandInfo, float]] = []
     for card, scoring in land_candidates:
@@ -441,8 +489,10 @@ def build_mana_base(
     used_names: set[str] = set()
     land_price = 0.0
 
-    # Reserve slots for basics (at least 1 per commander color, min 3 total)
-    min_basics = max(3, len(commander_colors))
+    # Reserve slots for basics — more basics = checklands enter untapped
+    # 1-color: 10, 2-color: 8, 3-color: 10, 4-color: 8, 5-color: 5
+    _MIN_BASICS_BY_COLORS = {1: 10, 2: 8, 3: 10, 4: 8, 5: 5}
+    min_basics = _MIN_BASICS_BY_COLORS.get(len(commander_colors), 5)
     nonbasic_cap = total_lands - min_basics
 
     # Score and sort candidates by mana-math fit
@@ -453,7 +503,7 @@ def build_mana_base(
             name = info.card.get("name", "")
             if name in used_names:
                 continue
-            mana_score = _score_land(info, color_deficit, commander_colors)
+            mana_score = _score_land(info, color_deficit, commander_colors, avg_cmc=computed_avg_cmc)
             # Blend: 70% mana-math score, 30% CVAR base score
             combined = 0.7 * mana_score + 0.3 * base * 10
             scored.append((info, base, combined))
