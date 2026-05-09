@@ -1,7 +1,23 @@
 # Curated strategic articles for reference layer
 # These are fetched and chunked as tier-3 reference material
 
-articles: []
+articles:
+  - slug: edhrec-budget-dual-lands
+    url: "https://edhrec.com/articles/the-big-list-of-budget-dual-lands-in-commander"
+    description: "Tyler Bucks' comprehensive guide to budget dual lands by category with tier rankings"
+  - slug: edhrec-guide-to-ramp
+    url: "https://edhrec.com/guides/the-edhrec-guide-to-ramp-in-commander"
+    description: "EDHREC guide to evaluating ramp efficiency, categories, and matching ramp to deck strategy"
+  - slug: spot-removal-in-commander
+    url: "https://www.threeforonetrading.com/en/best-spot-removal-in-commander"
+    description: "Comprehensive guide to spot removal by color with evaluation criteria and density guidelines"
+  - slug: protection-spells-in-commander
+    url: "https://blog.cardkingdom.com/how-to-choose-a-protection-spell-for-commander/"
+    description: "Guide to protection spell categories (phasing, hexproof, indestructible), tier rankings, and evaluation criteria"
+    additional_sources:
+      - "https://draftsim.com/mtg-protection-spells/"
+      - "https://www.tcgplayer.com/content/article/The-Best-Protection-Spells-in-Commander-MTG/e93ef220-8bb8-4c74-b4bb-2fc1d6b88604/"
+      - "https://www.playedh.com/articles/protection-top10"
 # Note: Article fetching is deferred. URLs require manual curation
 # and many sites block scraping. The chunker and indexer are ready
 # to process articles when URLs are added here.
