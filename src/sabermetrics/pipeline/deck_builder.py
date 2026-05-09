@@ -597,6 +597,8 @@ class DeckBuilder:
         )
         all_assignments.extend(ramp)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in ramp)
+        # Capture protected names from ramp generator for swap_refine
+        self._protected_names = ramp_gen.protected_names
 
         # 2. Draw
         draw_gen = DrawPackageGenerator(self.db_path)
@@ -721,6 +723,7 @@ class DeckBuilder:
         all_assignments = list(infrastructure) + diff_assignments
 
         # 4. Swap refinement (infrastructure cards eligible for swap)
+        protected = getattr(self, "_protected_names", None) or set()
         all_assignments, swaps = swap_refine(
             deck=all_assignments,
             candidates=candidates,
@@ -728,6 +731,7 @@ class DeckBuilder:
             role_targets=role_targets,
             budget=request.budget_usd,
             protect_lands=True,
+            protected_names=protected,
         )
 
         # 5. Reduced LLM safety net: score weakest picks via Haiku

@@ -1,9 +1,17 @@
 # Auto-include cards for infrastructure generators.
 # Cards listed here are always included when conditions are met.
+# protect_from_swap: true prevents swap_refine() from replacing these staples.
 
 always:
   # Sol Ring is the best mana rock in Commander, period
   - name: "Sol Ring"
+    role: "ramp"
+    protect_from_swap: true
+  - name: "Mind Stone"
+    role: "ramp"
+  - name: "Thought Vessel"
+    role: "ramp"
+  - name: "Wayfarer's Bauble"
     role: "ramp"
 
 multicolor:
@@ -12,13 +20,30 @@ multicolor:
     role: "land"
   - name: "Arcane Signet"
     role: "ramp"
+    protect_from_swap: true
+  - name: "Fellwar Stone"
+    role: "ramp"
+    protect_from_swap: true
+  - name: "Commander's Sphere"
+    role: "ramp"
 
 three_plus_colors:
   # Exotic Orchard for 3+ color decks
   - name: "Exotic Orchard"
     role: "land"
+  - name: "Chromatic Lantern"
+    role: "ramp"
+    protect_from_swap: true
 
 has_black:
   # Bojuka Bog for any deck with black (free graveyard hate)
   - name: "Bojuka Bog"
     role: "land"
+
+has_green:
+  - name: "Nature's Lore"
+    role: "ramp"
+  - name: "Cultivate"
+    role: "ramp"
+  - name: "Kodama's Reach"
+    role: "ramp"

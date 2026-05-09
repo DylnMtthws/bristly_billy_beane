@@ -44,8 +44,22 @@ def main() -> int:
         logger.error("Scryfall sync failed: %s", e)
         errors.append(f"scryfall: {e}")
 
-    # --- Step 2: Health monitoring ---
-    logger.info("Step 2: Health monitoring update")
+    # --- Step 2: Populate ramp_candidates ---
+    logger.info("Step 2: Populate ramp_candidates table")
+    try:
+        from sabermetrics.analytics.ramp_detector import populate_ramp_candidates
+
+        result = populate_ramp_candidates(DB_PATH)
+        logger.info(
+            "Ramp candidates: rows=%d, skipped=%s, version=%s",
+            result["rows"], result["skipped"], result["version"],
+        )
+    except Exception as e:
+        logger.error("Ramp candidates population failed: %s", e)
+        errors.append(f"ramp_candidates: {e}")
+
+    # --- Step 3: Health monitoring ---
+    logger.info("Step 3: Health monitoring update")
     try:
         from sabermetrics.ingestion.health import SourceHealthMonitor
 

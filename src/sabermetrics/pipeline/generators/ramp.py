@@ -7,6 +7,7 @@ diversify rocks vs land-ramp vs dorks, sorted by role-specific quality score.
 import json
 import logging
 import re
+import sqlite3
 from pathlib import Path
 
 import yaml
@@ -44,13 +45,26 @@ _ADD_GENERIC_MANA = re.compile(
 )
 
 
-def _load_auto_includes() -> dict:
-    """Load auto-include cards from config."""
+def _load_auto_includes() -> tuple[dict, set[str]]:
+    """Load auto-include cards from config.
+
+    Returns:
+        Tuple of (auto_includes_dict, protected_names_set).
+    """
     config_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "auto_include_cards.yaml"
     if not config_path.exists():
-        return {}
+        return {}, set()
     with open(config_path) as f:
-        return yaml.safe_load(f) or {}
+        data = yaml.safe_load(f) or {}
+    # Collect names with protect_from_swap: true
+    protected: set[str] = set()
+    for section_entries in data.values():
+        if not isinstance(section_entries, list):
+            continue
+        for entry in section_entries:
+            if entry.get("protect_from_swap", False):
+                protected.add(entry["name"])
+    return data, protected
 
 
 def _estimate_mana_output(oracle: str) -> tuple[float, bool]:
@@ -180,6 +194,71 @@ class RampPackageGenerator:
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
+        self.protected_names: set[str] = set()
+
+    def _load_ramp_candidates(
+        self,
+        color_identity: list[str],
+    ) -> list[dict]:
+        """Load pre-scored ramp candidates from the ramp_candidates table.
+
+        Joins with cards table to get full card data. Filters by color identity
+        and Commander legality.
+
+        Args:
+            color_identity: Commander's color identity.
+
+        Returns:
+            List of card dicts augmented with ramp_score from ramp_candidates.
+        """
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            conn.row_factory = sqlite3.Row
+
+            # Build color identity filter
+            color_set = set(color_identity)
+            cursor = conn.execute(
+                "SELECT c.id, c.name, c.oracle_text, c.type_line, c.cmc, "
+                "c.color_identity, c.mana_cost, c.role_tags, c.keywords, "
+                "r.ramp_type, r.ramp_score, r.produces_colored, r.is_conditional, "
+                "r.net_mana_rate, r.resilience_tier "
+                "FROM ramp_candidates r "
+                "JOIN cards c ON r.card_id = c.id "
+                "WHERE c.is_legal_in_99 = 1 "
+                "AND r.is_restricted = 0 "
+                "ORDER BY r.ramp_score DESC"
+            )
+
+            results: list[dict] = []
+            for row in cursor:
+                card = dict(row)
+                # Filter by color identity
+                card_colors_raw = card.get("color_identity") or "[]"
+                if isinstance(card_colors_raw, str):
+                    try:
+                        card_colors = json.loads(card_colors_raw)
+                    except (json.JSONDecodeError, TypeError):
+                        card_colors = []
+                else:
+                    card_colors = card_colors_raw
+                if not all(c in color_set for c in card_colors):
+                    continue
+
+                # Get latest price
+                price_row = conn.execute(
+                    "SELECT price_usd FROM card_prices "
+                    "WHERE card_id = ? ORDER BY snapshot_date DESC LIMIT 1",
+                    (card["id"],),
+                ).fetchone()
+                card["price_usd"] = price_row["price_usd"] if price_row else 0.0
+
+                results.append(card)
+
+            conn.close()
+            return results
+        except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
+            logger.warning("Failed to load ramp_candidates: %s", e)
+            return []
 
     def generate(
         self,
@@ -193,6 +272,10 @@ class RampPackageGenerator:
         avg_cmc: float | None = None,
     ) -> list[SlotAssignment]:
         """Generate ramp package with auto-includes and role-specific scoring.
+
+        Prefers the ramp_candidates table (pre-scored, reminder-text-stripped)
+        over the role_tag_pool. Falls back to role_tag_pool if the table is
+        empty or unavailable.
 
         Args:
             color_identity: Commander's color identity.
@@ -210,7 +293,7 @@ class RampPackageGenerator:
         colors = commander_colors or color_identity
         deck_avg_cmc = avg_cmc or template.avg_cmc_target
 
-        auto_includes = _load_auto_includes()
+        auto_includes, self.protected_names = _load_auto_includes()
         used_names = {c.get("name", "") for c in already_placed}
         assignments: list[SlotAssignment] = []
         running_price = 0.0
@@ -221,36 +304,69 @@ class RampPackageGenerator:
             if entry.get("role") == "ramp":
                 auto_ramp_names.add(entry["name"])
 
-        # Arcane Signet for multicolor
+        # Multicolor ramp
         if len(color_identity) >= 2:
             for entry in auto_includes.get("multicolor", []):
                 if entry.get("role") == "ramp":
                     auto_ramp_names.add(entry["name"])
 
-        # Place auto-includes from pool
-        for card in role_tag_pool:
-            name = card.get("name", "")
-            if name in auto_ramp_names and name not in used_names:
-                price = float(card.get("price_usd", 0) or 0)
-                if budget_remaining <= 0 or running_price + price <= budget_remaining:
-                    assignments.append(SlotAssignment(
-                        card=card,
-                        slot_role="ramp",
-                        score=0.95,
-                        alternatives=[],
-                    ))
-                    used_names.add(name)
-                    running_price += price
-                    auto_ramp_names.discard(name)
+        # 3+ color ramp
+        if len(color_identity) >= 3:
+            for entry in auto_includes.get("three_plus_colors", []):
+                if entry.get("role") == "ramp":
+                    auto_ramp_names.add(entry["name"])
+
+        # Green ramp
+        if "G" in color_identity:
+            for entry in auto_includes.get("has_green", []):
+                if entry.get("role") == "ramp":
+                    auto_ramp_names.add(entry["name"])
+
+        # Try loading ramp_candidates table
+        ramp_candidates = self._load_ramp_candidates(color_identity)
+        use_candidates_table = len(ramp_candidates) > 0
+
+        # Combine: use ramp_candidates as primary source, role_tag_pool as fallback
+        if use_candidates_table:
+            pool = ramp_candidates
+            logger.info("Using ramp_candidates table (%d cards)", len(pool))
+        else:
+            pool = role_tag_pool
+            logger.info("Falling back to role_tag_pool (%d cards)", len(pool))
+
+        # Place auto-includes from pool (or role_tag_pool as backup)
+        search_pools = [pool] if use_candidates_table else [role_tag_pool]
+        if use_candidates_table:
+            search_pools.append(role_tag_pool)  # Fallback for auto-includes not in table
+
+        for search_pool in search_pools:
+            for card in search_pool:
+                name = card.get("name", "")
+                if name in auto_ramp_names and name not in used_names:
+                    price = float(card.get("price_usd", 0) or 0)
+                    if budget_remaining <= 0 or running_price + price <= budget_remaining:
+                        assignments.append(SlotAssignment(
+                            card=card,
+                            slot_role="ramp",
+                            score=0.95,
+                            alternatives=[],
+                        ))
+                        used_names.add(name)
+                        running_price += price
+                        auto_ramp_names.discard(name)
 
         # Score remaining candidates with role-specific function
         candidates: list[tuple[dict, float]] = []
-        for card in role_tag_pool:
+        for card in pool:
             name = card.get("name", "")
             if name in used_names:
                 continue
 
-            score = _score_ramp(card, colors, deck_avg_cmc)
+            # Use pre-computed ramp_score if available, otherwise compute
+            if "ramp_score" in card and card["ramp_score"] is not None:
+                score = float(card["ramp_score"])
+            else:
+                score = _score_ramp(card, colors, deck_avg_cmc)
 
             # Budget awareness: prefer $0.25-$2 range
             price = float(card.get("price_usd", 0) or 0)
@@ -279,7 +395,7 @@ class RampPackageGenerator:
                 continue
 
             # Classify ramp type
-            ramp_type = _classify_ramp_type(card)
+            ramp_type = card.get("ramp_type") or _classify_ramp_type(card)
 
             # Soft cap on each type for diversity
             cap = max(3, target_count // 2)
@@ -297,8 +413,8 @@ class RampPackageGenerator:
             type_counts[ramp_type] = type_counts.get(ramp_type, 0) + 1
 
         logger.info(
-            "Ramp generator: %d ramp cards (target %d), types: %s",
-            len(assignments), target_count, type_counts,
+            "Ramp generator: %d ramp cards (target %d), types: %s, protected: %s",
+            len(assignments), target_count, type_counts, self.protected_names,
         )
         return assignments
 

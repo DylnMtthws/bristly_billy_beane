@@ -652,3 +652,50 @@ def test_land_generator_auto_includes_command_tower() -> None:
     )
     names = [a.card["name"] for a in result]
     assert "Command Tower" in names
+
+
+# --- Ramp Generator: ramp_candidates table preference ---
+
+
+def test_ramp_generator_exposes_protected_names() -> None:
+    """After generate(), protected_names should contain staple cards."""
+    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen.generate(
+        color_identity=["W", "U"],
+        target_count=10,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=_make_ramp_pool(),
+    )
+    # Sol Ring and Arcane Signet should be protected (from auto_include_cards.yaml)
+    assert "Sol Ring" in gen.protected_names
+    assert "Arcane Signet" in gen.protected_names
+
+
+def test_ramp_generator_includes_green_staples_when_green() -> None:
+    """Green ramp staples (Cultivate, etc.) should be auto-included for green decks."""
+    pool = _make_ramp_pool()
+    # Add green staples to pool
+    pool.extend([
+        {"id": "natures-lore", "name": "Nature's Lore", "type_line": "Sorcery",
+         "oracle_text": "Search your library for a Forest card, put it onto the battlefield, then shuffle.",
+         "price_usd": 0.5, "cmc": 2, "_cvar_score": 0.7, "role_tags": '["ramp"]'},
+        {"id": "kodamas-reach", "name": "Kodama's Reach", "type_line": "Sorcery — Arcane",
+         "oracle_text": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
+         "price_usd": 0.25, "cmc": 3, "_cvar_score": 0.65, "role_tags": '["ramp"]'},
+    ])
+    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    result = gen.generate(
+        color_identity=["W", "U", "G"],
+        target_count=12,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=pool,
+    )
+    names = [a.card["name"] for a in result]
+    # At least some of the green staples should be auto-included
+    green_staples = {"Nature's Lore", "Cultivate", "Kodama's Reach"}
+    included_green = green_staples & set(names)
+    assert len(included_green) >= 1, f"Expected green staples but got: {names}"

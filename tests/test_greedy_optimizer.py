@@ -367,6 +367,46 @@ def test_deck_objective_empty_deck() -> None:
     assert deck_objective([], synergy, {}) == 0.0
 
 
+def test_swap_protects_named_cards() -> None:
+    """Cards in protected_names should never be swapped out."""
+    sol_ring = _make_card(
+        card_id="sol", name="Sol Ring",
+        role_tags='["ramp"]', cvar_score=0.3,  # Low CVAR to tempt swap
+    )
+    synergy_bomb = _make_card(
+        card_id="bomb", name="Synergy Bomb",
+        role_tags='["ramp"]', cvar_score=0.95,
+    )
+    deck_card = _make_card(card_id="deck1", name="Deck Card", cvar_score=0.5)
+
+    all_cards = [sol_ring, synergy_bomb, deck_card]
+    synergy = _make_synergy(
+        all_cards,
+        scores={("bomb", "deck1"): 0.9},  # Bomb has high synergy
+    )
+    role_targets = _make_role_targets(
+        ramp=RoleTarget(
+            role="ramp", target_count=2, min_count=1,
+            max_count=5, need_by_turn=3, reliability=0.8,
+        ),
+    )
+
+    deck = [
+        SlotAssignment(card=sol_ring, slot_role="ramp", score=0.3, alternatives=[]),
+        SlotAssignment(card=deck_card, slot_role="utility", score=0.5, alternatives=[]),
+    ]
+
+    # Without protection, Sol Ring could be swapped for Synergy Bomb
+    improved_deck, swaps = swap_refine(
+        deck=deck, candidates=all_cards, synergy=synergy,
+        role_targets=role_targets, budget=100.0,
+        protected_names={"Sol Ring"},
+    )
+    # Sol Ring should still be in the deck
+    names = {a.card.get("name") for a in improved_deck}
+    assert "Sol Ring" in names, "Sol Ring should be protected from swap"
+
+
 def test_full_optimizer_produces_correct_count() -> None:
     """Shell + greedy should produce the expected number of cards."""
     # 5 infrastructure cards + 5 differentiator slots

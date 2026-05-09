@@ -9,6 +9,7 @@ Target composition varies by power level and archetype.
 
 import json
 import logging
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -112,11 +113,15 @@ def _classify_card_role(card: dict, llm_role: str | None = None) -> SlotRole:
     if "land" in type_line and "creature" not in type_line:
         return "land"
 
-    # Ramp detection
+    # Ramp detection — strip reminder text to avoid Treasure reminder false positives
+    oracle_stripped = re.sub(r"\([^)]*\)", "", oracle_text)
     ramp_indicators = [
-        "add" in oracle_text and ("mana" in oracle_text or "{" in oracle_text),
-        "search your library for a" in oracle_text and "land" in oracle_text,
-        "put" in oracle_text and "land" in oracle_text and "battlefield" in oracle_text,
+        "add" in oracle_stripped and (
+            "mana" in oracle_stripped
+            or bool(re.search(r"\{[WUBRGC]\}", oracle_stripped))
+        ),
+        "search your library for a" in oracle_stripped and "land" in oracle_stripped,
+        "put" in oracle_stripped and "land" in oracle_stripped and "battlefield" in oracle_stripped,
     ]
     if any(ramp_indicators):
         return "ramp"

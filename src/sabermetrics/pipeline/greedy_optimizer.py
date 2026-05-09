@@ -181,6 +181,7 @@ def swap_refine(
     budget: float,
     max_passes: int = 3,
     protect_lands: bool = True,
+    protected_names: set[str] | None = None,
 ) -> tuple[list[SlotAssignment], int]:
     """Improve deck by swapping cards if objective improves.
 
@@ -196,6 +197,7 @@ def swap_refine(
         budget: Total budget constraint.
         max_passes: Maximum swap passes.
         protect_lands: If True, land cards are not swapped.
+        protected_names: Card names that cannot be swapped out (staple protection).
 
     Returns:
         Tuple of (improved deck, total swaps made).
@@ -226,6 +228,10 @@ def swap_refine(
             if protect_lands and "land" in (
                 assignment.card.get("type_line") or ""
             ).lower():
+                continue
+
+            # Skip protected staple cards
+            if protected_names and assignment.card.get("name", "") in protected_names:
                 continue
 
             current_card = assignment.card

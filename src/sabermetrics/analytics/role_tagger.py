@@ -167,14 +167,20 @@ def tag_card_roles(card: dict) -> RoleTagResult:
     # --- Role tags ---
     roles: list[str] = []
 
+    # Strip parenthetical reminder text for ramp detection to avoid
+    # false positives from Treasure token reminder text
+    oracle_text_stripped = re.sub(r"\([^)]*\)", "", oracle_text)
+
     # Type-line based roles
     if "land" in type_lower and "creature" not in type_lower:
         roles.append("land")
     else:
         # Oracle text pattern matching
         for role, patterns in _ROLE_PATTERNS.items():
+            # Use stripped text for ramp role to avoid reminder text false positives
+            text_to_search = oracle_text_stripped if role == "ramp" else oracle_text
             for pat in patterns:
-                if pat.search(oracle_text):
+                if pat.search(text_to_search):
                     roles.append(role)
                     break
 

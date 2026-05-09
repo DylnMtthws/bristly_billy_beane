@@ -241,6 +241,24 @@ DDL_STATEMENTS = [
         consecutive_failures INTEGER DEFAULT 0
     )
     """,
+    # 1.10 Ramp Candidates (auto-populated by ramp_detector)
+    """
+    CREATE TABLE IF NOT EXISTS ramp_candidates (
+        card_id TEXT PRIMARY KEY,
+        ramp_type TEXT NOT NULL,
+        net_mana_rate REAL,
+        mana_output REAL,
+        produces_colored BOOLEAN,
+        is_conditional BOOLEAN,
+        is_restricted BOOLEAN,
+        resilience_tier INTEGER,
+        ramp_score REAL,
+        detection_version TEXT,
+        computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (card_id) REFERENCES cards(id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_ramp_candidates_score ON ramp_candidates(ramp_score DESC)",
 ]
 
 
