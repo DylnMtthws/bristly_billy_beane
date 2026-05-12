@@ -9,9 +9,12 @@ not independently. The deck_objective function measures deck-level quality
 across synergy density, role coverage, average CVAR, and curve coherence.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from math import log
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -20,6 +23,9 @@ from sabermetrics.analytics.role_targets import RoleTarget, role_need_multiplier
 from sabermetrics.analytics.synergy_matrix import SynergyMatrix
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+if TYPE_CHECKING:
+    from sabermetrics.pipeline.trace import GenerationTracer
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +40,13 @@ class OptimizerResult(BaseModel):
     cards_swapped: int
 
 
+class ProfileSignals(BaseModel):
+    """Commander profile signals for deck-level alignment scoring."""
+
+    referenced_keywords: list[str] = Field(default_factory=list)
+    referenced_mechanics: list[str] = Field(default_factory=list)
+
+
 def greedy_fill(
     shell: list[SlotAssignment],
     candidates: list[dict],
@@ -41,6 +54,8 @@ def greedy_fill(
     role_targets: dict[str, RoleTarget],
     budget_remaining: float,
     slots_remaining: int,
+    tracer: GenerationTracer | None = None,
+    profile_signals: ProfileSignals | None = None,
 ) -> list[SlotAssignment]:
     """Fill remaining slots by marginal contribution to deck.
 
@@ -163,6 +178,22 @@ def greedy_fill(
         deck_names.add(best_card.get("name", ""))
         budget_left -= float(best_card.get("price_usd", 0) or 0)
 
+        if tracer is not None:
+            tracer.record(
+                card_name=best_card.get("name", ""),
+                stage="greedy_fill",
+                action="placed",
+                card_id=best_card.get("id"),
+                score=round(best_score, 4),
+                score_components={
+                    "synergy": round(synergy_contrib, 4),
+                    "role_mult": round(role_mult, 4),
+                    "cvar": round(cvar_base, 4),
+                    "marginal": round(best_score, 4),
+                },
+                reason=f"role={primary_role}, price=${float(best_card.get('price_usd', 0) or 0):.2f}",
+            )
+
         # Remove from eligible
         eligible.pop(best_idx)
 
@@ -182,6 +213,8 @@ def swap_refine(
     max_passes: int = 3,
     protect_lands: bool = True,
     protected_names: set[str] | None = None,
+    tracer: GenerationTracer | None = None,
+    profile_signals: ProfileSignals | None = None,
 ) -> tuple[list[SlotAssignment], int]:
     """Improve deck by swapping cards if objective improves.
 
@@ -217,6 +250,7 @@ def swap_refine(
 
         current_obj = deck_objective(
             [a.card for a in deck], synergy, role_targets,
+            profile_signals=profile_signals,
         )
 
         for deck_idx in range(len(deck)):
@@ -232,6 +266,15 @@ def swap_refine(
 
             # Skip protected staple cards
             if protected_names and assignment.card.get("name", "") in protected_names:
+                if tracer is not None:
+                    tracer.record(
+                        card_name=assignment.card.get("name", ""),
+                        stage="swap_refine",
+                        action="protected",
+                        card_id=assignment.card.get("id"),
+                        reason="staple protection — exempt from swap",
+                        force=True,
+                    )
                 continue
 
             current_card = assignment.card
@@ -283,6 +326,7 @@ def swap_refine(
 
                 new_obj = deck_objective(
                     [a.card for a in deck], synergy, role_targets,
+                    profile_signals=profile_signals,
                 )
 
                 if new_obj > best_swap_obj + 0.001:  # Require meaningful improvement
@@ -312,6 +356,27 @@ def swap_refine(
                 total_swaps += 1
                 improved = True
 
+                if tracer is not None:
+                    obj_delta = round(best_swap_obj - current_obj, 4)
+                    tracer.record(
+                        card_name=old_name,
+                        stage="swap_refine",
+                        action="swapped_out",
+                        card_id=current_card.get("id"),
+                        score=round(current_obj, 4),
+                        reason=f"pass {pass_num + 1}, obj delta +{obj_delta}",
+                        force=True,
+                    )
+                    tracer.record(
+                        card_name=new_name,
+                        stage="swap_refine",
+                        action="swapped_in",
+                        card_id=best_swap_card.get("id"),
+                        score=round(best_swap_obj, 4),
+                        reason=f"pass {pass_num + 1}, obj delta +{obj_delta}",
+                        force=True,
+                    )
+
                 logger.info(
                     "Swap pass %d: %s → %s (obj %.4f → %.4f)",
                     pass_num + 1, old_name, new_name,
@@ -330,20 +395,25 @@ def deck_objective(
     synergy: SynergyMatrix,
     role_targets: dict[str, RoleTarget],
     template: DeckTemplate | None = None,
+    profile_signals: ProfileSignals | None = None,
 ) -> float:
     """Deck-level objective function.
 
     Components (all 0-1 normalized):
-      synergy_density (0.40): mean pairwise synergy among non-land cards
-      role_coverage   (0.35): 1.0 minus penalty for roles below target
-      avg_cvar        (0.15): mean CVAR of non-land cards
-      curve_coherence (0.10): 1.0 minus divergence from template curve
+      synergy_density    (0.30): mean pairwise synergy among non-land cards
+      role_coverage      (0.25): 1.0 minus penalty for roles below target
+      profile_alignment  (0.20): fraction of cards matching commander keywords
+      avg_cvar           (0.15): mean CVAR of non-land cards
+      curve_coherence    (0.10): 1.0 minus divergence from template curve
+
+    When profile_signals is None, alignment defaults to 0.5 (neutral).
 
     Args:
         deck_cards: List of card dicts in the deck.
         synergy: Precomputed synergy matrix.
         role_targets: Per-role reliability targets.
         template: Optional deck template for curve coherence.
+        profile_signals: Commander keyword/mechanic signals for alignment.
 
     Returns:
         Objective score (higher is better), typically 0-1.
@@ -360,10 +430,12 @@ def deck_objective(
     role_cov = _compute_role_coverage(deck_cards, role_targets)
     avg_cvar = _compute_avg_cvar(non_lands)
     curve_coh = _compute_curve_coherence(deck_cards, template) if template else 0.5
+    alignment = _compute_profile_alignment(non_lands, profile_signals)
 
     return (
-        0.40 * syn_density
-        + 0.35 * role_cov
+        0.30 * syn_density
+        + 0.25 * role_cov
+        + 0.20 * alignment
         + 0.15 * avg_cvar
         + 0.10 * curve_coh
     )
@@ -438,6 +510,46 @@ def _compute_avg_cvar(non_land_cards: list[dict]) -> float:
         return 0.0
     scores = [c.get("_cvar_score", 0.0) for c in non_land_cards]
     return min(1.0, sum(scores) / len(scores))
+
+
+def _compute_profile_alignment(
+    non_land_cards: list[dict],
+    profile_signals: ProfileSignals | None,
+) -> float:
+    """Fraction of non-land cards matching commander's referenced keywords/mechanics.
+
+    Scaled so 40% match → 1.0, 0% → 0.0. When profile_signals is None,
+    returns 0.5 (neutral default).
+
+    Args:
+        non_land_cards: Non-land cards in the deck.
+        profile_signals: Commander keyword/mechanic signals.
+
+    Returns:
+        Alignment score in [0.0, 1.0].
+    """
+    if profile_signals is None:
+        return 0.5
+
+    if not profile_signals.referenced_keywords and not profile_signals.referenced_mechanics:
+        return 0.5
+
+    if not non_land_cards:
+        return 0.0
+
+    from sabermetrics.analytics.oracle_keywords import card_matches_referenced_keywords
+
+    matching = sum(
+        1 for c in non_land_cards
+        if card_matches_referenced_keywords(
+            c, profile_signals.referenced_keywords,
+            profile_signals.referenced_mechanics,
+        )
+    )
+
+    fraction = matching / len(non_land_cards)
+    # Scale: 40% match → 1.0, linear below
+    return min(1.0, fraction / 0.4)
 
 
 def _compute_curve_coherence(

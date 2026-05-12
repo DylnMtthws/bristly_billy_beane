@@ -1267,3 +1267,130 @@ def test_profile_summary_works_without_mispriced_examples() -> None:
 
     assert "MISPRICED CARDS" not in profile_summary
     assert "Tribal" in profile_summary
+
+
+# ---------------------------------------------------------------------------
+# Toughness_matters regex tightening tests
+# ---------------------------------------------------------------------------
+
+
+def test_sharp_eyed_rookie_no_longer_matches_toughness_matters() -> None:
+    """Sharp-Eyed Rookie's comparison text should NOT match toughness_matters.
+
+    "its toughness is greater than this creature's toughness" is a comparison
+    condition, not a toughness-as-damage mechanic.
+    """
+    card = _make_card(
+        "Sharp-Eyed Rookie",
+        oracle_text=(
+            "Whenever Sharp-Eyed Rookie attacks, reveal the top card of your "
+            "library. If its toughness is greater than this creature's toughness, "
+            "put it into your hand."
+        ),
+        type_line="Creature — Human Scout",
+        keywords=[],
+    )
+    assert card_matches_referenced_keywords(card, [], ["toughness_matters"]) is False
+
+
+# ---------------------------------------------------------------------------
+# Value inversion desired trait matching tests
+# ---------------------------------------------------------------------------
+
+
+def test_desired_trait_matches_defender_keyword() -> None:
+    """Card with defender keyword matches 'defender keyword' trait."""
+    from sabermetrics.analytics.cvar import _count_desired_trait_matches
+
+    card = _make_card(
+        "Wall of Omens",
+        oracle_text="When Wall of Omens enters the battlefield, draw a card.",
+        type_line="Creature — Wall",
+        keywords=["Defender"],
+    )
+    traits = ["Has the defender keyword", "High toughness (4+)", "Low mana cost"]
+    matches = _count_desired_trait_matches(card, traits)
+    assert matches >= 1, f"Expected >= 1 trait match, got {matches}"
+
+
+def test_desired_trait_matches_high_toughness() -> None:
+    """Card with toughness >= 4 matches 'high toughness' trait."""
+    from sabermetrics.analytics.cvar import _count_desired_trait_matches
+
+    card = {
+        "name": "Wall of Denial",
+        "oracle_text": "",
+        "type_line": "Creature — Wall",
+        "keywords": ["Defender", "Flying", "Shroud"],
+        "color_identity": ["W", "U"],
+        "toughness": "8",
+        "cmc": 3,
+    }
+    traits = ["High toughness (4+)"]
+    matches = _count_desired_trait_matches(card, traits)
+    assert matches == 1
+
+
+def test_desired_trait_matches_low_cmc() -> None:
+    """Card with CMC <= 3 matches 'low mana cost' trait."""
+    from sabermetrics.analytics.cvar import _count_desired_trait_matches
+
+    card = {
+        "name": "Wall of Omens",
+        "oracle_text": "When Wall of Omens enters the battlefield, draw a card.",
+        "type_line": "Creature — Wall",
+        "keywords": ["Defender"],
+        "color_identity": ["W"],
+        "cmc": 2,
+    }
+    traits = ["Low mana cost (1-3 CMC)"]
+    matches = _count_desired_trait_matches(card, traits)
+    assert matches == 1
+
+
+def test_desired_trait_no_false_positives() -> None:
+    """Card without matching traits returns 0."""
+    from sabermetrics.analytics.cvar import _count_desired_trait_matches
+
+    card = _make_card(
+        "Lightning Bolt",
+        oracle_text="Lightning Bolt deals 3 damage to any target.",
+        type_line="Instant",
+        keywords=[],
+    )
+    traits = ["Has the defender keyword", "High toughness (4+)"]
+    matches = _count_desired_trait_matches(card, traits)
+    assert matches == 0
+
+
+def test_synergy_score_includes_desired_trait_bonus() -> None:
+    """compute_synergy_score adds bonus when desired_card_traits are set."""
+    card = _make_card(
+        "Wall of Omens",
+        oracle_text="When Wall of Omens enters the battlefield, draw a card.",
+        type_line="Creature — Wall",
+        keywords=["Defender"],
+        color_identity=["W"],
+    )
+    ctx_with_traits = ScoringContext(
+        commander_id="arcades-id",
+        commander_name="Arcades, the Strategist",
+        commander_colors=["W", "U", "G"],
+        commander_keywords=["Flying", "Vigilance"],
+        commander_oracle_text=ARCADES_TEXT,
+        referenced_keywords=["defender"],
+        referenced_mechanics=["toughness_matters"],
+        desired_card_traits=["Has the defender keyword", "Low mana cost"],
+    )
+    ctx_without_traits = ScoringContext(
+        commander_id="arcades-id",
+        commander_name="Arcades, the Strategist",
+        commander_colors=["W", "U", "G"],
+        commander_keywords=["Flying", "Vigilance"],
+        commander_oracle_text=ARCADES_TEXT,
+        referenced_keywords=["defender"],
+        referenced_mechanics=["toughness_matters"],
+    )
+    score_with = compute_synergy_score(card, ctx_with_traits)
+    score_without = compute_synergy_score(card, ctx_without_traits)
+    assert score_with > score_without

@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from sabermetrics.errors import FatalError
 from sabermetrics.models.card import Card
+from sabermetrics.pipeline.trace import GenerationTracer
 from sabermetrics.models.deck import (
     CVARWeights,
     CardSubScores,
@@ -51,6 +52,7 @@ class DeckBuildRequest(BaseModel):
     weights: CVARWeights | None = None
     user_intent: str | None = None
     deck_name: str | None = None
+    trace_cards: list[str] | None = None
 
 
 class DeckBuildResult(BaseModel):
@@ -61,6 +63,34 @@ class DeckBuildResult(BaseModel):
     total_cost_usd: float
     total_time_seconds: float
     pipeline_metrics: dict
+
+
+def _tokenize_engine_traits(raw_traits: list[str]) -> list[str]:
+    """Extract matchable MTG keywords from LLM-generated trait descriptions.
+
+    Profile engine_card_traits are full sentences (e.g. "Has the 'defender'
+    keyword in oracle text") that never match substring checks against card
+    oracle text. This tokenizes them into short MTG keywords like "defender".
+
+    Args:
+        raw_traits: LLM-generated trait description strings.
+
+    Returns:
+        Sorted list of unique matchable keyword strings.
+    """
+    from sabermetrics.analytics.oracle_keywords import MTG_KEYWORD_ABILITIES
+
+    tokens: set[str] = set()
+    type_keywords = {"wall", "artifact", "enchantment", "creature", "instant", "sorcery"}
+    for trait in raw_traits:
+        trait_lower = trait.lower()
+        for kw in MTG_KEYWORD_ABILITIES:
+            if kw in trait_lower:
+                tokens.add(kw)
+        for type_kw in type_keywords:
+            if type_kw in trait_lower:
+                tokens.add(type_kw)
+    return sorted(tokens)
 
 
 class DeckBuilder:
@@ -81,6 +111,25 @@ class DeckBuilder:
         start_time = time.time()
         metrics: dict[str, float] = {}
         total_cost = 0.0
+
+        # --- Build trace watchlist and create tracer ---
+        watchlist: set[str] = set()
+        if request.trace_cards:
+            watchlist.update(request.trace_cards)
+        # Add all auto-include card names
+        try:
+            from sabermetrics.pipeline.generators.ramp import _load_auto_includes
+            auto_inc, _ = _load_auto_includes()
+            for section_entries in auto_inc.values():
+                if isinstance(section_entries, list):
+                    for entry in section_entries:
+                        watchlist.add(entry["name"])
+        except Exception:
+            pass
+        self._tracer = GenerationTracer(
+            generation_id="pending",
+            watchlist=watchlist,
+        )
 
         # --- Validate & Profile (unchanged) ---
         t = time.time()
@@ -203,6 +252,13 @@ class DeckBuilder:
             start_time=start_time,
         )
         self._persist_deck(deck)
+
+        # Flush trace events keyed to the real deck ID
+        self._tracer.set_generation_id(deck.id)
+        trace_count = self._tracer.flush(self.db_path)
+        if trace_count:
+            logger.info("Flushed %d trace events for deck %s", trace_count, deck.id)
+
         metrics["10_synthesis"] = time.time() - t
 
         total_time = time.time() - start_time
@@ -372,6 +428,21 @@ class DeckBuilder:
                     engine_keywords.extend(dep.engine_card_traits)
                     output_keywords.extend(dep.dependent_outputs)
 
+        # Tokenize LLM-generated trait descriptions into matchable keywords
+        engine_keywords = _tokenize_engine_traits(engine_keywords)
+
+        # Extract desired card traits from value inversions
+        desired_traits: list[str] = []
+        if profile_result is not None:
+            sp = getattr(
+                getattr(profile_result, "profile", None),
+                "strategic_profile",
+                None,
+            )
+            if sp is not None:
+                for vi in getattr(sp, "value_inversions", []):
+                    desired_traits.extend(vi.desired_characteristics)
+
         # Load EDHREC top cards
         edhrec_top_cards: dict[str, float] = {}
         try:
@@ -404,6 +475,7 @@ class DeckBuilder:
             engine_keywords=[kw.lower() for kw in engine_keywords],
             output_keywords=[kw.lower() for kw in output_keywords],
             edhrec_top_cards=edhrec_top_cards,
+            desired_card_traits=desired_traits,
             weights_synergy=weights.synergy,
             weights_mana_efficiency=weights.mana_efficiency,
             weights_replacement_value=weights.replacement_value,
@@ -483,23 +555,49 @@ class DeckBuilder:
                 card_name = card.get("name", "")
                 if card_name in auto_include_names:
                     frontier.append(card)
+                    self._tracer.record(
+                        card_name=card_name,
+                        stage="pareto",
+                        action="protected",
+                        card_id=card.get("id"),
+                        score=card.get("_cvar_score"),
+                        reason="auto-include exempt",
+                    )
                     continue
 
                 cvar = card.get("_cvar_score", 0)
                 price = float(card.get("price_usd", 0) or 0)
 
                 dominated = False
+                dominator_name = ""
                 for f_card in frontier:
                     f_cvar = f_card.get("_cvar_score", 0)
                     f_price = float(f_card.get("price_usd", 0) or 0)
                     if f_cvar >= cvar and f_price <= price and (f_cvar > cvar or f_price < price):
                         dominated = True
+                        dominator_name = f_card.get("name", "")
                         break
 
                 if not dominated:
                     frontier.append(card)
+                    self._tracer.record(
+                        card_name=card_name,
+                        stage="pareto",
+                        action="considered",
+                        card_id=card.get("id"),
+                        score=cvar,
+                        reason="survived Pareto",
+                    )
                 else:
                     removed += 1
+                    self._tracer.record(
+                        card_name=card_name,
+                        stage="pareto",
+                        action="rejected",
+                        card_id=card.get("id"),
+                        score=cvar,
+                        reason=f"dominated by {dominator_name} (cvar={f_cvar:.3f}, price=${f_price:.2f})",
+                    )
 
             # Ensure minimum per-role diversity: if frontier is too small,
             # re-add top CVAR cards that were dominated
@@ -605,6 +703,18 @@ class DeckBuilder:
 
         placed_cards = lambda: [a.card for a in all_assignments]
 
+        def _trace_infra(assignments: list, stage: str) -> None:
+            """Emit trace events for infrastructure placements."""
+            for a in assignments:
+                self._tracer.record(
+                    card_name=a.card.get("name", ""),
+                    stage=stage,
+                    action="placed",
+                    card_id=a.card.get("id"),
+                    score=a.score,
+                    reason=f"infrastructure {stage.removeprefix('infra_')}",
+                )
+
         # 1. Ramp (first, so land generator knows what spells are in deck)
         ramp_gen = RampPackageGenerator(self.db_path)
         ramp = ramp_gen.generate(
@@ -619,6 +729,7 @@ class DeckBuilder:
         )
         all_assignments.extend(ramp)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in ramp)
+        _trace_infra(ramp, "infra_ramp")
         # Capture protected names from ramp generator for swap_refine
         self._protected_names = ramp_gen.protected_names
 
@@ -634,6 +745,7 @@ class DeckBuilder:
         )
         all_assignments.extend(draw)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in draw)
+        _trace_infra(draw, "infra_draw")
 
         # 3. Removal + board wipes
         removal_pool = _pool_by_role("removal") + _pool_by_role("board_wipe")
@@ -660,6 +772,7 @@ class DeckBuilder:
         )
         all_assignments.extend(removal)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in removal)
+        _trace_infra(removal, "infra_removal")
         self._protected_names |= removal_gen.protected_names
 
         # 4. Protection (before lands; slots come from differentiator pool)
@@ -679,6 +792,7 @@ class DeckBuilder:
         )
         all_assignments.extend(protection)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in protection)
+        _trace_infra(protection, "infra_protection")
         self._protected_names |= prot_gen.protected_names
 
         # 5. Lands (last, so it knows what spells need color support)
@@ -712,9 +826,14 @@ class DeckBuilder:
         Returns:
             Tuple of (all_assignments including infrastructure, optimizer_metrics).
         """
+        from sabermetrics.analytics.oracle_keywords import (
+            extract_referenced_keywords,
+            extract_referenced_mechanics,
+        )
         from sabermetrics.analytics.role_targets import compute_role_targets
         from sabermetrics.analytics.synergy_matrix import build_synergy_matrix
         from sabermetrics.pipeline.greedy_optimizer import (
+            ProfileSignals,
             deck_objective,
             greedy_fill,
             swap_refine,
@@ -722,6 +841,12 @@ class DeckBuilder:
         from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
         profile = profile_result.profile
+
+        # Build profile signals for alignment scoring
+        prof_signals = ProfileSignals(
+            referenced_keywords=extract_referenced_keywords(commander.oracle_text),
+            referenced_mechanics=extract_referenced_mechanics(commander.oracle_text),
+        )
 
         # 1. Compute role targets
         role_targets = compute_role_targets(profile, template)
@@ -743,6 +868,8 @@ class DeckBuilder:
             role_targets=role_targets,
             budget_remaining=request.budget_usd - budget_used,
             slots_remaining=diff_slots,
+            tracer=self._tracer,
+            profile_signals=prof_signals,
         )
         all_assignments = list(infrastructure) + diff_assignments
 
@@ -756,6 +883,8 @@ class DeckBuilder:
             budget=request.budget_usd,
             protect_lands=True,
             protected_names=protected,
+            tracer=self._tracer,
+            profile_signals=prof_signals,
         )
 
         # 5. Reduced LLM safety net: score weakest picks via Haiku
@@ -780,7 +909,8 @@ class DeckBuilder:
             "cards_swapped": swaps,
             "llm_safety_cost": llm_cost,
             "objective_score": deck_objective(
-                [a.card for a in all_assignments], synergy, role_targets, template,
+                [a.card for a in all_assignments], synergy, role_targets,
+                template, profile_signals=prof_signals,
             ),
         }
         return all_assignments, metrics
@@ -843,6 +973,16 @@ class DeckBuilder:
             deck_names = {a.card.get("name", "") for a in deck}
             for (deck_idx, _assignment), (card, fit_response) in zip(weakest, results):
                 card["_fit_reasoning"] = fit_response.reasoning
+                card_name = card.get("name", "")
+                self._tracer.record(
+                    card_name=card_name,
+                    stage="llm_safety",
+                    action="considered",
+                    card_id=card.get("id"),
+                    score=float(fit_response.fit_score),
+                    reason=fit_response.reasoning,
+                    force=True,
+                )
                 if fit_response.fit_score <= 3:
                     # Find replacement
                     replacement = None
@@ -869,6 +1009,24 @@ class DeckBuilder:
                         )
                         deck_names.discard(old_name)
                         deck_names.add(new_name)
+                        self._tracer.record(
+                            card_name=old_name,
+                            stage="llm_safety",
+                            action="swapped_out",
+                            card_id=card.get("id"),
+                            score=float(fit_response.fit_score),
+                            reason=f"LLM fit score {fit_response.fit_score} <= 3",
+                            force=True,
+                        )
+                        self._tracer.record(
+                            card_name=new_name,
+                            stage="llm_safety",
+                            action="swapped_in",
+                            card_id=replacement.get("id"),
+                            score=replacement.get("_cvar_score", 0.0),
+                            reason=f"replaced {old_name} (LLM score {fit_response.fit_score})",
+                            force=True,
+                        )
                         logger.info(
                             "LLM safety: replaced %s (score %d) with %s",
                             old_name, fit_response.fit_score, new_name,
@@ -928,6 +1086,14 @@ class DeckBuilder:
 
             for idx, assignment in indexed[:5]:  # Check 5 weakest
                 if assignment.card.get("name", "") in protected:
+                    self._tracer.record(
+                        card_name=assignment.card.get("name", ""),
+                        stage="budget_redist",
+                        action="protected",
+                        card_id=assignment.card.get("id"),
+                        reason="staple protection — exempt from budget swap",
+                        force=True,
+                    )
                     continue
                 role = assignment.slot_role
                 if role not in pool_by_role:
@@ -957,6 +1123,24 @@ class DeckBuilder:
                         used_names.add(up_name)
                         budget_remaining -= price_diff
                         total_price += price_diff
+                        self._tracer.record(
+                            card_name=old_name,
+                            stage="budget_redist",
+                            action="swapped_out",
+                            card_id=assignment.card.get("id"),
+                            score=current_score,
+                            reason=f"upgrade: +${price_diff:.2f}, +{up_score - current_score:.2f} score",
+                            force=True,
+                        )
+                        self._tracer.record(
+                            card_name=up_name,
+                            stage="budget_redist",
+                            action="swapped_in",
+                            card_id=upgrade_card.get("id"),
+                            score=round(up_score, 4),
+                            reason=f"upgrade: +${price_diff:.2f}, +{up_score - current_score:.2f} score",
+                            force=True,
+                        )
                         logger.info(
                             "Budget upgrade: %s → %s (+$%.2f, +%.2f score)",
                             old_name, up_name, price_diff,
@@ -975,6 +1159,14 @@ class DeckBuilder:
                     break
 
                 if assignment.card.get("name", "") in protected:
+                    self._tracer.record(
+                        card_name=assignment.card.get("name", ""),
+                        stage="budget_redist",
+                        action="protected",
+                        card_id=assignment.card.get("id"),
+                        reason="staple protection — exempt from budget downgrade",
+                        force=True,
+                    )
                     continue
                 role = assignment.slot_role
                 if role not in pool_by_role:
@@ -1003,6 +1195,24 @@ class DeckBuilder:
                         used_names.discard(old_name)
                         used_names.add(alt_name)
                         total_price -= savings
+                        self._tracer.record(
+                            card_name=old_name,
+                            stage="budget_redist",
+                            action="swapped_out",
+                            card_id=assignment.card.get("id"),
+                            score=assignment.score,
+                            reason=f"downgrade: -${savings:.2f}",
+                            force=True,
+                        )
+                        self._tracer.record(
+                            card_name=alt_name,
+                            stage="budget_redist",
+                            action="swapped_in",
+                            card_id=alt_card.get("id"),
+                            score=round(alt_score, 4),
+                            reason=f"downgrade: -${savings:.2f}",
+                            force=True,
+                        )
                         logger.info(
                             "Budget downgrade: %s → %s (-$%.2f)",
                             old_name, alt_name, savings,

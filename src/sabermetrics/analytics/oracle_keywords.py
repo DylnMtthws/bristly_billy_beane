@@ -340,7 +340,6 @@ def card_matches_referenced_keywords(
             if re.search(
                 r"(?:"
                 r"equal to (?:its |that creature's |their )?toughness"
-                r"|toughness (?:is )?greater than"
                 r"|total toughness"
                 r"|(?:creatures?|permanents?)\s+(?:you control\s+)?with defender"
                 r"|\+0/\+\d"

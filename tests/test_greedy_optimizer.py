@@ -7,6 +7,7 @@ from sabermetrics.analytics.synergy_matrix import SynergyMatrix
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.greedy_optimizer import (
     OptimizerResult,
+    ProfileSignals,
     deck_objective,
     greedy_fill,
     swap_refine,
@@ -472,3 +473,61 @@ def test_swap_protects_removal_staples() -> None:
     )
     names = {a.card.get("name") for a in improved_deck}
     assert "Swords to Plowshares" in names, "Swords should be protected from swap"
+
+
+# --- Profile alignment tests ---
+
+def test_deck_objective_with_profile_signals_boosts_aligned_deck() -> None:
+    """Deck with cards matching profile keywords should score higher."""
+    # Defender cards (matching Arcades profile signals)
+    defender_cards = [
+        _make_card(
+            card_id=f"def-{i}", name=f"Wall {i}",
+            oracle_text="defender", type_line="Creature — Wall",
+            role_tags='["utility"]', cvar_score=0.5,
+        )
+        for i in range(5)
+    ]
+    # Generic cards (no defender match)
+    generic_cards = [
+        _make_card(
+            card_id=f"gen-{i}", name=f"Generic {i}",
+            oracle_text="draw a card", type_line="Creature",
+            role_tags='["utility"]', cvar_score=0.5,
+        )
+        for i in range(5)
+    ]
+
+    all_cards = defender_cards + generic_cards
+    synergy = _make_synergy(all_cards)
+    role_targets = _make_role_targets()
+
+    arcades_signals = ProfileSignals(
+        referenced_keywords=["defender"],
+        referenced_mechanics=["toughness_matters"],
+    )
+
+    score_aligned = deck_objective(
+        defender_cards, synergy, role_targets,
+        profile_signals=arcades_signals,
+    )
+    score_generic = deck_objective(
+        generic_cards, synergy, role_targets,
+        profile_signals=arcades_signals,
+    )
+    assert score_aligned > score_generic, (
+        f"Aligned deck ({score_aligned:.4f}) should beat generic ({score_generic:.4f})"
+    )
+
+
+def test_deck_objective_none_profile_signals_is_neutral() -> None:
+    """With profile_signals=None, objective uses neutral alignment (0.5)."""
+    cards = [
+        _make_card(card_id=f"c{i}", name=f"Card {i}", cvar_score=0.5)
+        for i in range(3)
+    ]
+    synergy = _make_synergy(cards)
+    role_targets = _make_role_targets()
+
+    score_none = deck_objective(cards, synergy, role_targets, profile_signals=None)
+    assert score_none > 0.0, "Should produce non-zero score with None signals"

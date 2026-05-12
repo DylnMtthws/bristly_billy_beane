@@ -44,12 +44,69 @@ class ScoringContext(BaseModel):
     engine_keywords: list[str] = Field(default_factory=list)
     output_keywords: list[str] = Field(default_factory=list)
     edhrec_top_cards: dict[str, float] = Field(default_factory=dict)  # card_name_lower -> inclusion_pct
+    desired_card_traits: list[str] = Field(default_factory=list)
     weights_synergy: float = 0.35
     weights_mana_efficiency: float = 0.25
     weights_replacement_value: float = 0.25
     weights_price_efficiency: float = 0.15
     average_card_price: float = 2.0
     max_budget: Optional[float] = None
+
+
+def _count_desired_trait_matches(card: dict, traits: list[str]) -> int:
+    """Count how many desired trait descriptions a card satisfies.
+
+    For each trait string, checks:
+    - MTG keywords extracted from trait text against card keywords
+    - Type mentions against card type_line
+    - CMC mentions ("low mana cost" → CMC ≤ 3)
+
+    Args:
+        card: Card dict with keywords, type_line, cmc fields.
+        traits: Desired characteristic strings from value inversions.
+
+    Returns:
+        Number of traits matched.
+    """
+    from sabermetrics.analytics.oracle_keywords import MTG_KEYWORD_ABILITIES
+
+    card_kw = card.get("keywords", "[]")
+    if isinstance(card_kw, str):
+        card_kw = json.loads(card_kw)
+    card_keywords = {k.lower() for k in card_kw}
+    oracle_text = (card.get("oracle_text") or "").lower()
+    type_line = (card.get("type_line") or "").lower()
+    cmc = float(card.get("cmc", 0) or 0)
+
+    matches = 0
+    for trait in traits:
+        trait_lower = trait.lower()
+
+        # Check MTG keywords in the trait description
+        for kw in MTG_KEYWORD_ABILITIES:
+            if kw in trait_lower and (kw in card_keywords or kw in oracle_text):
+                matches += 1
+                break
+        else:
+            # Check type mentions
+            for type_kw in ("wall", "artifact", "enchantment", "creature", "instant", "sorcery"):
+                if type_kw in trait_lower and type_kw in type_line:
+                    matches += 1
+                    break
+            else:
+                # Check CMC-related traits
+                if ("low mana cost" in trait_lower or "low cmc" in trait_lower) and cmc <= 3:
+                    matches += 1
+                elif "high toughness" in trait_lower:
+                    toughness = card.get("toughness")
+                    if toughness is not None:
+                        try:
+                            if int(toughness) >= 4:
+                                matches += 1
+                        except (ValueError, TypeError):
+                            pass
+
+    return matches
 
 
 def compute_synergy_score(card: dict, context: ScoringContext) -> float:
@@ -137,6 +194,11 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
     inclusion_pct = context.edhrec_top_cards.get(card_name, 0.0)
     if inclusion_pct > 0:
         score += min(0.2, inclusion_pct / 100.0 * 0.4)
+
+    # Value inversion desired trait matching
+    if context.desired_card_traits:
+        trait_matches = _count_desired_trait_matches(card, context.desired_card_traits)
+        score += min(0.25, trait_matches * 0.08)
 
     return min(1.0, score)
 
