@@ -60,21 +60,29 @@ class EDHRECIngestion:
             conn.close()
 
     def sync(self, full: bool = False) -> SyncResult:
-        """Fetch EDHREC data for popular commanders.
+        """Fetch EDHREC data for commanders.
 
         Args:
-            full: If True, refresh all commanders. If False, only new ones.
+            full: If True, refresh all commanders. If False, only stale ones.
         """
         started_at = datetime.now()
         errors: list[str] = []
         items_ingested = 0
+        items_skipped = 0
         items_failed = 0
 
         try:
-            # Get list of popular commanders from our DB
             commanders = self._get_popular_commanders()
+            total_commanders = len(commanders)
+
+            if not full:
+                commanders = self._filter_stale_commanders(commanders)
+
             logger.info(
-                "Processing EDHREC data for %d commanders", len(commanders)
+                "Processing EDHREC data for %d commanders (%d total, full=%s)",
+                len(commanders),
+                total_commanders,
+                full,
             )
 
             for commander_id, commander_name in commanders:
@@ -84,11 +92,26 @@ class EDHRECIngestion:
                     if data:
                         self._store_commander_data(commander_id, data)
                         items_ingested += 1
-                    if items_ingested % 50 == 0 and items_ingested > 0:
+                    else:
+                        # No EDHREC page — store sentinel to avoid retrying
+                        self._store_empty_commander(commander_id)
+                        items_skipped += 1
+                    processed = items_ingested + items_skipped + items_failed
+                    if processed % 100 == 0 and processed > 0:
+                        elapsed = (datetime.now() - started_at).total_seconds()
+                        rate = processed / elapsed
+                        remaining = (
+                            (len(commanders) - processed) / rate
+                            if rate > 0
+                            else 0
+                        )
                         logger.info(
-                            "Processed %d / %d commanders",
-                            items_ingested,
+                            "Processed %d / %d commanders "
+                            "(%.0f/min, ~%.0fm remaining)",
+                            processed,
                             len(commanders),
+                            rate * 60,
+                            remaining / 60,
                         )
                 except NetworkError as e:
                     items_failed += 1
@@ -101,6 +124,15 @@ class EDHRECIngestion:
                         f"Error processing '{commander_name}': {e}"
                     )
 
+            elapsed_total = (datetime.now() - started_at).total_seconds()
+            logger.info(
+                "EDHREC sync complete: %d ingested, %d skipped (no page), "
+                "%d failed in %.1f minutes",
+                items_ingested,
+                items_skipped,
+                items_failed,
+                elapsed_total / 60,
+            )
             self._update_source_health(success=True)
             success = items_ingested > 0 or items_failed == 0
         except FatalError:
@@ -115,14 +147,14 @@ class EDHRECIngestion:
             started_at=started_at,
             completed_at=datetime.now(),
             items_ingested=items_ingested,
-            items_updated=0,
+            items_updated=items_skipped,
             items_failed=items_failed,
             errors=errors,
             success=success,
         )
 
-    def _get_popular_commanders(self, limit: int = 200) -> list[tuple[str, str]]:
-        """Get top legal commanders from our cards table.
+    def _get_popular_commanders(self) -> list[tuple[str, str]]:
+        """Get all legal commanders from our cards table.
 
         Returns:
             List of (card_id, card_name) tuples.
@@ -132,11 +164,48 @@ class EDHRECIngestion:
             cursor = conn.execute(
                 """SELECT id, name FROM cards
                 WHERE is_legal_commander = 1
-                ORDER BY name
-                LIMIT ?""",
-                (limit,),
+                ORDER BY name"""
             )
             return cursor.fetchall()
+        finally:
+            conn.close()
+
+    def _filter_stale_commanders(
+        self, commanders: list[tuple[str, str]], max_age_days: int = 7
+    ) -> list[tuple[str, str]]:
+        """Filter out commanders with recent EDHREC data.
+
+        Args:
+            commanders: List of (card_id, card_name) tuples.
+            max_age_days: Skip commanders updated within this many days.
+
+        Returns:
+            Commanders that need refreshing.
+        """
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            cursor = conn.execute(
+                """SELECT commander_id FROM edhrec_commander_data
+                WHERE last_updated > datetime('now', ?)""",
+                (f"-{max_age_days} days",),
+            )
+            recent_ids = {row[0] for row in cursor.fetchall()}
+        finally:
+            conn.close()
+        return [(cid, name) for cid, name in commanders if cid not in recent_ids]
+
+    def _store_empty_commander(self, commander_id: str) -> None:
+        """Store a sentinel row for commanders without EDHREC pages."""
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            conn.execute(
+                """INSERT OR REPLACE INTO edhrec_commander_data
+                (commander_id, themes, salt_score, deck_count, top_cards,
+                 last_updated)
+                VALUES (?, '[]', NULL, 0, '[]', CURRENT_TIMESTAMP)""",
+                (commander_id,),
+            )
+            conn.commit()
         finally:
             conn.close()
 
