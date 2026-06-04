@@ -10,7 +10,6 @@ import os
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from sabermetrics.utils.logging import JSONFormatter, setup_job_logging
 

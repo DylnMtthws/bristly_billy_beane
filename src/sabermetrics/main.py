@@ -1,6 +1,5 @@
 """CLI interface for Sabermetrics."""
 
-import json
 from pathlib import Path
 
 import click
@@ -23,7 +22,6 @@ def cli() -> None:
 @click.option("--force-refresh", is_flag=True, help="Force profile regeneration.")
 def profile(commander_name: str, user_intent: str | None, force_refresh: bool) -> None:
     """Generate or retrieve a commander profile."""
-    import json as _json
     import sqlite3
 
     db_path = _default_db_path()

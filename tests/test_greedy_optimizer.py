@@ -7,7 +7,6 @@ from sabermetrics.analytics.role_targets import RoleTarget
 from sabermetrics.analytics.synergy_matrix import SynergyMatrix
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.greedy_optimizer import (
-    OptimizerResult,
     ProfileSignals,
     deck_objective,
     greedy_fill,

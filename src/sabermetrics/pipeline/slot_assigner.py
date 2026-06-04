@@ -7,7 +7,6 @@ wincon, utility, other.
 Target composition varies by power level and archetype.
 """
 
-import json
 import logging
 import re
 from typing import Literal

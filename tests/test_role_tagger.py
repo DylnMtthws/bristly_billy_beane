@@ -8,10 +8,8 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from sabermetrics.analytics.role_tagger import (
-    ROLE_TAGS,
     tag_all_cards,
     tag_card_roles,
 )

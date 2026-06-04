@@ -14,13 +14,11 @@ import pytest
 
 from sabermetrics.pipeline.slot_assigner import (
     AssemblyResult,
-    SlotAssignment,
     _classify_card_role,
     fill_slots,
     get_target_composition,
 )
 from sabermetrics.pipeline.mana_base import (
-    LandInfo,
     build_mana_base,
     compute_color_targets,
     count_color_pips,

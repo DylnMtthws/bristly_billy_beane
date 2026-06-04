@@ -1,11 +1,9 @@
 """Tests for template derivation (6.5.3)."""
 
-import pytest
 
 from sabermetrics.models.template import DeckTemplate, SlotIntent
 from sabermetrics.reasoning.template_deriver import (
     derive_deck_template,
-    _estimate_avg_cmc,
     _estimate_creature_density,
     _parse_commander_cmc,
 )

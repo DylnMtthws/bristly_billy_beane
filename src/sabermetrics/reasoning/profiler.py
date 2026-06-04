@@ -11,12 +11,16 @@ import sqlite3
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from sabermetrics.errors import CommanderNotFoundError, DegradableError
+from sabermetrics.errors import DegradableError
 from sabermetrics.models.profile import CommanderProfile
 from sabermetrics.reference_layer.evidence import EvidenceAggregator
+
+if TYPE_CHECKING:
+    from sabermetrics.models.evidence import EvidencePackage
 
 logger = logging.getLogger(__name__)
 

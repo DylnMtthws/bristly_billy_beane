@@ -3,8 +3,6 @@
 Tests Flask app creation, route accessibility, and template rendering.
 """
 
-import os
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -41,7 +39,6 @@ def test_app_creation() -> None:
 
 def test_app_binds_localhost_only() -> None:
     """App config enforces localhost binding."""
-    from sabermetrics.ui.app import run_server
     # run_server overrides non-localhost hosts, but we can't test the
     # actual server start. Just verify the function exists and app creates.
     app = create_app(DB_PATH)

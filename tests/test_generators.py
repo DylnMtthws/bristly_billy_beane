@@ -1,11 +1,7 @@
 """Tests for infrastructure generators (6.5.4)."""
 
-import json
-import sqlite3
-import tempfile
 from pathlib import Path
 
-import pytest
 
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.generators.ramp import (
@@ -90,7 +86,7 @@ def _make_removal_pool() -> list[dict]:
             "id": f"removal-{i}", "name": f"Test Removal {i}",
             "type_line": "Instant" if not is_wipe else "Sorcery",
             "oracle_text": (
-                f"Destroy all creatures." if is_wipe
+                "Destroy all creatures." if is_wipe
                 else f"Destroy target {target}."
             ),
             "price_usd": 1.0, "cmc": 3, "_cvar_score": 0.5 + i * 0.02,

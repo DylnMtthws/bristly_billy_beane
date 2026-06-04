@@ -2,7 +2,6 @@
 
 from sabermetrics.analytics.role_targets import (
     ROLE_TIMING,
-    RoleTarget,
     copies_for_reliability,
     compute_role_targets,
     role_need_multiplier,

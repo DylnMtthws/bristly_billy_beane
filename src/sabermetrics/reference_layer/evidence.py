@@ -19,7 +19,6 @@ from sabermetrics.errors import CommanderNotFoundError
 from sabermetrics.models.card import Card, CardRuling
 from sabermetrics.models.evidence import (
     EvidencePackage,
-    PrimerArticle,
     ReferenceChunk,
     RedditThread,
 )

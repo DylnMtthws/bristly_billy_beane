@@ -6,7 +6,6 @@ Pure function: same inputs -> same outputs. <100ms per card.
 
 import json
 import logging
-import re
 import sqlite3
 from pathlib import Path
 from typing import Optional
