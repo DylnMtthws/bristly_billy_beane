@@ -39,7 +39,7 @@ class DeckCard(BaseModel):
 
     card: Card
     slot_role: Literal[
-        "ramp", "draw", "removal", "wincon", "utility", "land", "other"
+        "ramp", "draw", "removal", "protection", "wincon", "utility", "land", "other"
     ]
     cvar_score: float
     sub_scores: CardSubScores

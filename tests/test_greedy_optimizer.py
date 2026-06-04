@@ -1,6 +1,7 @@
 """Tests for greedy deck optimizer (Step 3 of synergy optimizer)."""
 
 import numpy as np
+import pytest
 
 from sabermetrics.analytics.role_targets import RoleTarget
 from sabermetrics.analytics.synergy_matrix import SynergyMatrix
@@ -10,6 +11,7 @@ from sabermetrics.pipeline.greedy_optimizer import (
     ProfileSignals,
     deck_objective,
     greedy_fill,
+    is_playable_as_land,
     swap_refine,
 )
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
@@ -531,3 +533,51 @@ def test_deck_objective_none_profile_signals_is_neutral() -> None:
 
     score_none = deck_objective(cards, synergy, role_targets, profile_signals=None)
     assert score_none > 0.0, "Should produce non-zero score with None signals"
+
+
+# --- is_playable_as_land tests ---
+
+
+class TestIsPlayableAsLand:
+    """Tests for front-face land detection."""
+
+    @pytest.mark.parametrize("type_line", [
+        "Land — Plains",
+        "Basic Land — Forest",
+        "Land — Cave",
+        "Legendary Land",
+    ])
+    def test_pure_lands(self, type_line):
+        assert is_playable_as_land(type_line) is True
+
+    @pytest.mark.parametrize("type_line", [
+        "Land — Plains // Land — Swamp",
+        "Land — Forest // Land — Mountain",
+    ])
+    def test_mdfc_both_lands(self, type_line):
+        assert is_playable_as_land(type_line) is True
+
+    @pytest.mark.parametrize("type_line", [
+        "Artifact // Land",
+        "Legendary Enchantment // Legendary Land",
+        "Legendary Artifact — Book // Legendary Land — Cave",
+        "Enchantment — Aura // Land",
+    ])
+    def test_transform_cards_not_lands(self, type_line):
+        assert is_playable_as_land(type_line) is False
+
+    @pytest.mark.parametrize("type_line", [
+        "Creature — Elf Warrior",
+        "Instant",
+        "Sorcery",
+        "Artifact — Equipment",
+        "Enchantment — Aura",
+    ])
+    def test_non_lands(self, type_line):
+        assert is_playable_as_land(type_line) is False
+
+    def test_empty_string(self):
+        assert is_playable_as_land("") is False
+
+    def test_none_type_line(self):
+        assert is_playable_as_land(None) is False

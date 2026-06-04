@@ -269,10 +269,14 @@ class EDHRECIngestion:
             for cv in cardviews:
                 card_name = cv.get("name", "")
                 inclusion = cv.get("inclusion", 0)
-                num_decks = cv.get("num_decks", 0)
-                if num_decks > deck_count:
-                    deck_count = num_decks
-                pct = (inclusion / num_decks * 100) if num_decks > 0 else 0
+                potential_decks = cv.get("potential_decks", 0)
+                if potential_decks > deck_count:
+                    deck_count = potential_decks
+                pct = (
+                    (inclusion / potential_decks * 100)
+                    if potential_decks > 0
+                    else 0
+                )
                 top_cards.append({
                     "card_name": card_name,
                     "inclusion_pct": round(pct, 1),

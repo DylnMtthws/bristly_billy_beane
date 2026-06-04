@@ -241,6 +241,23 @@ DDL_STATEMENTS = [
         consecutive_failures INTEGER DEFAULT 0
     )
     """,
+    # 1.13 Generation Traces (per-card decision history)
+    """
+    CREATE TABLE IF NOT EXISTS generation_traces (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        generation_id TEXT NOT NULL,
+        card_name TEXT NOT NULL,
+        card_id TEXT,
+        stage TEXT NOT NULL,
+        action TEXT NOT NULL,
+        score REAL,
+        score_components_json TEXT,
+        reason TEXT,
+        timestamp REAL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_traces_gen ON generation_traces(generation_id)",
+    "CREATE INDEX IF NOT EXISTS idx_traces_card ON generation_traces(card_name)",
     # 1.10 Ramp Candidates (auto-populated by ramp_detector)
     """
     CREATE TABLE IF NOT EXISTS ramp_candidates (

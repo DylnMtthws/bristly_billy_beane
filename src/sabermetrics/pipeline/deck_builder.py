@@ -570,24 +570,43 @@ class DeckBuilder:
 
                 dominated = False
                 dominator_name = ""
+                edhrec_saved = False
+                card_edhrec = card.get("edhrec_inclusion_pct", 0.0)
+
                 for f_card in frontier:
                     f_cvar = f_card.get("_cvar_score", 0)
                     f_price = float(f_card.get("price_usd", 0) or 0)
                     if f_cvar >= cvar and f_price <= price and (f_cvar > cvar or f_price < price):
+                        # EDHREC protection: a card with strong empirical inclusion
+                        # cannot be dominated by one the community doesn't use.
+                        f_edhrec = f_card.get("edhrec_inclusion_pct", 0.0)
+                        if card_edhrec >= 30.0 and (card_edhrec - f_edhrec) >= 25.0:
+                            edhrec_saved = True
+                            continue  # This frontier card can't dominate; check others
                         dominated = True
                         dominator_name = f_card.get("name", "")
                         break
 
                 if not dominated:
                     frontier.append(card)
-                    self._tracer.record(
-                        card_name=card_name,
-                        stage="pareto",
-                        action="considered",
-                        card_id=card.get("id"),
-                        score=cvar,
-                        reason="survived Pareto",
-                    )
+                    if edhrec_saved:
+                        self._tracer.record(
+                            card_name=card_name,
+                            stage="pareto",
+                            action="protected",
+                            card_id=card.get("id"),
+                            score=cvar,
+                            reason=f"EDHREC protected ({card_edhrec:.0f}% inclusion)",
+                        )
+                    else:
+                        self._tracer.record(
+                            card_name=card_name,
+                            stage="pareto",
+                            action="considered",
+                            card_id=card.get("id"),
+                            score=cvar,
+                            reason="survived Pareto",
+                        )
                 else:
                     removed += 1
                     self._tracer.record(
@@ -694,10 +713,11 @@ class DeckBuilder:
             return pool
 
         def _land_pool() -> list[dict]:
+            from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
             pool = []
             for card in candidates:
-                type_line = (card.get("type_line") or "").lower()
-                if "land" in type_line and "creature" not in type_line:
+                type_line = card.get("type_line") or ""
+                if is_playable_as_land(type_line) and "creature" not in type_line.lower():
                     pool.append(card)
             return pool
 
@@ -1060,12 +1080,12 @@ class DeckBuilder:
         used_names = {a.card.get("name", "") for a in deck}
 
         # Build upgrade pool indexed by role
+        from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
         pool_by_role: dict[str, list[dict]] = {}
         for card in candidate_pool:
             if card.get("name", "") in used_names:
                 continue
-            type_line = (card.get("type_line") or "").lower()
-            if "land" in type_line:
+            if is_playable_as_land(card.get("type_line") or ""):
                 continue
             role = _heuristic_role(card)
             if role not in pool_by_role:

@@ -154,6 +154,70 @@ _CHECKLAND_CONDITION = re.compile(
 _FASTLAND_CONDITION = re.compile(
     r"unless you control (?:two|2) or fewer other lands", re.IGNORECASE
 )
+# Activation cost containing a mana payment ({1}, {2}, {X}, etc., excluding {T}/{S}/{Q})
+_COST_HAS_MANA = re.compile(r"\{\s*(?:\d+|x)[^}]*\}", re.IGNORECASE)
+
+
+def _has_free_any_color_ability(oracle: str) -> bool:
+    """True if the land has an unconditional, mana-free 'add any color' ability.
+
+    Rejects cost-gated ({1}, {T}: Add ... any color), timing-restricted
+    ('Activate only if...'), state-conditional ('among legendary creature
+    cards in your graveyard'), triggered ('When ... add ... any color'),
+    and resource-cost ('Sacrifice X Goats: Add...') variants.
+    """
+    if not oracle:
+        return False
+    # Split into ability clauses by newline only. Within an ability, the
+    # activation restriction often appears as a follow-on sentence after the
+    # primary effect (e.g. "Add one mana of any color. Activate only if this
+    # land entered this turn."), so periods are NOT clause boundaries.
+    raw_clauses = re.split(r"\n+", oracle)
+    for clause in raw_clauses:
+        clause = clause.strip()
+        if not clause:
+            continue
+        clause_lower = clause.lower()
+        if "any color" not in clause_lower and "any one color" not in clause_lower:
+            continue
+
+        # Triggered abilities don't count as a reliable mana source
+        if clause_lower.startswith(("when ", "whenever ", "at the beginning")):
+            continue
+
+        # Must be an activated ability
+        if ":" not in clause:
+            continue
+
+        cost_part, effect = clause.split(":", 1)
+        cost_lower = cost_part.lower()
+        effect_lower = effect.lower()
+
+        # Mana payment in cost disqualifies — paying {1}+ for {colored} is not a real source
+        if _COST_HAS_MANA.search(cost_lower):
+            continue
+
+        # Resource costs (sacrifice creatures, discard, pay life beyond 1) disqualify
+        if "sacrifice" in cost_lower and "sacrifice this" not in cost_lower:
+            continue
+        if "discard" in cost_lower:
+            continue
+
+        # Timing restrictions in the effect
+        if "activate only if" in effect_lower or "activate only during" in effect_lower:
+            continue
+
+        # State-conditional sources (depend on graveyard contents, etc.)
+        if "among legendary" in effect_lower:
+            continue
+        if "in your graveyard" in effect_lower:
+            continue
+        if "among basic land types" in effect_lower:
+            continue
+
+        return True
+
+    return False
 
 
 @dataclass
@@ -214,8 +278,11 @@ def parse_land_colors(
             for sym in _MANA_SYMBOLS.finditer(match.group(1)):
                 colors.add(sym.group(1))
 
-    # "any color" detection
-    if _ANY_COLOR.search(oracle):
+    # "any color" detection — only if there's a free, unconditional ability.
+    # Cost-gated, timing-restricted, triggered, and state-conditional variants
+    # are filtered out so trap lands like Hall of Oracles don't get treated as
+    # full color sources.
+    if _has_free_any_color_ability(oracle):
         info.produces_any_color = True
         if commander_colors:
             colors.update(commander_colors)
@@ -242,7 +309,9 @@ def parse_land_colors(
     if _RESTRICTED_MANA.search(oracle):
         info.has_mana_restriction = True
 
-    # Fetch land detection
+    # Fetch land detection. fetch_targets are tracked separately from
+    # colors_produced — a fetch doesn't produce those colors directly, it
+    # searches for a land that can. _score_land gives discounted credit.
     fetch_match = _FETCH_PATTERN.search(oracle)
     if fetch_match and "land" in oracle.lower():
         info.is_fetch = True
@@ -250,7 +319,6 @@ def parse_land_colors(
         for basic_type, color in BASIC_TYPE_COLORS.items():
             if basic_type in target_text:
                 info.fetch_targets.append(color)
-                colors.add(color)
 
         # Generic fetch (e.g. "a basic land card") — all commander colors
         if not info.fetch_targets and ("basic land" in target_text or "land" in target_text):
@@ -395,17 +463,34 @@ def _score_land(
             # More points for colors we need more of
             score += deficit
 
-    # Bonus for multi-color lands (cover multiple gaps simultaneously)
-    colors_filling_gaps = sum(
-        1 for c in relevant_colors if color_deficit.get(c, 0) > 0
-    )
-    if colors_filling_gaps >= 2:
-        score *= 1.2
-    if colors_filling_gaps >= 3:
-        score *= 1.1
-
-    # Fetch land bonus (flexibility + untapped)
+    # Fetch lands: discounted credit. A fetch isn't a direct source; it
+    # searches for a land that can produce the color. Quality tiers:
+    #   - Basic-only sac-fetch that ETBs tapped (Panorama-class): 0.30x
+    #   - Basic-only fetch with no tap on target (Evolving Wilds): 0.50x
+    #   - True fetch that can grab shock/dual lands (Bloodstained Mire): 0.85x
+    fetch_contrib_colors: set[str] = set()
     if land_info.is_fetch:
+        oracle_lower = (land_info.card.get("oracle_text") or "").lower()
+        if "basic" in oracle_lower:
+            fetch_credit = 0.3 if "tapped" in oracle_lower else 0.5
+        else:
+            fetch_credit = 0.85
+
+        for color in land_info.fetch_targets:
+            if color in commander_colors:
+                deficit = color_deficit.get(color, 0)
+                if deficit > 0:
+                    score += deficit * fetch_credit
+                    fetch_contrib_colors.add(color)
+
+    # Multi-color bonus: count distinct colors filling gaps from both
+    # direct production and fetch targets
+    gap_colors = {
+        c for c in relevant_colors if color_deficit.get(c, 0) > 0
+    } | fetch_contrib_colors
+    if len(gap_colors) >= 2:
+        score *= 1.2
+    if len(gap_colors) >= 3:
         score *= 1.1
 
     # Restricted mana penalty (usually not real color sources)
@@ -425,6 +510,13 @@ def _score_land(
         # Checklands synergize with basics — bonus when deck has enough basics
         if land_info.check_basic_types:
             score += 1.0  # De-facto untapped dual with 8-10 basics
+
+    # EDHREC inclusion bonus (commander-specific community signal). Lands the
+    # community runs for this commander score higher; lands at 0% inclusion
+    # get no boost. This counteracts oracle-text noise that lets "any color"
+    # trap lands tie with real color sources in the parser-derived score.
+    edhrec_pct = float(land_info.card.get("edhrec_inclusion_pct", 0.0) or 0.0)
+    score += (edhrec_pct / 100.0) * 5.0
 
     return score
 

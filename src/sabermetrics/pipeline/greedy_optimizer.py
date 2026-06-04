@@ -30,6 +30,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def is_playable_as_land(type_line: str) -> bool:
+    """Check if a card can be played as a land from hand.
+
+    Checks the FRONT face only (before // separator). This correctly
+    distinguishes:
+    - Pure lands ("Land — Plains"): True
+    - MDFCs with land front ("Land — Forest // Land — Mountain"): True
+    - Transform cards with non-land front ("Artifact // Land"): False
+    - Non-land cards ("Creature — Elf Warrior"): False
+
+    Args:
+        type_line: The card's full type_line string.
+
+    Returns:
+        True if the card's front face is a land.
+    """
+    if not type_line:
+        return False
+    front_face = type_line.split("//")[0].strip().lower()
+    return "land" in front_face
+
+
 class OptimizerResult(BaseModel):
     """Result of greedy optimization."""
 
@@ -94,7 +116,7 @@ def greedy_fill(
     eligible = [
         c for c in candidates
         if c.get("name", "") not in deck_names
-        and "land" not in (c.get("type_line") or "").lower()
+        and not is_playable_as_land(c.get("type_line") or "")
     ]
 
     assignments: list[SlotAssignment] = []
@@ -242,7 +264,7 @@ def swap_refine(
     swap_pool = [
         c for c in candidates
         if c.get("name", "") not in deck_names
-        and "land" not in (c.get("type_line") or "").lower()
+        and not is_playable_as_land(c.get("type_line") or "")
     ]
 
     for pass_num in range(max_passes):
@@ -259,9 +281,9 @@ def swap_refine(
             # Skip lands if protected
             if protect_lands and assignment.slot_role == "land":
                 continue
-            if protect_lands and "land" in (
+            if protect_lands and is_playable_as_land(
                 assignment.card.get("type_line") or ""
-            ).lower():
+            ):
                 continue
 
             # Skip protected staple cards
@@ -563,7 +585,7 @@ def _compute_curve_coherence(
     # Actual CMC distribution
     actual: dict[int, int] = {}
     for card in deck_cards:
-        if "land" in (card.get("type_line") or "").lower():
+        if is_playable_as_land(card.get("type_line") or ""):
             continue
         cmc = int(float(card.get("cmc", 0) or 0))
         bucket = min(cmc, 7)

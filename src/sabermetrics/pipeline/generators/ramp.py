@@ -298,29 +298,36 @@ class RampPackageGenerator:
         assignments: list[SlotAssignment] = []
         running_price = 0.0
 
-        # Auto-includes: Sol Ring always
-        auto_ramp_names: set[str] = set()
-        for entry in auto_includes.get("always", []):
-            if entry.get("role") == "ramp":
-                auto_ramp_names.add(entry["name"])
-
-        # Multicolor ramp
-        if len(color_identity) >= 2:
-            for entry in auto_includes.get("multicolor", []):
+        # Collect auto-includes in priority order (highest priority first).
+        # Protected cards get priority 0 (always kept), others get 1-3.
+        auto_ramp_entries: list[tuple[str, int]] = []  # (name, priority)
+        _sections_in_order = [
+            ("always", True),
+            ("multicolor", len(color_identity) >= 2),
+            ("three_plus_colors", len(color_identity) >= 3),
+            ("has_green", "G" in color_identity),
+        ]
+        for section, condition in _sections_in_order:
+            if not condition:
+                continue
+            for entry in auto_includes.get(section, []):
                 if entry.get("role") == "ramp":
-                    auto_ramp_names.add(entry["name"])
+                    is_protected = entry.get("protect_from_swap", False)
+                    priority = 0 if is_protected else len(auto_ramp_entries)
+                    auto_ramp_entries.append((entry["name"], priority))
 
-        # 3+ color ramp
-        if len(color_identity) >= 3:
-            for entry in auto_includes.get("three_plus_colors", []):
-                if entry.get("role") == "ramp":
-                    auto_ramp_names.add(entry["name"])
+        # Sort by priority (protected first, then order of appearance)
+        auto_ramp_entries.sort(key=lambda x: x[1])
 
-        # Green ramp
-        if "G" in color_identity:
-            for entry in auto_includes.get("has_green", []):
-                if entry.get("role") == "ramp":
-                    auto_ramp_names.add(entry["name"])
+        # Cap at target_count — protected cards always fit, drop lowest priority
+        auto_ramp_names: list[str] = [name for name, _ in auto_ramp_entries]
+        if len(auto_ramp_names) > target_count:
+            logger.info(
+                "Capping ramp auto-includes from %d to %d (target_count)",
+                len(auto_ramp_names), target_count,
+            )
+            auto_ramp_names = auto_ramp_names[:target_count]
+        auto_ramp_set = set(auto_ramp_names)
 
         # Try loading ramp_candidates table
         ramp_candidates = self._load_ramp_candidates(color_identity)
@@ -342,7 +349,7 @@ class RampPackageGenerator:
         for search_pool in search_pools:
             for card in search_pool:
                 name = card.get("name", "")
-                if name in auto_ramp_names and name not in used_names:
+                if name in auto_ramp_set and name not in used_names:
                     price = float(card.get("price_usd", 0) or 0)
                     if budget_remaining <= 0 or running_price + price <= budget_remaining:
                         assignments.append(SlotAssignment(
@@ -353,7 +360,7 @@ class RampPackageGenerator:
                         ))
                         used_names.add(name)
                         running_price += price
-                        auto_ramp_names.discard(name)
+                        auto_ramp_set.discard(name)
 
         # Score remaining candidates with role-specific function
         candidates: list[tuple[dict, float]] = []

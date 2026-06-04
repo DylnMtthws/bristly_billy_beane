@@ -316,32 +316,62 @@ class RemovalPackageGenerator:
         running_price = 0.0
 
         # --- Auto-include removal staples ---
-        auto_removal_names: set[str] = set()
+        # Collect single-target and wipe auto-includes separately so each
+        # respects its own quota — otherwise section ordering causes wipes
+        # to be cut from the cap, and the wipe loop below adds them back
+        # on top of an already-full single-removal set, overflowing the
+        # combined target.
+        single_entries: list[tuple[str, int]] = []  # (name, priority)
+        wipe_entries: list[tuple[str, int]] = []
+        seen_names: set[str] = set()
 
-        # Color-gated removal staples
-        color_sections = {
-            "W": "removal_has_white",
-            "U": "removal_has_blue",
-            "B": "removal_has_black",
-            "R": "removal_has_red",
-            "G": "removal_has_green",
-        }
-        for color, section in color_sections.items():
+        # Color-gated removal staples (single-target)
+        color_sections = [
+            ("W", "removal_has_white"),
+            ("U", "removal_has_blue"),
+            ("B", "removal_has_black"),
+            ("R", "removal_has_red"),
+            ("G", "removal_has_green"),
+        ]
+        for color, section in color_sections:
             if color in color_identity:
                 for entry in auto_includes.get(section, []):
-                    if entry.get("role") == "removal":
-                        auto_removal_names.add(entry["name"])
+                    if entry.get("role") == "removal" and entry["name"] not in seen_names:
+                        is_protected = entry.get("protect_from_swap", False)
+                        priority = 0 if is_protected else len(single_entries) + 1
+                        single_entries.append((entry["name"], priority))
+                        seen_names.add(entry["name"])
 
         # Color-gated board wipe staples
-        wipe_sections = {
-            "W": "wipe_has_white",
-            "R": "wipe_has_red",
-        }
-        for color, section in wipe_sections.items():
+        wipe_sections = [
+            ("W", "wipe_has_white"),
+            ("R", "wipe_has_red"),
+        ]
+        for color, section in wipe_sections:
             if color in color_identity:
                 for entry in auto_includes.get(section, []):
-                    if entry.get("role") == "removal":
-                        auto_removal_names.add(entry["name"])
+                    if entry.get("role") == "removal" and entry["name"] not in seen_names:
+                        is_protected = entry.get("protect_from_swap", False)
+                        priority = 0 if is_protected else len(wipe_entries) + 1
+                        wipe_entries.append((entry["name"], priority))
+                        seen_names.add(entry["name"])
+
+        # Sort each bucket by priority (protected first, then order of appearance)
+        single_entries.sort(key=lambda x: x[1])
+        wipe_entries.sort(key=lambda x: x[1])
+
+        # Cap each bucket independently
+        single_names = [n for n, _ in single_entries[:target_count]]
+        wipe_names = [n for n, _ in wipe_entries[:board_wipe_target]]
+        combined_target = target_count + board_wipe_target
+        if len(single_entries) > target_count or len(wipe_entries) > board_wipe_target:
+            logger.info(
+                "Capping removal auto-includes: single %d→%d, wipes %d→%d",
+                len(single_entries), len(single_names),
+                len(wipe_entries), len(wipe_names),
+            )
+        auto_removal_set = set(single_names) | set(wipe_names)
+        auto_wipe_set = set(wipe_names)
 
         # Try loading removal_candidates table
         removal_candidates = self._load_removal_candidates(color_identity)
@@ -362,7 +392,7 @@ class RemovalPackageGenerator:
         for search_pool in search_pools:
             for card in search_pool:
                 name = card.get("name", "")
-                if name in auto_removal_names and name not in used_names:
+                if name in auto_removal_set and name not in used_names:
                     price = float(card.get("price_usd", 0) or 0)
                     if budget_remaining <= 0 or running_price + price <= budget_remaining:
                         assignments.append(SlotAssignment(
@@ -373,7 +403,7 @@ class RemovalPackageGenerator:
                         ))
                         used_names.add(name)
                         running_price += price
-                        auto_removal_names.discard(name)
+                        auto_removal_set.discard(name)
 
         # --- Score and sort remaining candidates ---
         board_wipe_candidates: list[tuple[dict, float]] = []
@@ -423,10 +453,17 @@ class RemovalPackageGenerator:
         board_wipe_candidates.sort(key=lambda x: x[1], reverse=True)
         single_removal_candidates.sort(key=lambda x: x[1], reverse=True)
 
-        # Fill board wipes first
+        # Count wipes already placed via auto-includes (by name match — more
+        # reliable than scanning oracle text for "all").
+        wipes_placed = sum(
+            1 for a in assignments if a.card.get("name", "") in auto_wipe_set
+        )
+
+        # Fill board wipes first, but never exceed the combined cap
         for card, score in board_wipe_candidates:
-            if len([a for a in assignments if a.slot_role == "removal"
-                    and "all" in (a.card.get("oracle_text") or "").lower()]) >= board_wipe_target:
+            if wipes_placed >= board_wipe_target:
+                break
+            if len(assignments) >= combined_target:
                 break
 
             name = card.get("name", "")
@@ -445,13 +482,14 @@ class RemovalPackageGenerator:
             ))
             used_names.add(name)
             running_price += price
+            wipes_placed += 1
 
         # Fill single-target removal
         target_types = {"creature": 0, "artifact": 0, "enchantment": 0,
                         "planeswalker": 0, "any": 0}
 
         for card, score in single_removal_candidates:
-            if len(assignments) >= target_count + board_wipe_target:
+            if len(assignments) >= combined_target:
                 break
 
             name = card.get("name", "")
