@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from sabermetrics.analytics.role_targets import RoleTarget, role_need_multiplier
 from sabermetrics.analytics.synergy_matrix import SynergyMatrix
+from sabermetrics.config import settings
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -28,6 +29,9 @@ if TYPE_CHECKING:
     from sabermetrics.pipeline.trace import GenerationTracer
 
 logger = logging.getLogger(__name__)
+
+# Scoring weights, centralized in config/settings.yaml.
+_SCORING = settings.scoring
 
 
 def is_playable_as_land(type_line: str) -> bool:
@@ -162,9 +166,9 @@ def greedy_fill(
 
             # Marginal value formula
             marginal = (
-                0.45 * synergy_contrib
-                + 0.35 * (role_mult * cvar_base)
-                + 0.20 * cvar_base
+                _SCORING.marginal_synergy_weight * synergy_contrib
+                + _SCORING.marginal_role_cvar_weight * (role_mult * cvar_base)
+                + _SCORING.marginal_cvar_weight * cvar_base
             )
 
             if marginal > best_score:
@@ -455,11 +459,11 @@ def deck_objective(
     alignment = _compute_profile_alignment(non_lands, profile_signals)
 
     return (
-        0.30 * syn_density
-        + 0.25 * role_cov
-        + 0.20 * alignment
-        + 0.15 * avg_cvar
-        + 0.10 * curve_coh
+        _SCORING.objective_synergy_density_weight * syn_density
+        + _SCORING.objective_role_coverage_weight * role_cov
+        + _SCORING.objective_alignment_weight * alignment
+        + _SCORING.objective_avg_cvar_weight * avg_cvar
+        + _SCORING.objective_curve_coherence_weight * curve_coh
     )
 
 

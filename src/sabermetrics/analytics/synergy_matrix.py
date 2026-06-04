@@ -18,13 +18,14 @@ import numpy as np
 import yaml
 
 from sabermetrics.analytics.embeddings import get_embedding_service
+from sabermetrics.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Signal weights for hybrid score
-RULE_WEIGHT = 0.40
-COOCCURRENCE_WEIGHT = 0.35
-EMBEDDING_WEIGHT = 0.25
+# Signal weights for hybrid score (centralized in config/settings.yaml).
+RULE_WEIGHT = settings.scoring.synergy_rule_weight
+COOCCURRENCE_WEIGHT = settings.scoring.synergy_cooccurrence_weight
+EMBEDDING_WEIGHT = settings.scoring.synergy_embedding_weight
 
 
 class SynergyMatrix:
