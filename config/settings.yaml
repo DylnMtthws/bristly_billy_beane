@@ -48,3 +48,19 @@ knowledge_base:
       url: "https://edhrec.com/articles/how-to-build-a-commander-deck"
     - slug: "superior-numbers-land-counts"
       url: "https://edhrec.com/articles/superior-numbers-land-counts"
+
+scoring:
+  # Synergy matrix: blend of the three pairwise signals (sum to 1.0).
+  synergy_rule_weight: 0.40
+  synergy_cooccurrence_weight: 0.35
+  synergy_embedding_weight: 0.25
+  # Greedy fill: marginal value of adding a card.
+  marginal_synergy_weight: 0.45
+  marginal_role_cvar_weight: 0.35
+  marginal_cvar_weight: 0.20
+  # Deck-level objective (components, all 0-1 normalized).
+  objective_synergy_density_weight: 0.30
+  objective_role_coverage_weight: 0.25
+  objective_alignment_weight: 0.20
+  objective_avg_cvar_weight: 0.15
+  objective_curve_coherence_weight: 0.10

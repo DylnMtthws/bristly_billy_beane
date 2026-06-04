@@ -82,6 +82,32 @@ class KnowledgeBaseSettings(BaseModel):
     edhrec_articles: list[dict[str, str]] = Field(default_factory=list)
 
 
+class ScoringSettings(BaseModel):
+    """Tunable scoring weights for the synergy matrix and greedy optimizer.
+
+    Defaults match the values previously hard-coded in
+    ``analytics.synergy_matrix`` and ``pipeline.greedy_optimizer``; centralizing
+    them here lets the weights be swept from config without code edits.
+    """
+
+    # Synergy matrix: blend of the three pairwise signals (sum to 1.0).
+    synergy_rule_weight: float = 0.40
+    synergy_cooccurrence_weight: float = 0.35
+    synergy_embedding_weight: float = 0.25
+
+    # Greedy fill: marginal value of adding a card.
+    marginal_synergy_weight: float = 0.45
+    marginal_role_cvar_weight: float = 0.35
+    marginal_cvar_weight: float = 0.20
+
+    # Deck-level objective (components, all 0-1 normalized).
+    objective_synergy_density_weight: float = 0.30
+    objective_role_coverage_weight: float = 0.25
+    objective_alignment_weight: float = 0.20
+    objective_avg_cvar_weight: float = 0.15
+    objective_curve_coherence_weight: float = 0.10
+
+
 class Settings(BaseModel):
     """Top-level settings container."""
 
@@ -92,6 +118,7 @@ class Settings(BaseModel):
     refresh: RefreshSettings = Field(default_factory=RefreshSettings)
     output: OutputSettings = Field(default_factory=OutputSettings)
     knowledge_base: KnowledgeBaseSettings = Field(default_factory=KnowledgeBaseSettings)
+    scoring: ScoringSettings = Field(default_factory=ScoringSettings)
 
 
 def _find_config_path() -> Path:
