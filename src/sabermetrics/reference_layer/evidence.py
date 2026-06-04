@@ -12,9 +12,9 @@ Composes an EvidencePackage from multiple data sources:
 import json
 import logging
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 
+from sabermetrics.db import row_to_card
 from sabermetrics.errors import CommanderNotFoundError
 from sabermetrics.models.card import Card, CardRuling
 from sabermetrics.models.evidence import (
@@ -114,41 +114,14 @@ class EvidenceAggregator:
                 f"Commander not found in DB: {commander_id}"
             )
 
-        row_dict = dict(row)
-        # Parse JSON fields
-        for field in ("color_identity", "keywords"):
-            val = row_dict.get(field, "[]")
-            if isinstance(val, str):
-                row_dict[field] = json.loads(val)
-
-        # Get current price
-        price_cursor = conn.execute(
+        price_row = conn.execute(
             "SELECT price_usd FROM card_prices "
             "WHERE card_id = ? ORDER BY snapshot_date DESC LIMIT 1",
             (commander_id,),
-        )
-        price_row = price_cursor.fetchone()
-        if price_row:
-            row_dict["current_price_usd"] = price_row["price_usd"]
+        ).fetchone()
+        price = price_row["price_usd"] if price_row else None
 
-        return Card(
-            id=row_dict["id"],
-            oracle_id=row_dict["oracle_id"],
-            name=row_dict["name"],
-            mana_cost=row_dict.get("mana_cost"),
-            cmc=row_dict["cmc"],
-            type_line=row_dict["type_line"],
-            oracle_text=row_dict.get("oracle_text"),
-            color_identity=row_dict["color_identity"],
-            keywords=row_dict.get("keywords", []),
-            is_legal_commander=bool(row_dict["is_legal_commander"]),
-            is_legal_in_99=bool(row_dict["is_legal_in_99"]),
-            set_code=row_dict["set_code"],
-            rarity=row_dict["rarity"],
-            image_uri=row_dict.get("image_uri"),
-            last_updated=row_dict.get("last_updated", datetime.now()),
-            current_price_usd=row_dict.get("current_price_usd"),
-        )
+        return row_to_card(row, price_usd=price)
 
     def _get_rulings(
         self, conn: sqlite3.Connection, oracle_id: str
