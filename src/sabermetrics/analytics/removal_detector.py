@@ -3,30 +3,27 @@
 Strips parenthetical reminder text before pattern matching to eliminate
 false positives from keyword reminder text. Populates a pre-scored
 removal_candidates SQLite table for the removal generator to query.
+
+The detect/populate plumbing lives in
+:mod:`sabermetrics.analytics.detectors.base`; this module supplies only the
+removal-specific patterns, scoring, and table layout.
 """
 
-import logging
 import re
-import sqlite3
-import time
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from sabermetrics.analytics.detectors.base import (
+    Detector,
+    populate_candidates,
+    run_detect,
+    strip_reminder_text,
+)
+
+# Re-exported for backward compatibility with existing imports/tests.
+_strip_reminder_text = strip_reminder_text
 
 # Detection version — bump when patterns change to force re-computation
 DETECTION_VERSION = "1.0.0"
-
-
-def _strip_reminder_text(oracle: str) -> str:
-    """Remove parenthetical reminder text from oracle text.
-
-    Args:
-        oracle: Raw oracle text.
-
-    Returns:
-        Oracle text with all parenthetical expressions removed.
-    """
-    return re.sub(r"\([^)]*\)", "", oracle)
 
 
 # --- Positive patterns (applied to reminder-stripped text) ---
@@ -219,38 +216,10 @@ def _score_removal_card(
     return min(role_score / 9.5, 1.0)
 
 
-def detect_removal_card(card: dict) -> dict | None:
-    """Detect whether a card is a removal card and return its metadata.
-
-    Strips parenthetical reminder text before pattern matching to avoid
-    false positives from keyword reminder text.
-
-    Args:
-        card: Card dict with oracle_text, type_line, cmc keys.
-
-    Returns:
-        Dict with removal metadata if card is removal, None otherwise.
-    """
-    oracle = card.get("oracle_text") or ""
+def _extract_removal(card: dict, oracle_stripped: str) -> dict:
+    """Build the removal metadata dict for a qualifying card."""
     type_line = card.get("type_line") or ""
     cmc = float(card.get("cmc", 0) or 0)
-
-    oracle_stripped = _strip_reminder_text(oracle)
-
-    # Check negative patterns on original text
-    for neg_pat in _NEGATIVE_PATTERNS:
-        if neg_pat.search(oracle):
-            return None
-
-    # Check positive patterns on stripped text
-    matched_pattern = None
-    for pattern_name, pat in _POSITIVE_PATTERNS:
-        if pat.search(oracle_stripped):
-            matched_pattern = pattern_name
-            break
-
-    if matched_pattern is None:
-        return None
 
     removal_type = _classify_removal_type(oracle_stripped)
     target_type = _classify_target_type(oracle_stripped)
@@ -272,9 +241,23 @@ def detect_removal_card(card: dict) -> dict | None:
     }
 
 
-def _ensure_removal_table(conn: sqlite3.Connection) -> None:
-    """Create removal_candidates table if it doesn't exist."""
-    conn.execute("""
+REMOVAL_DETECTOR = Detector(
+    name="removal",
+    table="removal_candidates",
+    detection_version=DETECTION_VERSION,
+    positive_patterns=_POSITIVE_PATTERNS,
+    negative_patterns=_NEGATIVE_PATTERNS,
+    extract=_extract_removal,
+    columns=[
+        "removal_type",
+        "target_type",
+        "is_exile",
+        "is_instant",
+        "is_free_cast",
+        "flexibility_score",
+        "removal_score",
+    ],
+    create_table_sql="""
         CREATE TABLE IF NOT EXISTS removal_candidates (
             card_id TEXT PRIMARY KEY,
             removal_type TEXT NOT NULL,
@@ -288,12 +271,24 @@ def _ensure_removal_table(conn: sqlite3.Connection) -> None:
             computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (card_id) REFERENCES cards(id)
         )
-    """)
-    conn.execute(
+    """,
+    index_sql=(
         "CREATE INDEX IF NOT EXISTS idx_removal_candidates_score "
         "ON removal_candidates(removal_score DESC)"
-    )
-    conn.commit()
+    ),
+)
+
+
+def detect_removal_card(card: dict) -> dict | None:
+    """Detect whether a card is a removal card and return its metadata.
+
+    Args:
+        card: Card dict with oracle_text, type_line, cmc keys.
+
+    Returns:
+        Dict with removal metadata if card is removal, None otherwise.
+    """
+    return run_detect(REMOVAL_DETECTOR, card)
 
 
 def populate_removal_candidates(db_path: Path) -> dict:
@@ -305,86 +300,4 @@ def populate_removal_candidates(db_path: Path) -> dict:
     Returns:
         Dict with population statistics.
     """
-    start = time.time()
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-
-    try:
-        _ensure_removal_table(conn)
-
-        # Check if already populated at current version
-        try:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM removal_candidates WHERE detection_version = ?",
-                (DETECTION_VERSION,),
-            ).fetchone()
-            if row and row[0] > 0:
-                logger.info(
-                    "removal_candidates already populated at version %s (%d rows)",
-                    DETECTION_VERSION, row[0],
-                )
-                return {
-                    "rows": row[0],
-                    "skipped": True,
-                    "version": DETECTION_VERSION,
-                    "duration_seconds": 0.0,
-                }
-        except sqlite3.OperationalError:
-            pass
-
-        # Fetch all Commander-legal cards
-        cursor = conn.execute(
-            "SELECT id, name, oracle_text, type_line, cmc "
-            "FROM cards "
-            "WHERE is_legal_in_99 = 1"
-        )
-        cards = [dict(row) for row in cursor.fetchall()]
-        logger.info("Scanning %d Commander-legal cards for removal detection", len(cards))
-
-        # Clear previous version data
-        conn.execute(
-            "DELETE FROM removal_candidates WHERE detection_version != ?",
-            (DETECTION_VERSION,),
-        )
-
-        inserts: list[tuple] = []
-        for card in cards:
-            result = detect_removal_card(card)
-            if result is not None:
-                inserts.append((
-                    card["id"],
-                    result["removal_type"],
-                    result["target_type"],
-                    result["is_exile"],
-                    result["is_instant"],
-                    result["is_free_cast"],
-                    result["flexibility_score"],
-                    result["removal_score"],
-                    DETECTION_VERSION,
-                ))
-
-        # Batch insert
-        conn.executemany(
-            "INSERT OR REPLACE INTO removal_candidates "
-            "(card_id, removal_type, target_type, is_exile, is_instant, "
-            "is_free_cast, flexibility_score, removal_score, "
-            "detection_version) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            inserts,
-        )
-        conn.commit()
-
-        duration = time.time() - start
-        logger.info(
-            "Populated removal_candidates: %d cards in %.1fs",
-            len(inserts), duration,
-        )
-
-        return {
-            "rows": len(inserts),
-            "skipped": False,
-            "version": DETECTION_VERSION,
-            "duration_seconds": round(duration, 2),
-        }
-    finally:
-        conn.close()
+    return populate_candidates(REMOVAL_DETECTOR, db_path)
