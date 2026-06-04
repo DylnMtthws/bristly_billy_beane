@@ -19,7 +19,6 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 from pydantic import BaseModel, Field
 
 from sabermetrics.errors import FatalError
@@ -402,13 +401,9 @@ class DeckBuilder:
         """Score by CVAR composite (reused from v1)."""
         from sabermetrics.analytics.cvar import ScoringContext, compute_cvar
         from sabermetrics.analytics.oracle_keywords import (
-            card_matches_referenced_keywords,
             extract_referenced_keywords,
             extract_referenced_mechanics,
         )
-        from sabermetrics.config import settings
-
-        target = settings.pipeline.structural_filter_target
         weights = request.weights or CVARWeights()
 
         ref_keywords = extract_referenced_keywords(commander.oracle_text)
@@ -721,7 +716,8 @@ class DeckBuilder:
                     pool.append(card)
             return pool
 
-        placed_cards = lambda: [a.card for a in all_assignments]
+        def placed_cards() -> list:
+            return [a.card for a in all_assignments]
 
         def _trace_infra(assignments: list, stage: str) -> None:
             """Emit trace events for infrastructure placements."""
@@ -858,7 +854,6 @@ class DeckBuilder:
             greedy_fill,
             swap_refine,
         )
-        from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
         profile = profile_result.profile
 

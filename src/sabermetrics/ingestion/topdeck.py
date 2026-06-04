@@ -4,7 +4,6 @@ Fetches Commander tournament results and decklists from TopDeck.gg API.
 Populates: tournament_results, decks, deck_cards tables.
 """
 
-import json
 import logging
 import os
 import sqlite3

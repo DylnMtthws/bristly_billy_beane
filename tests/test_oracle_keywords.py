@@ -1,7 +1,6 @@
 """Tests for oracle text keyword extraction and CVAR synergy integration."""
 
 from sabermetrics.analytics.oracle_keywords import (
-    MTG_KEYWORD_ABILITIES,
     card_matches_referenced_keywords,
     extract_referenced_keywords,
     extract_referenced_mechanics,
@@ -262,7 +261,6 @@ def test_value_inversion_model_validates() -> None:
 def test_strategic_profile_defaults_empty_inversions() -> None:
     """StrategicProfile defaults to empty value_inversions list."""
     from sabermetrics.models.profile import (
-        AntiSynergy,
         PowerIndicators,
         StrategicConstraints,
         WinCondition,
@@ -683,7 +681,6 @@ def test_engine_dependency_model_validates() -> None:
 def test_strategic_profile_defaults_empty_engine_deps() -> None:
     """StrategicProfile defaults to empty engine_dependencies list."""
     from sabermetrics.models.profile import (
-        AntiSynergy,
         PowerIndicators,
         StrategicConstraints,
         WinCondition,
@@ -1102,7 +1099,6 @@ def test_mispriced_card_example_validates() -> None:
 def test_strategic_profile_defaults_empty_mispriced() -> None:
     """StrategicProfile defaults to empty mispriced_card_examples list."""
     from sabermetrics.models.profile import (
-        AntiSynergy,
         PowerIndicators,
         StrategicConstraints,
         WinCondition,

@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 from sabermetrics.models.card import Card, CardRuling
-from sabermetrics.models.deck import CVARWeights, DeckParameters
+from sabermetrics.models.deck import CVARWeights
 from sabermetrics.models.llm_responses import CardFitResponse, RelevanceScreenResponse
 from sabermetrics.models.profile import ValueInversion
 

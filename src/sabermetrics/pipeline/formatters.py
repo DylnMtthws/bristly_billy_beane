@@ -7,7 +7,6 @@ Supports four output formats:
 - Archidekt: Import-compatible card list
 """
 
-import json
 import logging
 
 from sabermetrics.models.deck import GeneratedDeck
@@ -202,7 +201,6 @@ def format_archidekt(deck: GeneratedDeck) -> str:
     Format: "Nx Card Name" per line with categories.
     Aggregates duplicates (basic lands).
     """
-    from collections import Counter
 
     lines: list[str] = []
 

@@ -1,6 +1,5 @@
 """Tests for deck pattern analysis and knowledge base generation."""
 
-import json
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -10,7 +9,6 @@ from sabermetrics.analytics.deck_patterns import (
     CardTypeDistribution,
     ComponentStats,
     DeckbuildingPatterns,
-    FeatureCorrelation,
     GameKnightsAnalyzer,
     KnowledgeBaseBuilder,
     ManaBaseAnalysis,

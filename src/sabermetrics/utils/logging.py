@@ -6,7 +6,6 @@ Config: 10MB per file, 5 backups.
 
 import json
 import logging
-import os
 import sys
 from datetime import datetime
 from logging.handlers import RotatingFileHandler

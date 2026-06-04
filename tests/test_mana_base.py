@@ -1,6 +1,5 @@
 """Tests for mana base land parsing and scoring."""
 
-import pytest
 
 from sabermetrics.pipeline.mana_base import (
     LandInfo,

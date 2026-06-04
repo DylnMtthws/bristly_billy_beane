@@ -5,15 +5,10 @@ Uses the /api/decks/v3/ search endpoint to discover popular decks.
 """
 
 import logging
-import sqlite3
-from datetime import datetime
 from pathlib import Path
 
 import httpx
-import mtg_parser
 
-from sabermetrics.errors import FatalError, NetworkError
-from sabermetrics.ingestion.base import SyncResult
 from sabermetrics.ingestion._decklist_base import DecklistIngestionBase
 from sabermetrics.utils.rate_limit import RateLimiter
 

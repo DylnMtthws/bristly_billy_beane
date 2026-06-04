@@ -336,7 +336,6 @@ def swap_refine(
                     continue
 
                 # Simulate swap
-                old_card = deck[deck_idx].card
                 swap_roles = _get_card_roles(swap_card)
                 primary = swap_roles[0] if swap_roles else "utility"
                 valid_roles = {"ramp", "draw", "removal", "wincon", "utility", "land", "other"}

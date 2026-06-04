@@ -3,7 +3,6 @@
 import json
 from datetime import datetime
 
-import pytest
 
 from sabermetrics.models.profile import (
     BehavioralSignals,

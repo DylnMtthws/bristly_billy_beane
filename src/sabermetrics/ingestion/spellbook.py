@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from sabermetrics.errors import FatalError, NetworkError
+from sabermetrics.errors import FatalError
 from sabermetrics.ingestion.base import SourceHealthMixin, SyncResult
 from sabermetrics.utils.rate_limit import RateLimiter
 

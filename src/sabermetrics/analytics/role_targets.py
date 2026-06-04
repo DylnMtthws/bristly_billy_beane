@@ -9,7 +9,6 @@ by turn T?" Uses the same hypergeometric CDF:
 where N=deck_size, k=copies, n=cards_seen_by_turn.
 """
 
-import json
 import logging
 from math import comb
 

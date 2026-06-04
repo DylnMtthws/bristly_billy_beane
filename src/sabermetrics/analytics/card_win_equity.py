@@ -93,8 +93,8 @@ def compute_card_win_equity(
                 continue
 
             # Overall stats for this commander
-            total_wins = sum(w for w, l in decks.values())
-            total_losses = sum(l for w, l in decks.values())
+            total_wins = sum(w for w, _ in decks.values())
+            total_losses = sum(loss for _, loss in decks.values())
             total_games = total_wins + total_losses
             if total_games == 0:
                 continue

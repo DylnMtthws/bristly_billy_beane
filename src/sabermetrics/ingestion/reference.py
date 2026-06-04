@@ -9,7 +9,6 @@ Downloads and stores reference documents:
 import logging
 import re
 from pathlib import Path
-from typing import Any
 
 import httpx
 import yaml

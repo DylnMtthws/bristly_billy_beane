@@ -19,9 +19,8 @@ from sabermetrics.reasoning.prompts import list_prompts, load_prompt
 from sabermetrics.models.llm_responses import (
     CardFitResponse,
     DeckSynthesisResponse,
-    RelevanceScreenResponse,
 )
-from sabermetrics.reasoning.profiler import ProfileManager, ProfileRequest
+from sabermetrics.reasoning.profiler import ProfileManager
 from sabermetrics.reference_layer.evidence import EvidenceAggregator
 
 HAS_API_KEY = bool(os.environ.get("ANTHROPIC_API_KEY"))

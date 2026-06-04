@@ -703,7 +703,6 @@ def _fill_basics_by_deficit(
 
     # Distribute basics proportionally
     allocated: dict[str, int] = {}
-    remaining = count
     for color in available:
         share = round(count * weights[color] / total_weight)
         allocated[color] = share

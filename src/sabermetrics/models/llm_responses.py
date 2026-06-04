@@ -1,6 +1,6 @@
 """LLM response models for structured output parsing."""
 
-from typing import List, Literal
+from typing import List
 
 from pydantic import BaseModel, Field
 

@@ -8,11 +8,14 @@ deck-context-aware scoring.
 
 import json
 import logging
-import sqlite3
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sabermetrics.models.llm_responses import CardFitResponse
 from sabermetrics.models.template import SlotIntent
+
+if TYPE_CHECKING:
+    from sabermetrics.reasoning.client import AnthropicClient
 
 logger = logging.getLogger(__name__)
 

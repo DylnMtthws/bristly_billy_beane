@@ -11,7 +11,6 @@ from sabermetrics.analytics.synergy_matrix import (
     COOCCURRENCE_WEIGHT,
     EMBEDDING_WEIGHT,
     RULE_WEIGHT,
-    SynergyMatrix,
     _card_matches_clause,
     _load_synergy_rules,
     _match_rules,

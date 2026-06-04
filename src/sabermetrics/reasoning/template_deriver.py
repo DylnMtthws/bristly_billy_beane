@@ -5,7 +5,6 @@ mostly via formulaic logic with one optional small Haiku call
 for avg_cmc_target and creature_density interpretation.
 """
 
-import json
 import logging
 from pathlib import Path
 

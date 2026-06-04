@@ -1,8 +1,6 @@
 """Tests for Phase 4 analytics layer (A4.1-A4.6)."""
 
-import json
 import sqlite3
-import tempfile
 import time
 from pathlib import Path
 
@@ -28,11 +26,10 @@ from sabermetrics.analytics.components import (
     count_card_draw,
     count_ramp_spells,
     count_removal,
-    count_tutors,
 )
 from sabermetrics.analytics.brackets import BracketResult, classify_bracket
 from sabermetrics.analytics.card_win_equity import wilson_lower_bound
-from sabermetrics.analytics.embeddings import EmbeddingCache, EmbeddingService
+from sabermetrics.analytics.embeddings import EmbeddingCache
 
 
 # --- Filter tests (A4.1) ---

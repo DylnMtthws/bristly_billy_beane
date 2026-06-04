@@ -3,7 +3,6 @@
 Wraps the existing Karsten mana base builder with auto-include logic.
 """
 
-import json
 import logging
 from pathlib import Path
 
