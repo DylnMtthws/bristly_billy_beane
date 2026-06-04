@@ -4,12 +4,10 @@ Checks availability of all data sources and updates the source_health table.
 """
 
 import logging
-import sqlite3
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sabermetrics.ingestion.base import IngestionSource
+from sabermetrics.db import SourceHealthRepo
 
 logger = logging.getLogger(__name__)
 
@@ -57,13 +55,7 @@ class SourceHealthMonitor:
         Returns:
             List of source health records.
         """
-        conn = sqlite3.connect(str(self.db_path))
-        try:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM source_health ORDER BY source")
-            return [dict(row) for row in cursor.fetchall()]
-        finally:
-            conn.close()
+        return SourceHealthRepo(self.db_path).get_all()
 
     def get_source_status(self, source_name: str) -> dict[str, Any] | None:
         """Get health status for a specific source.
@@ -74,14 +66,4 @@ class SourceHealthMonitor:
         Returns:
             Source health record or None if not found.
         """
-        conn = sqlite3.connect(str(self.db_path))
-        try:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                "SELECT * FROM source_health WHERE source = ?",
-                (source_name,),
-            )
-            row = cursor.fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+        return SourceHealthRepo(self.db_path).get(source_name)

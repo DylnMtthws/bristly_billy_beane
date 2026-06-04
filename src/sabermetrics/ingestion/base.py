@@ -1,9 +1,12 @@
 """Base protocol and models for all ingestion sources."""
 
 from datetime import datetime
+from pathlib import Path
 from typing import Protocol
 
 from pydantic import BaseModel
+
+from sabermetrics.db import SourceHealthRepo
 
 
 class SyncResult(BaseModel):
@@ -51,3 +54,25 @@ class IngestionSource(Protocol):
             - Never raises on transient errors; logs and returns success=False
         """
         ...
+
+
+class SourceHealthMixin:
+    """Provides ``last_updated`` / ``_update_source_health`` via the repo.
+
+    Hosts must set ``self.db_path`` and ``self.name`` in their ``__init__``
+    (every ingestion source already does). This replaces the identical
+    copy-pasted implementations that previously lived in each source.
+    """
+
+    db_path: Path
+    name: str
+
+    def last_updated(self) -> datetime | None:
+        """When did this source last successfully sync? None if never."""
+        return SourceHealthRepo(self.db_path).last_successful_sync(self.name)
+
+    def _update_source_health(
+        self, success: bool, error: str | None = None
+    ) -> None:
+        """Record a sync outcome in the source_health table."""
+        SourceHealthRepo(self.db_path).record(self.name, success, error)

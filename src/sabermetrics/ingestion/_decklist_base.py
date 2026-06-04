@@ -14,13 +14,13 @@ from typing import Any
 import mtg_parser
 
 from sabermetrics.errors import FatalError
-from sabermetrics.ingestion.base import SyncResult
+from sabermetrics.ingestion.base import SourceHealthMixin, SyncResult
 from sabermetrics.utils.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 
-class DecklistIngestionBase:
+class DecklistIngestionBase(SourceHealthMixin):
     """Base class for mtg-parser based decklist ingestion sources."""
 
     name: str = ""
@@ -29,19 +29,6 @@ class DecklistIngestionBase:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self._rate_limiter = RateLimiter(requests_per_second=1.0)
-
-    def last_updated(self) -> datetime | None:
-        """When did this source last successfully sync?"""
-        conn = sqlite3.connect(str(self.db_path))
-        try:
-            cursor = conn.execute(
-                "SELECT last_successful_sync FROM source_health WHERE source = ?",
-                (self.name,),
-            )
-            row = cursor.fetchone()
-            return datetime.fromisoformat(row[0]) if row and row[0] else None
-        finally:
-            conn.close()
 
     def sync(self, full: bool = False) -> SyncResult:
         """Discover and parse decklists from this source.
@@ -226,34 +213,5 @@ class DecklistIngestionBase:
                 (limit,),
             )
             return cursor.fetchall()
-        finally:
-            conn.close()
-
-    def _update_source_health(
-        self, success: bool, error: str | None = None
-    ) -> None:
-        """Update the source_health table."""
-        conn = sqlite3.connect(str(self.db_path))
-        try:
-            now = datetime.now().isoformat()
-            if success:
-                conn.execute(
-                    """INSERT OR REPLACE INTO source_health
-                    (source, last_successful_sync, consecutive_failures)
-                    VALUES (?, ?, 0)""",
-                    (self.name, now),
-                )
-            else:
-                conn.execute(
-                    """INSERT INTO source_health
-                    (source, last_failed_sync, last_error, consecutive_failures)
-                    VALUES (?, ?, ?, 1)
-                    ON CONFLICT(source) DO UPDATE SET
-                        last_failed_sync = excluded.last_failed_sync,
-                        last_error = excluded.last_error,
-                        consecutive_failures = consecutive_failures + 1""",
-                    (self.name, now, error),
-                )
-            conn.commit()
         finally:
             conn.close()

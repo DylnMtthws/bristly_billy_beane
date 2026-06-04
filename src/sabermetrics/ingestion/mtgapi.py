@@ -13,7 +13,7 @@ from pathlib import Path
 import httpx
 
 from sabermetrics.errors import FatalError, NetworkError
-from sabermetrics.ingestion.base import SyncResult
+from sabermetrics.ingestion.base import SourceHealthMixin, SyncResult
 from sabermetrics.utils.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 MTGAPI_BASE_URL = "https://api.magicthegathering.io/v1"
 
 
-class MtgApiIngestion:
+class MtgApiIngestion(SourceHealthMixin):
     """magicthegathering.io rulings ingestion source."""
 
     name: str = "mtgapi"
@@ -42,19 +42,6 @@ class MtgApiIngestion:
             return resp.status_code == 200
         except httpx.HTTPError:
             return False
-
-    def last_updated(self) -> datetime | None:
-        """When did mtgapi last successfully sync?"""
-        conn = sqlite3.connect(str(self.db_path))
-        try:
-            cursor = conn.execute(
-                "SELECT last_successful_sync FROM source_health WHERE source = ?",
-                (self.name,),
-            )
-            row = cursor.fetchone()
-            return datetime.fromisoformat(row[0]) if row and row[0] else None
-        finally:
-            conn.close()
 
     def sync(self, full: bool = False) -> SyncResult:
         """Fetch rulings for cards in our database.
@@ -212,32 +199,3 @@ class MtgApiIngestion:
             conn.close()
 
         return count
-
-    def _update_source_health(
-        self, success: bool, error: str | None = None
-    ) -> None:
-        """Update the source_health table."""
-        conn = sqlite3.connect(str(self.db_path))
-        try:
-            now = datetime.now().isoformat()
-            if success:
-                conn.execute(
-                    """INSERT OR REPLACE INTO source_health
-                    (source, last_successful_sync, consecutive_failures)
-                    VALUES (?, ?, 0)""",
-                    (self.name, now),
-                )
-            else:
-                conn.execute(
-                    """INSERT INTO source_health
-                    (source, last_failed_sync, last_error, consecutive_failures)
-                    VALUES (?, ?, ?, 1)
-                    ON CONFLICT(source) DO UPDATE SET
-                        last_failed_sync = excluded.last_failed_sync,
-                        last_error = excluded.last_error,
-                        consecutive_failures = consecutive_failures + 1""",
-                    (self.name, now, error),
-                )
-            conn.commit()
-        finally:
-            conn.close()
