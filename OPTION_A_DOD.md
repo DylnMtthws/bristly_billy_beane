@@ -48,6 +48,26 @@ then **stop the loop** (ScheduleWakeup `stop: true`).
 - **Check:** a test builds decks for ≥3 varied commanders × 2 budgets and asserts each
   is legal (count == 99, no illegal dupes, color identity respected).
 
+### 2b. Canonical one-row-per-card candidate source
+- The `cards` table stays faithful to Scryfall — **keep all 114k printings** (their
+  per-printing prices power cheapest-printing selection; `rarity`/`set_code`/`image_uri`
+  are per-printing and in use). Do **not** delete rows.
+- Replace the current "SELECT ~all printings → dedup in a Python loop on every build"
+  with a canonical candidate source that yields **one row per card**, deduped by
+  **`name`** (NOT `oracle_id` — 418 oracle_ids share names via reversible/reskin cases;
+  Commander singleton is by English name), selecting the **cheapest legal printing**
+  (`MIN(price_usd)` over the latest price snapshot; NULL-priced printings rank last but
+  are kept if that's the only printing). Basic lands exempt.
+- Implement as a SQL VIEW or a small `card_candidates` table rebuilt after ingestion —
+  whichever is cleaner. `apply_hard_filters` reads from it; `filter_singleton_legal`
+  becomes a guaranteed property of the source, not a filter callers must remember.
+- **Rationale:** makes dedup an invariant by construction (reinforces crit. 2 — no code
+  path can reintroduce duplicate printings), and cuts candidate-query volume ~3×.
+- **Check:** (a) a test asserts the candidate source returns ≤1 row per nonbasic name and
+  that the kept printing's price equals the min priced printing for that name; (b) a test
+  asserts a fresh generator/query path cannot introduce a duplicate nonbasic name into a
+  built deck. Baseline dedup semantics (cheapest printing) must be preserved.
+
 ### 3. No live scoring weight reads an empty table
 - Populate `card_cooccurrence` from the 500 decklists in `decks`/`deck_cards`
   (ship as `scripts/`-runnable migration; validate on a DB copy).
