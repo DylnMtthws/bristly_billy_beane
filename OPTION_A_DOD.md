@@ -188,4 +188,21 @@ _(Append one dated entry per iteration: criterion touched, what changed, check r
   no real card, so there is no real profile-cache hit path today (every real build currently
   needs Sonnet profile synthesis — noted for the user). Full suite 540 passed (538→540; the
   end-to-end build adds ~60s), ruff clean.
-- (next: criterion 5 — observable degradation / signals_used)
+- **2026-07-15 — Criterion 5 DONE.** Builds now record which signals were live. `SynergyMatrix`
+  carries a `signals` dict; `_compute_embedding_matrix` returns `(matrix, available)` so an
+  embedding-model failure is observable instead of silently degrading to zeros. The builder
+  tracks `self._signals` across stages — `rules`/`embeddings` (from the synergy matrix),
+  `edhrec` (whether this commander has inclusion data), `narrative` (LLM available or degraded)
+  — and surfaces `signals_used` / `signals_unavailable` on `GenerationMeta` **and** in the
+  persisted rationale JSON. Check: `tests/test_signals_observability.py` (synergy signal
+  detection with embeddings forced off; GenerationMeta fields) + the consolidated
+  `tests/test_end_to_end_build.py` asserting a real build records `rules` used and
+  `embeddings`/`narrative` unavailable, persisted to the DB. Test hygiene: end-to-end build
+  tests now run against a **session-scoped DB copy** (`build_db` fixture in conftest) so they
+  never write test decks to the real DB; a shared `canned_profile` fixture avoids API calls;
+  the two heavy build tests (crit 4 + 5) were merged into one (~50s) that asserts legality +
+  no-card_fit + signals together. Full suite 542 passed (540→542), ruff clean, ~66s.
+  NOTE: earlier iterations' test runs wrote ~2 throwaway decks into the real `generated_decks`
+  before the copy-fixture was added — harmless (degraded-narrative test rows), flagged for the
+  user in case they want them pruned.
+- (next: criterion 6 — calibrate scoring constants against real decks)

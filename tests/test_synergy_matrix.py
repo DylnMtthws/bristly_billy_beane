@@ -126,7 +126,7 @@ def test_cooccurrence_data_is_ignored() -> None:
     with patch(
         "sabermetrics.analytics.synergy_matrix._compute_embedding_matrix"
     ) as mock_emb:
-        mock_emb.return_value = np.zeros((3, 3), dtype=np.float32)
+        mock_emb.return_value = (np.zeros((3, 3), dtype=np.float32), True)
         matrix = build_synergy_matrix(
             [card_a, card_b, card_c], "cmdr-1", db_path,
         )
@@ -163,8 +163,9 @@ def test_embedding_same_role_filtered() -> None:
         "sabermetrics.analytics.synergy_matrix._compute_embedding_matrix"
     ) as mock_emb:
         # Pretend all pairs have 0.5 similarity
-        mock_emb.return_value = np.full((3, 3), 0.5, dtype=np.float32)
-        np.fill_diagonal(mock_emb.return_value, 0.0)
+        emb = np.full((3, 3), 0.5, dtype=np.float32)
+        np.fill_diagonal(emb, 0.0)
+        mock_emb.return_value = (emb, True)
 
         matrix = build_synergy_matrix(
             [removal_a, removal_b, utility], "cmdr-1", db_path,
@@ -204,7 +205,7 @@ def test_matrix_is_symmetric() -> None:
     with patch(
         "sabermetrics.analytics.synergy_matrix._compute_embedding_matrix"
     ) as mock_emb:
-        mock_emb.return_value = np.zeros((2, 2), dtype=np.float32)
+        mock_emb.return_value = (np.zeros((2, 2), dtype=np.float32), True)
         matrix = build_synergy_matrix([card_a, card_b], "cmdr-1", db_path)
 
     ab = matrix.get_synergy("a", "b")

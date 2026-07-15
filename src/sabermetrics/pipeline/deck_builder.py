@@ -111,6 +111,8 @@ class DeckBuilder:
         start_time = time.time()
         metrics: dict[str, float] = {}
         total_cost = 0.0
+        # Observable degradation: which signals were live for this build.
+        self._signals: dict[str, bool] = {}
 
         # --- Build trace watchlist and create tracer ---
         watchlist: set[str] = set()
@@ -464,6 +466,11 @@ class DeckBuilder:
             conn.close()
         except Exception as e:
             logger.warning("Failed to load EDHREC data: %s", e)
+
+        # EDHREC behavioral corroboration is a live signal only if this
+        # commander actually has inclusion data.
+        if hasattr(self, "_signals"):
+            self._signals["edhrec"] = bool(edhrec_top_cards)
 
         context = ScoringContext(
             commander_id=commander.id,
@@ -876,6 +883,9 @@ class DeckBuilder:
         synergy = build_synergy_matrix(
             candidates, commander.id, self.db_path,
         )
+        # Record which pairwise signals were live (rules / embeddings).
+        if hasattr(self, "_signals"):
+            self._signals.update(synergy.signals)
 
         # 3. Greedy fill (subtract protection slots already placed in Stage 4)
         protection_placed = sum(
@@ -1241,9 +1251,13 @@ class DeckBuilder:
                 weaknesses=synthesis.weaknesses,
                 suggested_play_pattern=synthesis.suggested_play_pattern,
             )
+            if hasattr(self, "_signals"):
+                self._signals["narrative"] = True
             return narrative, cost
         except Exception as e:
             logger.warning("Narrative synthesis failed: %s", e)
+            if hasattr(self, "_signals"):
+                self._signals["narrative"] = False
             narrative = DeckNarrative(
                 game_plan=profile_result.profile.strategic_profile.game_plan_summary,
                 key_synergies=[
@@ -1430,6 +1444,10 @@ class DeckBuilder:
                 generation_time_seconds=round(elapsed, 2),
                 llm_cost_usd=round(total_cost, 4),
                 source_profile_id=profile.commander_id,
+                signals_used=sorted(k for k, v in self._signals.items() if v),
+                signals_unavailable=sorted(
+                    k for k, v in self._signals.items() if not v
+                ),
             ),
         )
 
@@ -1453,6 +1471,8 @@ class DeckBuilder:
             rationale = json.dumps({
                 "narrative": deck.narrative.model_dump(),
                 "composition": deck.composition.model_dump(),
+                "signals_used": deck.meta.signals_used,
+                "signals_unavailable": deck.meta.signals_unavailable,
             })
 
             conn.execute(

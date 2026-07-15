@@ -38,10 +38,13 @@ class SynergyMatrix:
         matrix: np.ndarray,
         card_id_to_index: dict[str, int],
         index_to_card_id: dict[int, str],
+        signals: dict[str, bool] | None = None,
     ) -> None:
         self.matrix = matrix
         self.card_id_to_index = card_id_to_index
         self.index_to_card_id = index_to_card_id
+        # Which pairwise signals were live for this build (for observability).
+        self.signals: dict[str, bool] = signals or {}
 
     def get_synergy(self, card_id_a: str, card_id_b: str) -> float:
         """Get synergy score between two cards."""
@@ -76,6 +79,7 @@ def build_synergy_matrix(
             matrix=np.zeros((0, 0), dtype=np.float32),
             card_id_to_index={},
             index_to_card_id={},
+            signals={"rules": False, "embeddings": False},
         )
 
     # Build index mappings
@@ -96,7 +100,7 @@ def build_synergy_matrix(
             rule_matrix[j, i] = score
 
     # Signal 2: Embedding similarity (cross-role only)
-    embedding_matrix = _compute_embedding_matrix(candidates)
+    embedding_matrix, embeddings_ok = _compute_embedding_matrix(candidates)
 
     # Zero out same-role pairs for embedding signal
     primary_roles = _get_primary_roles(candidates)
@@ -112,17 +116,22 @@ def build_synergy_matrix(
         + EMBEDDING_WEIGHT * embedding_matrix
     )
 
+    # Which signals were live (for observable degradation).
+    signals = {"rules": bool(rules), "embeddings": embeddings_ok}
+
     logger.info(
-        "Synergy matrix built: %dx%d, rule_max=%.3f, emb_mean=%.3f",
+        "Synergy matrix built: %dx%d, rule_max=%.3f, emb_mean=%.3f, signals=%s",
         n, n,
         float(rule_matrix.max()) if n > 0 else 0,
         float(embedding_matrix.mean()) if n > 0 else 0,
+        signals,
     )
 
     return SynergyMatrix(
         matrix=hybrid,
         card_id_to_index=card_id_to_index,
         index_to_card_id=index_to_card_id,
+        signals=signals,
     )
 
 
@@ -227,18 +236,20 @@ def _card_matches_clause(card: dict, clause: dict) -> bool:
     return True
 
 
-def _compute_embedding_matrix(candidates: list[dict]) -> np.ndarray:
+def _compute_embedding_matrix(candidates: list[dict]) -> tuple[np.ndarray, bool]:
     """Compute pairwise cosine similarity from oracle text embeddings.
 
     Args:
         candidates: List of card dicts with 'oracle_text'.
 
     Returns:
-        N×N float32 matrix of cosine similarities (0-1 clamped).
+        Tuple of (N×N float32 cosine-similarity matrix, embeddings_available).
+        On failure (model load / inference error) returns a zero matrix and
+        False so the caller can record the embedding signal as unavailable.
     """
     n = len(candidates)
     if n == 0:
-        return np.zeros((0, 0), dtype=np.float32)
+        return np.zeros((0, 0), dtype=np.float32), True
 
     texts = [
         (c.get("oracle_text") or c.get("name") or "unknown card")
@@ -262,11 +273,11 @@ def _compute_embedding_matrix(candidates: list[dict]) -> np.ndarray:
         sim = np.clip(sim, 0.0, 1.0)
         np.fill_diagonal(sim, 0.0)
 
-        return sim.astype(np.float32)
+        return sim.astype(np.float32), True
 
     except Exception as e:
         logger.warning("Embedding computation failed, using zeros: %s", e)
-        return np.zeros((n, n), dtype=np.float32)
+        return np.zeros((n, n), dtype=np.float32), False
 
 
 def _get_primary_roles(candidates: list[dict]) -> list[str]:
