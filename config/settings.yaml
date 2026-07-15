@@ -56,6 +56,12 @@ scoring:
   # honest commander-conditioned rate); its weight went to rules + embeddings.
   synergy_rule_weight: 0.615
   synergy_embedding_weight: 0.385
+  # Card Win Equity (TopDeck tournament outcomes): additive, one-sided,
+  # sample-gated boost. Only affects commanders with >= cwe_min_sample
+  # tournament decks (~158 today). Bumped from the 0.10 default to weigh the
+  # competitive signal more heavily; still bounded (max boost = cwe_weight).
+  cwe_weight: 0.20
+  cwe_min_sample: 5
   # Greedy fill: marginal value of adding a card.
   marginal_synergy_weight: 0.45
   marginal_role_cvar_weight: 0.35
