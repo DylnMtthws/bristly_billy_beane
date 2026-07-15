@@ -2,10 +2,11 @@ user:
   default_budget_usd: 200
   default_power_target: 3
   default_weights:
-    synergy: 0.35
+    # Calibrated against real decklists (Option A criterion 6).
+    synergy: 0.45
     replacement_value: 0.25
     mana_efficiency: 0.25
-    price_efficiency: 0.15
+    price_efficiency: 0.05
 
 llm:
   profile_model: "claude-sonnet-4-6"

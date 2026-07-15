@@ -187,11 +187,14 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
         if "creature" in type_line:
             score += 0.1
 
-    # EDHREC behavioral corroboration (ADR-005: triangulation, not authority)
+    # EDHREC behavioral corroboration (ADR-005: triangulation, not authority).
+    # Calibrated against real decklists (Option A criterion 6): community
+    # inclusion is the strongest independent signal of "actually played," so it
+    # carries a larger share of synergy (cap 0.2 -> 0.4, slope 0.4 -> 0.8).
     card_name = (card.get("name") or "").lower()
     inclusion_pct = context.edhrec_top_cards.get(card_name, 0.0)
     if inclusion_pct > 0:
-        score += min(0.2, inclusion_pct / 100.0 * 0.4)
+        score += min(0.45, inclusion_pct / 100.0 * 0.9)
 
     # Value inversion desired trait matching
     if context.desired_card_traits:
