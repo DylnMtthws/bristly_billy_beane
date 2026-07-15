@@ -136,4 +136,23 @@ _(Append one dated entry per iteration: criterion touched, what changed, check r
   NOTE: the end-to-end form of the check runs only with a key present; the unit tests verify
   the invariant logic exhaustively for arbitrary inputs, which is stronger coverage than a
   handful of specific decks.
-- (next: criterion 2b — canonical one-row-per-card candidate source)
+- **2026-07-15 — Criterion 2b DONE.** Added a canonical `card_candidates` SQL view
+  (`filters.CANDIDATE_VIEW_SQL` + `ensure_candidate_view`): one row per card **name** (not
+  oracle_id — Commander singleton is by English name), choosing the cheapest legal printing
+  via `ROW_NUMBER() OVER (PARTITION BY name ORDER BY (price IS NULL), price ASC, id)` — NULLs
+  rank last but a name with no priced printing is still kept. `cards` keeps all 114,115
+  printings (per-printing prices remain load-bearing); only the view collapses them.
+  `apply_hard_filters` now reads `SELECT * FROM card_candidates` and the redundant Python
+  `filter_singleton_legal` pass was removed from the pipeline (function kept for its direct
+  unit tests). Verified on a *copy* of prod: 31,039 candidates from 114,115 printings =
+  exactly the distinct legal-name count, 0 duplicate names, cheapest-price correct for every
+  staple (Sol Ring 1.33, Bolt 0.10, etc.). Shipped `scripts/create_candidate_view.py`
+  (idempotent DROP+CREATE) for explicit prod provisioning; the pipeline also ensures the view
+  at query time, so it is now present on the prod DB (additive/metadata-only — the intended
+  2b change, matching the migration). Check: `tests/test_candidate_view.py` — 3 hermetic tests
+  on a synthetic DB (one-row-per-name + cheapest printing; min-price match for every name; a
+  fresh `apply_hard_filters` path emits no duplicate names). Belt-and-suspenders: criterion 2's
+  `_enforce_legality` also guarantees deck-level singleton. Full suite 536 passed (533→536),
+  ruff clean.
+- (next: criterion 3 — no live scoring weight reads an empty table; may hit the flagged
+  card_win_equity / tournament_results fork)

@@ -14,6 +14,47 @@ logger = logging.getLogger(__name__)
 # Cached banned list (Commander format)
 _BANNED_CARDS: set[str] | None = None
 
+# Canonical candidate source: one row per card NAME (Commander singleton is by
+# English name), choosing the cheapest legal printing. NULL-priced printings
+# rank last but are kept if a name has no priced printing. This makes "one
+# candidate per card" a property of the source rather than a Python filter
+# callers must remember — mirrors the old filter_singleton_legal semantics in
+# SQL. The `cards` table keeps every printing; only this view collapses them.
+CANDIDATE_VIEW_SQL = """
+CREATE VIEW IF NOT EXISTS card_candidates AS
+WITH latest AS (
+    SELECT MAX(snapshot_date) AS d FROM card_prices
+),
+latest_prices AS (
+    SELECT cp.card_id, cp.price_usd
+    FROM card_prices cp, latest
+    WHERE cp.snapshot_date = latest.d
+),
+ranked AS (
+    SELECT
+        c.*,
+        lp.price_usd AS price_usd,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.name
+            ORDER BY (lp.price_usd IS NULL) ASC, lp.price_usd ASC, c.id ASC
+        ) AS _rn
+    FROM cards c
+    LEFT JOIN latest_prices lp ON lp.card_id = c.id
+    WHERE c.is_legal_in_99 = 1
+)
+SELECT * FROM ranked WHERE _rn = 1
+"""
+
+
+def ensure_candidate_view(conn: sqlite3.Connection) -> None:
+    """Create the canonical `card_candidates` view if it does not exist.
+
+    Idempotent and additive (metadata only — no card rows are touched). Safe to
+    call on every query; after first creation it is a no-op.
+    """
+    conn.execute(CANDIDATE_VIEW_SQL)
+    conn.commit()
+
 
 def _load_banned_cards(db_path: Path) -> set[str]:
     """Load cards banned in Commander from the database."""
@@ -204,31 +245,23 @@ def apply_hard_filters(
         cmdr = dict(cmdr_row)
         cmdr_colors = json.loads(cmdr["color_identity"])
 
-        # Get all legal-in-99 cards with prices
-        cursor = conn.execute(
-            "SELECT c.*, cp.price_usd "
-            "FROM cards c "
-            "LEFT JOIN card_prices cp ON c.id = cp.card_id "
-            "AND cp.snapshot_date = ("
-            "  SELECT MAX(snapshot_date) FROM card_prices"
-            ") "
-            "WHERE c.is_legal_in_99 = 1"
-        )
+        # Read from the canonical candidate view: exactly one row per card name
+        # (cheapest legal printing). Deduplication is guaranteed by the source,
+        # so no Python singleton pass is needed downstream.
+        ensure_candidate_view(conn)
+        cursor = conn.execute("SELECT * FROM card_candidates")
         all_cards = [dict(row) for row in cursor]
     finally:
         conn.close()
 
-    logger.info("Starting with %d legal cards", len(all_cards))
+    logger.info("Starting with %d canonical candidates", len(all_cards))
 
     # Exclude the commander itself from the 99
     all_cards = [c for c in all_cards if c["id"] != commander_id]
 
-    # Apply filters in sequence
+    # Apply filters in sequence (singleton is already guaranteed by the view)
     filtered = filter_by_color_identity(all_cards, cmdr_colors)
     logger.info("After color identity filter: %d", len(filtered))
-
-    filtered = filter_singleton_legal(filtered)
-    logger.info("After singleton filter: %d", len(filtered))
 
     if max_budget_usd is not None:
         filtered = filter_by_budget(filtered, max_budget_usd)
