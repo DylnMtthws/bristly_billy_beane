@@ -119,4 +119,21 @@ _(Append one dated entry per iteration: criterion touched, what changed, check r
   `KNOWN_RETIRED_MODELS` guard so a genuinely stale ID now fails loud. Check: new
   `tests/test_model_validation.py` (5 tests) pass; full suite 526 passed (521→526, no
   regression); ruff clean.
-- (next: criterion 2 — deck legality invariant)
+- **2026-07-15 — Criterion 2 DONE.** Added `DeckBuilder._enforce_legality` (new Stage 7b,
+  runs after budget redistribution) enforcing the invariant: exactly 99 non-commander cards,
+  singleton (basics exempt), every card's color identity ⊆ commander's. It *repairs* rather
+  than warns — drops the commander/out-of-identity cards, collapses duplicate nonbasics to the
+  highest-scoring copy, trims an over-full deck weakest-first (basics → non-protected non-lands
+  → non-protected lands, never protected staples), and fills a short deck with basic lands in
+  the commander's colors (Wastes for colorless). Helpers `_parse_color_identity`,
+  `_make_basic_lands`, `_BASIC_LAND_NAMES` added. The old "Only N cards, need 99" warning is
+  now a can't-happen backstop. Check: `tests/test_deck_legality.py` — 7 unit tests covering
+  every repair path (short-fill, over-trim, protected-survival, dup-collapse, out-of-identity
+  drop, colorless Wastes fill, basic distribution) + 1 live end-to-end test across 3
+  commanders × 2 budgets (skipped without an API key / cost headroom — not run in the loop to
+  avoid API spend; the maxed ceiling would block it anyway). Full suite 533 passed (526→533),
+  ruff clean.
+  NOTE: the end-to-end form of the check runs only with a key present; the unit tests verify
+  the invariant logic exhaustively for arbitrary inputs, which is stronger coverage than a
+  handful of specific decks.
+- (next: criterion 2b — canonical one-row-per-card candidate source)
