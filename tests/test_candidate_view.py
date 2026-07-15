@@ -135,3 +135,34 @@ def test_apply_hard_filters_emits_no_duplicate_names(db) -> None:
     assert len(names) == len(set(names)), f"duplicate candidate names: {names}"
     assert "Green A" in names and "Green B" in names
     assert "Green Cmdr" not in names  # commander excluded from the 99
+
+
+def test_commander_excluded_even_when_view_keeps_a_different_printing(db) -> None:
+    """Regression: commander must be excluded by name, not printing id.
+
+    The requested commander id has a *pricier* printing; a cheaper printing of
+    the same name exists, so the canonical view keeps the cheaper id. Excluding
+    by id alone would let the commander into its own candidate pool.
+    """
+    conn = sqlite3.connect(str(db))
+    # Requested commander printing (pricey) + a cheaper printing of same name.
+    _card(conn, "cmd-hi", "Dup Cmdr", ci='["U"]', cmdr=1, type_line="Legendary Creature")
+    _price(conn, "cmd-hi", 50.0)
+    _card(conn, "cmd-lo", "Dup Cmdr", ci='["U"]', cmdr=1, type_line="Legendary Creature")
+    _price(conn, "cmd-lo", 1.0)
+    _card(conn, "blue-x", "Blue X", ci='["U"]', type_line="Creature")
+    _price(conn, "blue-x", 2.0)
+    conn.commit()
+    conn.close()
+
+    # View keeps the cheaper printing (cmd-lo), a different id than requested.
+    conn = sqlite3.connect(str(db))
+    ensure_candidate_view(conn)
+    kept = conn.execute(
+        "SELECT id FROM card_candidates WHERE name = 'Dup Cmdr'"
+    ).fetchone()[0]
+    conn.close()
+    assert kept == "cmd-lo"
+
+    candidates = apply_hard_filters(db, "cmd-hi", max_budget_usd=1000.0)
+    assert "Dup Cmdr" not in [c["name"] for c in candidates]

@@ -256,8 +256,12 @@ def apply_hard_filters(
 
     logger.info("Starting with %d canonical candidates", len(all_cards))
 
-    # Exclude the commander itself from the 99
-    all_cards = [c for c in all_cards if c["id"] != commander_id]
+    # Exclude the commander itself from the 99. Match by NAME, not printing id:
+    # the canonical view keeps one (cheapest) printing per name, which may be a
+    # different id than the requested commander printing, so an id comparison
+    # would let the commander slip into its own candidate pool.
+    cmdr_name = cmdr.get("name")
+    all_cards = [c for c in all_cards if c.get("name") != cmdr_name]
 
     # Apply filters in sequence (singleton is already guaranteed by the view)
     filtered = filter_by_color_identity(all_cards, cmdr_colors)

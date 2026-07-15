@@ -116,13 +116,14 @@ def calibrate(db_path: Path, n_commanders: int = 40, seed: int = 42) -> dict:
         ordered = sorted(scores.values())
         denom = max(1, len(ordered) - 1)
 
-        real = _real_deck_card_names(conn, cid) & set(scores)
+        real_all = _real_deck_card_names(conn, cid)
+        real = real_all & set(scores)
         if not real:
             continue
         pcts = [bisect.bisect_left(ordered, scores[nm]) / denom for nm in real]
         all_percentiles.extend(pcts)
         per_commander.append(sum(pcts) / len(pcts))
-        coverage.append(len(real) / max(1, len(_real_deck_card_names(conn, cid))))
+        coverage.append(len(real) / max(1, len(real_all)))
 
     conn.close()
     mean_pct = sum(all_percentiles) / len(all_percentiles) if all_percentiles else 0.0

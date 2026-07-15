@@ -1546,9 +1546,11 @@ def _make_basic_lands(count: int, commander_colors: list[str]) -> list:
     out: list = []
     for i in range(max(0, count)):
         name = names[i % len(names)]
+        # uuid suffix avoids id collisions with basics minted elsewhere (e.g.
+        # the mana-base builder), which also use a "basic-<name>-<n>" scheme.
         out.append(SlotAssignment(
             card={
-                "id": f"basic-{name.lower().replace(' ', '-')}-{i}",
+                "id": f"basic-{name.lower().replace(' ', '-')}-{uuid.uuid4().hex[:8]}",
                 "name": name,
                 "type_line": f"Basic Land — {name}",
                 "oracle_text": "",
