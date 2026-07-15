@@ -25,19 +25,39 @@ from sabermetrics.errors import (
 
 logger = logging.getLogger(__name__)
 
-# ADR-011: allowed models
+# ADR-011: allowed models. All three are current, active model IDs (verified
+# against the Anthropic model catalog). Keep this set in sync with the models
+# referenced in config/settings.yaml — validate_configured_models() enforces it.
 ALLOWED_MODELS = {
     "claude-haiku-4-5",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
 }
 
-# Pricing per 1M tokens (as of 2025)
+# Model IDs that have been retired and will 404. Presence of any of these in
+# ALLOWED_MODELS or config is a hard error — this is the "fail loud when a model
+# goes stale" guard.
+KNOWN_RETIRED_MODELS = {
+    "claude-3-7-sonnet-20250219",
+    "claude-3-5-haiku-20241022",
+    "claude-3-opus-20240229",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet-20240620",
+    "claude-3-sonnet-20240229",
+    "claude-2.1",
+    "claude-2.0",
+}
+
+# Pricing per 1M tokens. Verified against the Anthropic model catalog:
+#   Haiku 4.5  = $1.00 in / $5.00 out   (cached input ~0.1x)
+#   Sonnet 4.6 = $3.00 in / $15.00 out
+#   Opus 4.6   = $5.00 in / $25.00 out
+# Cached-input rate is ~0.1x the input rate for every current model.
 MODEL_PRICING = {
     "claude-haiku-4-5": {
-        "input": 0.80,
-        "cached_input": 0.08,
-        "output": 4.00,
+        "input": 1.00,
+        "cached_input": 0.10,
+        "output": 5.00,
     },
     "claude-sonnet-4-6": {
         "input": 3.00,
@@ -45,11 +65,62 @@ MODEL_PRICING = {
         "output": 15.00,
     },
     "claude-opus-4-6": {
-        "input": 15.00,
-        "cached_input": 1.50,
-        "output": 75.00,
+        "input": 5.00,
+        "cached_input": 0.50,
+        "output": 25.00,
     },
 }
+
+
+def validate_models() -> None:
+    """Validate the static model tables at import/boot time.
+
+    Guarantees that every allowed model has a pricing entry and that no allowed
+    model is a known-retired ID. Raises FatalError on any inconsistency so a
+    stale table fails loud rather than silently mis-pricing or 404-ing later.
+
+    Raises:
+        FatalError: If ALLOWED_MODELS and MODEL_PRICING are inconsistent, or an
+            allowed model is retired.
+    """
+    missing_pricing = ALLOWED_MODELS - set(MODEL_PRICING)
+    if missing_pricing:
+        raise FatalError(
+            f"Allowed models missing from MODEL_PRICING: {sorted(missing_pricing)}"
+        )
+    retired = ALLOWED_MODELS & KNOWN_RETIRED_MODELS
+    if retired:
+        raise FatalError(
+            f"Allowed models are retired (will 404): {sorted(retired)}"
+        )
+
+
+def validate_configured_models(configured: dict[str, str]) -> None:
+    """Validate that every model named in config is usable.
+
+    Args:
+        configured: Mapping of setting name -> model ID (e.g. from LLMSettings).
+
+    Raises:
+        FatalError: If any configured model is not in ALLOWED_MODELS or is a
+            known-retired ID.
+    """
+    for setting_name, model in configured.items():
+        if model in KNOWN_RETIRED_MODELS:
+            raise FatalError(
+                f"Configured model '{model}' (llm.{setting_name}) is retired "
+                f"and will 404. Update config/settings.yaml."
+            )
+        if model not in ALLOWED_MODELS:
+            raise FatalError(
+                f"Configured model '{model}' (llm.{setting_name}) is not in "
+                f"ALLOWED_MODELS {sorted(ALLOWED_MODELS)}. Add it (with pricing) "
+                f"or fix config/settings.yaml."
+            )
+
+
+# Validate the static model tables at import time (pure, no API key required).
+validate_models()
 
 
 class CallResult(BaseModel):
@@ -76,6 +147,18 @@ class AnthropicClient:
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
+        # Fail loud at construction if the model tables or configured models
+        # are inconsistent, rather than 404-ing on the first real API call.
+        validate_models()
+        from sabermetrics.config import settings
+
+        validate_configured_models({
+            "profile_model": settings.llm.profile_model,
+            "fit_model": settings.llm.fit_model,
+            "synthesis_model": settings.llm.synthesis_model,
+            "refresh_model": settings.llm.refresh_model,
+            "template_model": settings.llm.template_model,
+        })
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not api_key:
             raise FatalError(

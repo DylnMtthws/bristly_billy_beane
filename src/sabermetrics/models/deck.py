@@ -11,10 +11,14 @@ from .card import Card
 class CVARWeights(BaseModel):
     """Weights for the CVAR composite score."""
 
-    synergy: float = 0.35
+    # Calibrated against real decklists (Option A criterion 6). price_efficiency
+    # was reduced from 0.15 to 0.05 — as a *ranking* term it rewarded cheap
+    # vanilla cards (budget is enforced as a constraint elsewhere, not by
+    # preferring the cheapest card); that weight moved to synergy.
+    synergy: float = 0.45
     replacement_value: float = 0.25
     mana_efficiency: float = 0.25
-    price_efficiency: float = 0.15
+    price_efficiency: float = 0.05
 
 
 class CardSubScores(BaseModel):
@@ -103,6 +107,11 @@ class GenerationMeta(BaseModel):
     generation_time_seconds: float
     llm_cost_usd: float
     source_profile_id: str
+    # Observable degradation: which scoring/data signals were live for this
+    # build, and which were unavailable (e.g. embeddings failed to load, no
+    # EDHREC data for the commander, narrative LLM unavailable).
+    signals_used: list[str] = Field(default_factory=list)
+    signals_unavailable: list[str] = Field(default_factory=list)
 
 
 class GeneratedDeck(BaseModel):

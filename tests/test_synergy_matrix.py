@@ -8,7 +8,6 @@ from unittest.mock import patch
 import numpy as np
 
 from sabermetrics.analytics.synergy_matrix import (
-    COOCCURRENCE_WEIGHT,
     EMBEDDING_WEIGHT,
     RULE_WEIGHT,
     _card_matches_clause,
@@ -108,10 +107,14 @@ def test_card_matches_clause_keywords() -> None:
     assert not _card_matches_clause(card, {"keywords": ["Haste"]})
 
 
-# --- Co-occurrence signal ---
+# --- Co-occurrence signal removed (Option A criterion 3) ---
 
-def test_cooccurrence_signal_included() -> None:
-    """Pairs with co-occurrence data should get higher synergy."""
+def test_cooccurrence_data_is_ignored() -> None:
+    """Co-occurrence rows in the DB must NOT influence synergy.
+
+    Proves the scoring path no longer reads card_cooccurrence: even with a
+    strong co-occurrence rate for A-B, it scores the same as A-C.
+    """
     card_a = _make_card(card_id="a", name="Card A")
     card_b = _make_card(card_id="b", name="Card B")
     card_c = _make_card(card_id="c", name="Card C")
@@ -120,19 +123,17 @@ def test_cooccurrence_signal_included() -> None:
         ("a", "b", "cmdr-1", 10, 0.8),
     ])
 
-    # Mock embeddings to isolate co-occurrence signal
     with patch(
         "sabermetrics.analytics.synergy_matrix._compute_embedding_matrix"
     ) as mock_emb:
-        mock_emb.return_value = np.zeros((3, 3), dtype=np.float32)
+        mock_emb.return_value = (np.zeros((3, 3), dtype=np.float32), True)
         matrix = build_synergy_matrix(
             [card_a, card_b, card_c], "cmdr-1", db_path,
         )
 
-    # A-B should have higher synergy than A-C (no co-occurrence)
-    ab = matrix.get_synergy("a", "b")
-    ac = matrix.get_synergy("a", "c")
-    assert ab > ac, f"Co-occurring pair should score higher: {ab} vs {ac}"
+    # No rules match and embeddings are zeroed, so co-occurrence is the only
+    # thing that could differ A-B from A-C. It is ignored, so both are 0.
+    assert matrix.get_synergy("a", "b") == matrix.get_synergy("a", "c") == 0.0
 
 
 # --- Embedding cross-role filtering ---
@@ -162,8 +163,9 @@ def test_embedding_same_role_filtered() -> None:
         "sabermetrics.analytics.synergy_matrix._compute_embedding_matrix"
     ) as mock_emb:
         # Pretend all pairs have 0.5 similarity
-        mock_emb.return_value = np.full((3, 3), 0.5, dtype=np.float32)
-        np.fill_diagonal(mock_emb.return_value, 0.0)
+        emb = np.full((3, 3), 0.5, dtype=np.float32)
+        np.fill_diagonal(emb, 0.0)
+        mock_emb.return_value = (emb, True)
 
         matrix = build_synergy_matrix(
             [removal_a, removal_b, utility], "cmdr-1", db_path,
@@ -181,8 +183,8 @@ def test_embedding_same_role_filtered() -> None:
 # --- Hybrid weights ---
 
 def test_hybrid_weights_sum_correctly() -> None:
-    """RULE + COOCCURRENCE + EMBEDDING weights should sum to 1.0."""
-    total = RULE_WEIGHT + COOCCURRENCE_WEIGHT + EMBEDDING_WEIGHT
+    """RULE + EMBEDDING weights should sum to 1.0 (co-occurrence removed)."""
+    total = RULE_WEIGHT + EMBEDDING_WEIGHT
     assert abs(total - 1.0) < 0.001, f"Weights sum to {total}, expected 1.0"
 
 
@@ -203,7 +205,7 @@ def test_matrix_is_symmetric() -> None:
     with patch(
         "sabermetrics.analytics.synergy_matrix._compute_embedding_matrix"
     ) as mock_emb:
-        mock_emb.return_value = np.zeros((2, 2), dtype=np.float32)
+        mock_emb.return_value = (np.zeros((2, 2), dtype=np.float32), True)
         matrix = build_synergy_matrix([card_a, card_b], "cmdr-1", db_path)
 
     ab = matrix.get_synergy("a", "b")

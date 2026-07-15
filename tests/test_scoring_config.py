@@ -16,10 +16,9 @@ from sabermetrics.config import ScoringSettings, settings
 def test_scoring_defaults_match_prior_literals() -> None:
     """ScoringSettings defaults equal the values previously hard-coded."""
     s = ScoringSettings()
-    # synergy_matrix.py
-    assert s.synergy_rule_weight == 0.40
-    assert s.synergy_cooccurrence_weight == 0.35
-    assert s.synergy_embedding_weight == 0.25
+    # synergy_matrix.py (co-occurrence removed in Option A criterion 3)
+    assert s.synergy_rule_weight == 0.615
+    assert s.synergy_embedding_weight == 0.385
     # greedy_optimizer.py — marginal value formula
     assert s.marginal_synergy_weight == 0.45
     assert s.marginal_role_cvar_weight == 0.35
@@ -43,19 +42,11 @@ def test_synergy_matrix_reads_config() -> None:
     from sabermetrics.analytics import synergy_matrix
 
     assert synergy_matrix.RULE_WEIGHT == settings.scoring.synergy_rule_weight
-    assert (
-        synergy_matrix.COOCCURRENCE_WEIGHT
-        == settings.scoring.synergy_cooccurrence_weight
-    )
     assert synergy_matrix.EMBEDDING_WEIGHT == settings.scoring.synergy_embedding_weight
 
 
 def test_synergy_weights_sum_to_one() -> None:
-    """The three synergy signal weights form a convex blend."""
+    """The two synergy signal weights form a convex blend."""
     s = settings.scoring
-    total = (
-        s.synergy_rule_weight
-        + s.synergy_cooccurrence_weight
-        + s.synergy_embedding_weight
-    )
+    total = s.synergy_rule_weight + s.synergy_embedding_weight
     assert abs(total - 1.0) < 1e-9

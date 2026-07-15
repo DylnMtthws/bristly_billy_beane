@@ -6,7 +6,6 @@ Pure function: same inputs -> same outputs. <100ms per card.
 
 import json
 import logging
-import sqlite3
 from pathlib import Path
 from typing import Optional
 
@@ -188,11 +187,14 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
         if "creature" in type_line:
             score += 0.1
 
-    # EDHREC behavioral corroboration (ADR-005: triangulation, not authority)
+    # EDHREC behavioral corroboration (ADR-005: triangulation, not authority).
+    # Calibrated against real decklists (Option A criterion 6): community
+    # inclusion is the strongest independent signal of "actually played," so it
+    # carries a larger share of synergy (cap 0.2 -> 0.4, slope 0.4 -> 0.8).
     card_name = (card.get("name") or "").lower()
     inclusion_pct = context.edhrec_top_cards.get(card_name, 0.0)
     if inclusion_pct > 0:
-        score += min(0.2, inclusion_pct / 100.0 * 0.4)
+        score += min(0.45, inclusion_pct / 100.0 * 0.9)
 
     # Value inversion desired trait matching
     if context.desired_card_traits:
@@ -390,24 +392,12 @@ def compute_cvar(
     replacement = compute_replacement_value(card, db_path, context.commander_id)
     price_eff = compute_price_efficiency(card, context.average_card_price)
 
-    # Look up CWE if available
-    cwe = None
-    if db_path is not None:
-        try:
-            conn = sqlite3.connect(str(db_path))
-            cursor = conn.execute(
-                "SELECT cwe_score FROM card_win_equity "
-                "WHERE card_id = ? AND commander_id = ?",
-                (card.get("id", ""), context.commander_id),
-            )
-            row = cursor.fetchone()
-            if row:
-                cwe = row[0]
-            conn.close()
-        except Exception:
-            pass
-
-    # Composite score
+    # Composite score. The card_win_equity boost was removed in Option A
+    # criterion 3: card_win_equity is derived from tournament_results, for which
+    # no data source is wired (TopDeck.gg ingestion is unconfigured), so the
+    # table is empty and the boost never fired. The field stays None on the
+    # result for backward compatibility; re-enable the read here if a real
+    # tournament-outcome source is ever populated.
     composite = (
         context.weights_synergy * synergy
         + context.weights_mana_efficiency * mana_eff
@@ -415,15 +405,11 @@ def compute_cvar(
         + context.weights_price_efficiency * price_eff
     )
 
-    # Boost with CWE if available (additive bonus scaled to 0-0.1)
-    if cwe is not None:
-        composite += 0.1 * max(0, cwe)
-
     return CVARResult(
         composite_score=round(composite, 4),
         synergy_score=round(synergy, 4),
         mana_efficiency_score=round(mana_eff, 4),
         replacement_value_score=round(replacement, 4),
         price_efficiency_score=round(price_eff, 4),
-        card_win_equity=round(cwe, 4) if cwe is not None else None,
+        card_win_equity=None,
     )
