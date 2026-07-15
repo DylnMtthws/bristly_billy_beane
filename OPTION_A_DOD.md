@@ -154,5 +154,23 @@ _(Append one dated entry per iteration: criterion touched, what changed, check r
   fresh `apply_hard_filters` path emits no duplicate names). Belt-and-suspenders: criterion 2's
   `_enforce_legality` also guarantees deck-level singleton. Full suite 536 passed (533→536),
   ruff clean.
-- (next: criterion 3 — no live scoring weight reads an empty table; may hit the flagged
-  card_win_equity / tournament_results fork)
+- **2026-07-15 — Criterion 3 DONE (with a user decision).** Finding that reshaped this
+  criterion: the 500 tracked decks span 404 commanders with **max 4 decks each** (325 have
+  exactly 1), so commander-conditioned co-occurrence is co-membership noise, not signal —
+  populating `card_cooccurrence` as the DoD originally assumed would be *worse* than empty.
+  Surfaced this via AskUserQuestion; **user chose "remove & renormalize"** for the
+  co-occurrence signal. Implemented:
+  * Synergy matrix: removed the co-occurrence signal + `_batch_cooccurrence`; blend is now
+    rules + embeddings with weights renormalized 0.40/0.25 → **0.615/0.385** (config +
+    settings.yaml, `synergy_cooccurrence_weight` dropped). `card_cooccurrence` no longer read.
+  * CVAR: removed the `card_win_equity` DB read and the `+0.1*cwe` boost (the DoD had already
+    pre-decided "otherwise remove" for the CWE/tournament fork — no data source is wired for
+    `tournament_results`). `card_win_equity` stays `None` on results for back-compat; re-enable
+    the read if a real tournament-outcome source is ever populated. `cooccurrence.py` /
+    `card_win_equity.py` builder modules are left dormant as the documented re-enable path.
+  Check: `tests/test_no_empty_table_reads.py` (populate each formerly-empty table, prove
+  scoring ignores it + a source-level guard that no scoring SQL names them) and the rewritten
+  `test_synergy_matrix.test_cooccurrence_data_is_ignored`. Updated the weight-coupled tests in
+  `test_scoring_config.py` / `test_synergy_matrix.py` to the 2-signal model. Full suite 538
+  passed (536→538), ruff clean.
+- (next: criterion 4 — remove per-card LLM from the selection hot path)

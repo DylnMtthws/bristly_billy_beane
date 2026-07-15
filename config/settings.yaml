@@ -50,10 +50,11 @@ knowledge_base:
       url: "https://edhrec.com/articles/superior-numbers-land-counts"
 
 scoring:
-  # Synergy matrix: blend of the three pairwise signals (sum to 1.0).
-  synergy_rule_weight: 0.40
-  synergy_cooccurrence_weight: 0.35
-  synergy_embedding_weight: 0.25
+  # Synergy matrix: blend of two pairwise signals (sum to 1.0). Co-occurrence
+  # was removed in Option A criterion 3 (tracked-deck corpus too sparse for an
+  # honest commander-conditioned rate); its weight went to rules + embeddings.
+  synergy_rule_weight: 0.615
+  synergy_embedding_weight: 0.385
   # Greedy fill: marginal value of adding a card.
   marginal_synergy_weight: 0.45
   marginal_role_cvar_weight: 0.35

@@ -90,10 +90,13 @@ class ScoringSettings(BaseModel):
     them here lets the weights be swept from config without code edits.
     """
 
-    # Synergy matrix: blend of the three pairwise signals (sum to 1.0).
-    synergy_rule_weight: float = 0.40
-    synergy_cooccurrence_weight: float = 0.35
-    synergy_embedding_weight: float = 0.25
+    # Synergy matrix: blend of two pairwise signals (sum to 1.0). The
+    # commander-conditioned co-occurrence signal was removed in Option A
+    # criterion 3 — the tracked-deck corpus (max 4 decks/commander) is far too
+    # sparse to compute an honest conditional co-occurrence rate. Its 0.35 was
+    # redistributed proportionally onto rules and embeddings.
+    synergy_rule_weight: float = 0.615
+    synergy_embedding_weight: float = 0.385
 
     # Greedy fill: marginal value of adding a card.
     marginal_synergy_weight: float = 0.45

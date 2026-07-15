@@ -1,16 +1,19 @@
 """Pairwise synergy matrix for candidate cards.
 
-Combines three signals to score how well any two cards work together:
+Combines two signals to score how well any two cards work together:
 1. Rule matching — hand-curated trigger/payoff pairs (config/synergy_rules.yaml)
-2. Co-occurrence — empirical data from tracked decklists
-3. Embedding similarity — semantic similarity of oracle text (cross-role only)
+2. Embedding similarity — semantic similarity of oracle text (cross-role only)
+
+A commander-conditioned co-occurrence signal was removed in Option A criterion 3:
+the tracked-deck corpus has at most 4 decks per commander, so a conditional
+co-occurrence rate is co-membership noise, not signal. The `card_cooccurrence`
+table is no longer read by scoring.
 
 Matrix is symmetric, computed once per commander, and cacheable.
 """
 
 import json
 import logging
-import sqlite3
 from pathlib import Path
 
 import numpy as np
@@ -22,8 +25,8 @@ from sabermetrics.config import settings
 logger = logging.getLogger(__name__)
 
 # Signal weights for hybrid score (centralized in config/settings.yaml).
+# The two weights are renormalized to sum to 1.0.
 RULE_WEIGHT = settings.scoring.synergy_rule_weight
-COOCCURRENCE_WEIGHT = settings.scoring.synergy_cooccurrence_weight
 EMBEDDING_WEIGHT = settings.scoring.synergy_embedding_weight
 
 
@@ -54,13 +57,15 @@ def build_synergy_matrix(
     commander_id: str,
     db_path: Path,
 ) -> SynergyMatrix:
-    """Build hybrid synergy matrix from three signal sources.
+    """Build hybrid synergy matrix from two signal sources (rules + embeddings).
 
     Args:
         candidates: List of candidate card dicts (must have 'id', 'oracle_text',
             'role_tags' or inferred roles).
-        commander_id: Scryfall ID of the commander.
-        db_path: Path to SQLite database for co-occurrence lookup.
+        commander_id: Scryfall ID of the commander. Retained for interface
+            stability; no longer used since co-occurrence was removed.
+        db_path: Path to SQLite database. Retained for interface stability; no
+            longer used since co-occurrence was removed.
 
     Returns:
         SynergyMatrix with N×N float32 scores.
@@ -81,8 +86,6 @@ def build_synergy_matrix(
         card_id_to_index[cid] = i
         index_to_card_id[i] = cid
 
-    candidate_ids = [candidates[i].get("id", str(i)) for i in range(n)]
-
     # Signal 1: Rule matching
     rules = _load_synergy_rules()
     rule_matrix = np.zeros((n, n), dtype=np.float32)
@@ -92,21 +95,7 @@ def build_synergy_matrix(
             rule_matrix[i, j] = score
             rule_matrix[j, i] = score
 
-    # Signal 2: Co-occurrence
-    cooccurrence_rates = _batch_cooccurrence(candidate_ids, commander_id, db_path)
-    cooccurrence_matrix = np.zeros((n, n), dtype=np.float32)
-    max_rate = max(cooccurrence_rates.values()) if cooccurrence_rates else 1.0
-    if max_rate == 0:
-        max_rate = 1.0
-    for (id_a, id_b), rate in cooccurrence_rates.items():
-        idx_a = card_id_to_index.get(id_a)
-        idx_b = card_id_to_index.get(id_b)
-        if idx_a is not None and idx_b is not None:
-            normalized = rate / max_rate
-            cooccurrence_matrix[idx_a, idx_b] = normalized
-            cooccurrence_matrix[idx_b, idx_a] = normalized
-
-    # Signal 3: Embedding similarity (cross-role only)
+    # Signal 2: Embedding similarity (cross-role only)
     embedding_matrix = _compute_embedding_matrix(candidates)
 
     # Zero out same-role pairs for embedding signal
@@ -117,18 +106,16 @@ def build_synergy_matrix(
                 embedding_matrix[i, j] = 0.0
                 embedding_matrix[j, i] = 0.0
 
-    # Hybrid combination
+    # Hybrid combination (rules + embeddings; weights sum to 1.0)
     hybrid = (
         RULE_WEIGHT * rule_matrix
-        + COOCCURRENCE_WEIGHT * cooccurrence_matrix
         + EMBEDDING_WEIGHT * embedding_matrix
     )
 
     logger.info(
-        "Synergy matrix built: %dx%d, rule_max=%.3f, cooc_pairs=%d, emb_mean=%.3f",
+        "Synergy matrix built: %dx%d, rule_max=%.3f, emb_mean=%.3f",
         n, n,
         float(rule_matrix.max()) if n > 0 else 0,
-        len(cooccurrence_rates),
         float(embedding_matrix.mean()) if n > 0 else 0,
     )
 
@@ -238,61 +225,6 @@ def _card_matches_clause(card: dict, clause: dict) -> bool:
             return False
 
     return True
-
-
-def _batch_cooccurrence(
-    candidate_ids: list[str],
-    commander_id: str,
-    db_path: Path,
-) -> dict[tuple[str, str], float]:
-    """Load all cooccurrence rates for candidate pairs in one query.
-
-    Args:
-        candidate_ids: List of card IDs to look up.
-        commander_id: Commander context for co-occurrence data.
-        db_path: Path to SQLite database.
-
-    Returns:
-        Dict mapping (card_a_id, card_b_id) to cooccurrence_rate.
-    """
-    if not candidate_ids:
-        return {}
-
-    conn = sqlite3.connect(str(db_path))
-    try:
-        # Check if table exists
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name='card_cooccurrence'"
-        )
-        if not cursor.fetchone():
-            return {}
-
-        # Build IN clause with placeholders
-        id_set = set(candidate_ids)
-        placeholders = ",".join("?" * len(id_set))
-        id_list = list(id_set)
-
-        query = (
-            f"SELECT card_a_id, card_b_id, cooccurrence_rate "
-            f"FROM card_cooccurrence "
-            f"WHERE commander_id = ? "
-            f"AND card_a_id IN ({placeholders}) "
-            f"AND card_b_id IN ({placeholders})"
-        )
-        params = [commander_id] + id_list + id_list
-
-        cursor = conn.execute(query, params)
-        results: dict[tuple[str, str], float] = {}
-        for row in cursor:
-            results[(row[0], row[1])] = row[2]
-        return results
-
-    except sqlite3.OperationalError:
-        logger.debug("card_cooccurrence table query failed, skipping")
-        return {}
-    finally:
-        conn.close()
 
 
 def _compute_embedding_matrix(candidates: list[dict]) -> np.ndarray:
