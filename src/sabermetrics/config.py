@@ -98,6 +98,12 @@ class ScoringSettings(BaseModel):
     synergy_rule_weight: float = 0.615
     synergy_embedding_weight: float = 0.385
 
+    # Card Win Equity (CWE): additive boost from TopDeck.gg tournament outcomes,
+    # revived once real data was ingested. Sample-gated so low-evidence entries
+    # don't move scores; only a positive win-equity delta boosts a card.
+    cwe_weight: float = 0.10
+    cwe_min_sample: int = 5
+
     # Greedy fill: marginal value of adding a card.
     marginal_synergy_weight: float = 0.45
     marginal_role_cvar_weight: float = 0.35

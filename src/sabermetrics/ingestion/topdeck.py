@@ -6,8 +6,8 @@ Populates: tournament_results, decks, deck_cards tables.
 
 import logging
 import os
+import re
 import sqlite3
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -22,6 +22,20 @@ logger = logging.getLogger(__name__)
 
 TOPDECK_BASE_URL = "https://topdeck.gg/api/v2"
 
+# TopDeck v2 request constants. The tournaments endpoint is POST-only, filters by
+# game+format in the JSON body, and windows results by `last` (in DAYS).
+TOPDECK_GAME = "Magic: The Gathering"
+TOPDECK_FORMAT = "EDH"
+# Standing columns to request. `decklist` returns a text list with
+# "~~Commanders~~" / "~~Mainboard~~" sections we parse for card membership.
+TOPDECK_COLUMNS = ["name", "standing", "wins", "losses", "draws", "winRate", "decklist"]
+# Default lookback window (days) for an incremental sync. The tournaments
+# endpoint returns the whole window (with inline decklists) in one response, so
+# the window is bounded by response size / read timeout rather than pagination;
+# 30 days is a reliable single-request size.
+DEFAULT_LOOKBACK_DAYS = 30
+FULL_LOOKBACK_DAYS = 365
+
 
 class TopDeckIngestion(SourceHealthMixin):
     """TopDeck.gg tournament data ingestion source."""
@@ -32,13 +46,27 @@ class TopDeckIngestion(SourceHealthMixin):
         self.db_path = db_path
         self._rate_limiter = RateLimiter(requests_per_second=1.5)  # 100/min cap
         self._api_key = os.environ.get("TOPDECK_API_KEY", "")
+        # Per-sync cache of card-name -> id lookups (populated lazily).
+        self._card_id_cache: dict[str, str | None] = {}
 
     def _headers(self) -> dict[str, str]:
-        """Build request headers with auth."""
-        headers: dict[str, str] = {"Accept": "application/json"}
+        """Build request headers. TopDeck expects the raw key (no 'Bearer')."""
+        headers: dict[str, str] = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
         if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
+            headers["Authorization"] = self._api_key
         return headers
+
+    def _request_body(self, last_days: int) -> dict[str, Any]:
+        """Build the POST body for the tournaments endpoint."""
+        return {
+            "game": TOPDECK_GAME,
+            "format": TOPDECK_FORMAT,
+            "last": last_days,
+            "columns": TOPDECK_COLUMNS,
+        }
 
     def is_available(self) -> bool:
         """Check if TopDeck API is reachable and authenticated."""
@@ -47,10 +75,10 @@ class TopDeckIngestion(SourceHealthMixin):
             return False
         try:
             self._rate_limiter.wait()
-            resp = httpx.get(
+            resp = httpx.post(
                 f"{TOPDECK_BASE_URL}/tournaments",
                 headers=self._headers(),
-                params={"format": "EDH", "limit": 1},
+                json={"game": TOPDECK_GAME, "format": TOPDECK_FORMAT, "last": 1},
                 timeout=10,
             )
             return resp.status_code == 200
@@ -75,8 +103,8 @@ class TopDeckIngestion(SourceHealthMixin):
             if not full:
                 since = self.last_updated()
 
-            # Fetch tournament list
-            tournaments = self._fetch_tournaments(since=since)
+            # Fetch tournament list (with inline standings)
+            tournaments = self._fetch_tournaments(since=since, full=full)
             logger.info("Found %d tournaments to process", len(tournaments))
 
             # Process each tournament
@@ -111,20 +139,31 @@ class TopDeckIngestion(SourceHealthMixin):
         )
 
     def _fetch_tournaments(
-        self, since: datetime | None = None, limit: int = 200
+        self, since: datetime | None = None, full: bool = False
     ) -> list[dict[str, Any]]:
-        """Fetch list of EDH tournaments."""
-        params: dict[str, Any] = {"format": "EDH", "limit": limit}
-        if since:
-            params["since"] = since.isoformat()
+        """Fetch EDH tournaments (with inline standings) via POST.
+
+        Args:
+            since: If set, window the lookback to cover this date.
+            full: If True, use the wide historical window.
+
+        Returns:
+            List of tournament dicts, each with `TID`, `startDate`, `standings`.
+        """
+        if full:
+            last_days = FULL_LOOKBACK_DAYS
+        elif since is not None:
+            last_days = max(1, (datetime.now() - since).days + 1)
+        else:
+            last_days = DEFAULT_LOOKBACK_DAYS
 
         self._rate_limiter.wait()
         try:
-            resp = httpx.get(
+            resp = httpx.post(
                 f"{TOPDECK_BASE_URL}/tournaments",
                 headers=self._headers(),
-                params=params,
-                timeout=30,
+                json=self._request_body(last_days),
+                timeout=120,
             )
             resp.raise_for_status()
         except httpx.HTTPError as e:
@@ -133,34 +172,17 @@ class TopDeckIngestion(SourceHealthMixin):
         data = resp.json()
         return data if isinstance(data, list) else data.get("tournaments", data.get("data", []))
 
-    def _fetch_tournament_detail(self, tournament_id: str) -> dict[str, Any]:
-        """Fetch detailed standings for a tournament."""
-        self._rate_limiter.wait()
-        try:
-            resp = httpx.get(
-                f"{TOPDECK_BASE_URL}/tournaments/{tournament_id}",
-                headers=self._headers(),
-                timeout=30,
-            )
-            resp.raise_for_status()
-        except httpx.HTTPError as e:
-            raise NetworkError(
-                f"Failed to fetch tournament {tournament_id}: {e}"
-            ) from e
-        return resp.json()
-
     def _process_tournament(self, tourney: dict[str, Any]) -> int:
-        """Process a single tournament's standings into the database.
+        """Process a single tournament's inline standings into the database.
 
         Returns:
             Number of results ingested.
         """
-        tournament_id = str(tourney.get("id", ""))
-        tournament_date = tourney.get("date", "")
+        tournament_id = str(tourney.get("TID") or tourney.get("id", ""))
+        tournament_date = tourney.get("startDate", "") or tourney.get("date", "")
 
-        # Fetch detailed standings
-        detail = self._fetch_tournament_detail(tournament_id)
-        standings = detail.get("standings", [])
+        # Standings come inline in the tournaments response — no detail fetch.
+        standings = tourney.get("standings", [])
         if not standings:
             return 0
 
@@ -170,14 +192,23 @@ class TopDeckIngestion(SourceHealthMixin):
 
         try:
             for standing in standings:
-                player = standing.get("player", "unknown")
-                deck_data = standing.get("deck", {})
-                commander_name = deck_data.get("commander", "")
-                card_names = deck_data.get("cards", [])
+                player = standing.get("name", "unknown")
+                commanders, card_names = _parse_decklist(standing.get("decklist"))
+                commander_name = commanders[0] if commanders else ""
                 standing_pos = standing.get("standing")
-                win_rate = standing.get("win_rate")
-                games_played = standing.get("games_played")
-                games_won = standing.get("games_won")
+                wins = standing.get("wins")
+                losses = standing.get("losses")
+                draws = standing.get("draws")
+                win_rate = standing.get("winRate")
+                # Derive games from W/L/D; skip records with no game data.
+                if wins is None and losses is None and draws is None:
+                    games_won = games_played = None
+                else:
+                    games_won = wins or 0
+                    games_played = (wins or 0) + (losses or 0) + (draws or 0)
+
+                if not commander_name:
+                    continue
 
                 # Look up commander by name
                 commander_id = self._resolve_card_id(conn, commander_name)
@@ -233,12 +264,44 @@ class TopDeckIngestion(SourceHealthMixin):
         return count
 
     def _resolve_card_id(self, conn: sqlite3.Connection, card_name: str) -> str | None:
-        """Look up a card's Scryfall ID by name."""
-        cursor = conn.execute(
-            "SELECT id FROM cards WHERE name = ? LIMIT 1", (card_name,)
-        )
-        row = cursor.fetchone()
-        return row[0] if row else None
+        """Look up a card's Scryfall ID by name, tolerant of decklist formatting.
+
+        Tries, in order: exact name, case-insensitive, and the front face of a
+        double-faced/adventure "A // B" name. Results are cached per sync.
+        """
+        name = (card_name or "").strip()
+        if not name:
+            return None
+        if name in self._card_id_cache:
+            return self._card_id_cache[name]
+
+        # TopDeck decklists escape apostrophes as \' — strip stray backslashes
+        # (no real card name contains one) so "Agatha\'s" matches "Agatha's".
+        unescaped = name.replace("\\", "")
+        candidates = [name]
+        if unescaped != name:
+            candidates.append(unescaped)
+        # Front face of a double-faced/adventure "A // B" name.
+        for base in (name, unescaped):
+            if "//" in base:
+                candidates.append(base.split("//")[0].strip())
+
+        card_id: str | None = None
+        for cand in candidates:
+            row = conn.execute(
+                "SELECT id FROM cards WHERE name = ? LIMIT 1", (cand,)
+            ).fetchone()
+            if row is None:
+                row = conn.execute(
+                    "SELECT id FROM cards WHERE LOWER(name) = LOWER(?) LIMIT 1",
+                    (cand,),
+                ).fetchone()
+            if row is not None:
+                card_id = row[0]
+                break
+
+        self._card_id_cache[name] = card_id
+        return card_id
 
     def _create_deck(
         self,
@@ -250,8 +313,14 @@ class TopDeckIngestion(SourceHealthMixin):
         deck_name: str,
         creator: str,
     ) -> str:
-        """Create a deck and its card entries. Returns deck ID."""
-        deck_id = str(uuid.uuid4())
+        """Create a deck and its card entries. Returns deck ID.
+
+        The deck id is derived deterministically from source_id so repeated
+        weekly syncs replace the same deck rather than minting a new uuid each
+        run (which would orphan deck_cards). Stale card rows are cleared first.
+        """
+        deck_id = f"td-{source_id}"
+        conn.execute("DELETE FROM deck_cards WHERE deck_id = ?", (deck_id,))
 
         conn.execute(
             """INSERT OR REPLACE INTO decks
@@ -280,3 +349,51 @@ class TopDeckIngestion(SourceHealthMixin):
                 )
 
         return deck_id
+
+
+# Section headers in a TopDeck text decklist.
+_COMMANDER_SECTION = re.compile(r"^~~\s*commander", re.IGNORECASE)
+_MAINBOARD_SECTION = re.compile(r"^~~\s*(mainboard|maindeck|deck)", re.IGNORECASE)
+_CARD_LINE = re.compile(r"^(\d+)\s+(.+)$")
+
+
+def _parse_decklist(text: str | None) -> tuple[list[str], list[str]]:
+    """Parse a TopDeck text decklist into (commanders, mainboard card names).
+
+    The format uses ``~~Commanders~~`` / ``~~Mainboard~~`` section headers and
+    ``<qty> <card name>`` lines; line breaks arrive as escaped ``\\n``. Other
+    sections (sideboard/maybeboard) are ignored. Quantities are flattened to a
+    flat name list (Commander is singleton).
+
+    Args:
+        text: Raw decklist string, or None/empty.
+
+    Returns:
+        Tuple of (commander names, mainboard card names). Empty lists if no text.
+    """
+    if not text:
+        return [], []
+
+    commanders: list[str] = []
+    mainboard: list[str] = []
+    section: str | None = None
+    for raw in text.replace("\\n", "\n").split("\n"):
+        line = raw.strip()
+        if not line:
+            continue
+        if _COMMANDER_SECTION.match(line):
+            section = "cmd"
+            continue
+        if _MAINBOARD_SECTION.match(line):
+            section = "main"
+            continue
+        if line.startswith("~~"):  # sideboard / maybeboard / other
+            section = None
+            continue
+        m = _CARD_LINE.match(line)
+        if not m or section is None:
+            continue
+        name = m.group(2).strip()
+        (commanders if section == "cmd" else mainboard).append(name)
+
+    return commanders, mainboard
