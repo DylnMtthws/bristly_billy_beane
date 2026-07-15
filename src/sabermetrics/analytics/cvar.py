@@ -43,6 +43,11 @@ class ScoringContext(BaseModel):
     output_keywords: list[str] = Field(default_factory=list)
     edhrec_top_cards: dict[str, float] = Field(default_factory=dict)  # card_name_lower -> inclusion_pct
     desired_card_traits: list[str] = Field(default_factory=list)
+    # Card Win Equity from tournament data, keyed by card_id (batch-loaded once
+    # per commander, like edhrec_top_cards). cwe_score is win_rate_with minus
+    # win_rate_without; sample sizes gate the boost.
+    cwe_by_card: dict[str, float] = Field(default_factory=dict)
+    cwe_sample_by_card: dict[str, int] = Field(default_factory=dict)
     weights_synergy: float = 0.35
     weights_mana_efficiency: float = 0.25
     weights_replacement_value: float = 0.25
@@ -392,12 +397,6 @@ def compute_cvar(
     replacement = compute_replacement_value(card, db_path, context.commander_id)
     price_eff = compute_price_efficiency(card, context.average_card_price)
 
-    # Composite score. The card_win_equity boost was removed in Option A
-    # criterion 3: card_win_equity is derived from tournament_results, for which
-    # no data source is wired (TopDeck.gg ingestion is unconfigured), so the
-    # table is empty and the boost never fired. The field stays None on the
-    # result for backward compatibility; re-enable the read here if a real
-    # tournament-outcome source is ever populated.
     composite = (
         context.weights_synergy * synergy
         + context.weights_mana_efficiency * mana_eff
@@ -405,11 +404,26 @@ def compute_cvar(
         + context.weights_price_efficiency * price_eff
     )
 
+    # Card Win Equity boost (revived once TopDeck.gg tournament data was wired).
+    # Additive, sample-gated, and one-sided: a card only gains when it has a
+    # positive win-equity delta backed by enough tournament appearances, so
+    # low-evidence noise cannot move the ranking. Read from the batch-loaded
+    # context (no per-card DB query).
+    from sabermetrics.config import settings
+
+    cwe = context.cwe_by_card.get(card.get("id", ""))
+    if (
+        cwe is not None
+        and context.cwe_sample_by_card.get(card.get("id", ""), 0)
+        >= settings.scoring.cwe_min_sample
+    ):
+        composite += settings.scoring.cwe_weight * max(0.0, min(1.0, cwe))
+
     return CVARResult(
         composite_score=round(composite, 4),
         synergy_score=round(synergy, 4),
         mana_efficiency_score=round(mana_eff, 4),
         replacement_value_score=round(replacement, 4),
         price_efficiency_score=round(price_eff, 4),
-        card_win_equity=None,
+        card_win_equity=round(cwe, 4) if cwe is not None else None,
     )

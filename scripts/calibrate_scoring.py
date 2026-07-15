@@ -17,6 +17,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+from sabermetrics.analytics.card_win_equity import load_cwe_for_commander
 from sabermetrics.analytics.cvar import ScoringContext, compute_cvar
 from sabermetrics.analytics.filters import apply_hard_filters
 from sabermetrics.analytics.oracle_keywords import (
@@ -28,7 +29,9 @@ from sabermetrics.models.deck import CVARWeights
 _BASICS = {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"}
 
 
-def _commander_context(conn: sqlite3.Connection, commander_id: str) -> ScoringContext | None:
+def _commander_context(
+    conn: sqlite3.Connection, commander_id: str, db_path: Path
+) -> ScoringContext | None:
     row = conn.execute(
         "SELECT id, name, color_identity, keywords, oracle_text "
         "FROM cards WHERE id = ? AND is_legal_commander = 1",
@@ -52,6 +55,8 @@ def _commander_context(conn: sqlite3.Connection, commander_id: str) -> ScoringCo
             if name and pct > 0:
                 edhrec[name] = pct
 
+    cwe_by_card, cwe_sample_by_card = load_cwe_for_commander(db_path, commander_id)
+
     w = CVARWeights()
     return ScoringContext(
         commander_id=row[0],
@@ -62,6 +67,8 @@ def _commander_context(conn: sqlite3.Connection, commander_id: str) -> ScoringCo
         referenced_keywords=extract_referenced_keywords(oracle),
         referenced_mechanics=extract_referenced_mechanics(oracle),
         edhrec_top_cards=edhrec,
+        cwe_by_card=cwe_by_card,
+        cwe_sample_by_card=cwe_sample_by_card,
         weights_synergy=w.synergy,
         weights_mana_efficiency=w.mana_efficiency,
         weights_replacement_value=w.replacement_value,
@@ -70,11 +77,15 @@ def _commander_context(conn: sqlite3.Connection, commander_id: str) -> ScoringCo
 
 
 def _real_deck_card_names(conn: sqlite3.Connection, commander_id: str) -> set[str]:
+    # Ground truth excludes TopDeck tournament decks so calibration stays a
+    # held-out test independent of the CWE scoring signal (which is derived from
+    # those same tournament decks) — otherwise the check would be circular.
     rows = conn.execute(
         "SELECT DISTINCT lower(c.name) FROM deck_cards dk "
         "JOIN decks d ON d.id = dk.deck_id "
         "JOIN cards c ON c.id = dk.card_id "
-        "WHERE d.commander_id = ? AND dk.is_commander = 0",
+        "WHERE d.commander_id = ? AND dk.is_commander = 0 "
+        "AND d.source != 'topdeck'",
         (commander_id,),
     ).fetchall()
     return {r[0] for r in rows if r[0] and r[0] not in {b.lower() for b in _BASICS}}
@@ -88,6 +99,7 @@ def calibrate(db_path: Path, n_commanders: int = 40, seed: int = 42) -> dict:
         r[0] for r in conn.execute(
             "SELECT DISTINCT d.commander_id FROM decks d "
             "JOIN cards c ON c.id = d.commander_id AND c.is_legal_commander = 1 "
+            "WHERE d.source != 'topdeck' "  # held-out: curated decks only
             "ORDER BY d.commander_id"
         ).fetchall()
     ]
@@ -101,7 +113,7 @@ def calibrate(db_path: Path, n_commanders: int = 40, seed: int = 42) -> dict:
     coverage: list[float] = []
 
     for cid in commanders:
-        ctx = _commander_context(conn, cid)
+        ctx = _commander_context(conn, cid, db_path)
         if ctx is None:
             continue
         candidates = apply_hard_filters(db_path, cid, max_budget_usd=None)

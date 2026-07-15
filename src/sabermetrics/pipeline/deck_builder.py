@@ -472,6 +472,15 @@ class DeckBuilder:
         if hasattr(self, "_signals"):
             self._signals["edhrec"] = bool(edhrec_top_cards)
 
+        # Card Win Equity from tournament data (present only if TopDeck.gg
+        # tournament data has been ingested for this commander).
+        from sabermetrics.analytics.card_win_equity import load_cwe_for_commander
+        cwe_by_card, cwe_sample_by_card = load_cwe_for_commander(
+            self.db_path, commander.id
+        )
+        if hasattr(self, "_signals"):
+            self._signals["tournament_cwe"] = bool(cwe_by_card)
+
         context = ScoringContext(
             commander_id=commander.id,
             commander_name=commander.name,
@@ -483,6 +492,8 @@ class DeckBuilder:
             engine_keywords=[kw.lower() for kw in engine_keywords],
             output_keywords=[kw.lower() for kw in output_keywords],
             edhrec_top_cards=edhrec_top_cards,
+            cwe_by_card=cwe_by_card,
+            cwe_sample_by_card=cwe_sample_by_card,
             desired_card_traits=desired_traits,
             weights_synergy=weights.synergy,
             weights_mana_efficiency=weights.mana_efficiency,
