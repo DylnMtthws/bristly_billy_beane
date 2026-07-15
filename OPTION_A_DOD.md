@@ -173,4 +173,19 @@ _(Append one dated entry per iteration: criterion touched, what changed, check r
   `test_synergy_matrix.test_cooccurrence_data_is_ignored`. Updated the weight-coupled tests in
   `test_scoring_config.py` / `test_synergy_matrix.py` to the 2-signal model. Full suite 538
   passed (536→538), ruff clean.
-- (next: criterion 4 — remove per-card LLM from the selection hot path)
+- **2026-07-15 — Criterion 4 DONE.** Removed the per-card LLM from the selection hot path.
+  The only `card_fit` entry point was `_llm_safety_check` (the ~8-weakest-picks Haiku net),
+  the sole user of `FitScorer`; deleted its call from `_optimize_differentiators` and removed
+  the method plus the now-orphaned `_build_profile_summary`. Selection is now purely the
+  deterministic synergy optimizer (greedy_fill + swap_refine); the LLM remains only as
+  narrator/auditor (profile synthesis + deck narrative). Ledger context: this eliminates the
+  ~58 `card_fit` calls/deck that dominated the cost log (1,689 of 1,832 calls) — the "worst of
+  both worlds" per-card Haiku scoring. Check: `tests/test_no_llm_in_selection.py` — a source
+  guard (builder no longer names FitScorer/card_fit/score_cards) + a **hermetic end-to-end
+  build** (profile + narrative stubbed, `FitScorer.score_cards` patched to raise) that returns
+  a legal 99-card deck with the card_fit mock never called and zero API calls. Incidental
+  finding: the 44 rows in `commander_profiles` are seed fixtures with synthetic UUIDs matching
+  no real card, so there is no real profile-cache hit path today (every real build currently
+  needs Sonnet profile synthesis — noted for the user). Full suite 540 passed (538→540; the
+  end-to-end build adds ~60s), ruff clean.
+- (next: criterion 5 — observable degradation / signals_used)

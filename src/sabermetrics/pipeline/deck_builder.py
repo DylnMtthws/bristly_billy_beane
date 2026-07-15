@@ -6,8 +6,9 @@
 3. Template derivation (profile-driven composition)
 4. Infrastructure fill (4 deterministic generators)
 5. Role targets + synergy matrix computation
-6. Greedy optimizer + swap refinement + LLM safety net
+6. Greedy optimizer + swap refinement (deterministic; no per-card LLM)
 7. Budget redistribution (upgrade/downgrade passes)
+7b. Enforce Commander legality (exactly 99, singleton, in color identity)
 8. Synthesis + classify + persist
 """
 
@@ -907,18 +908,10 @@ class DeckBuilder:
             profile_signals=prof_signals,
         )
 
-        # 5. Reduced LLM safety net: score weakest picks via Haiku
-        llm_cost = 0.0
-        try:
-            all_assignments, llm_cost = self._llm_safety_check(
-                all_assignments, candidates, synergy, role_targets,
-                profile_result, request, n_weakest=8,
-                protected_names=protected,
-            )
-        except Exception as e:
-            logger.warning("LLM safety check failed, skipping: %s", e)
-
-        # Add fit reasoning for cards that lack it
+        # Option A criterion 4: no per-card LLM in the selection hot path. The
+        # deterministic synergy optimizer (greedy_fill + swap_refine) is the
+        # selector; the LLM is a narrator/auditor only (profile synthesis and
+        # deck narrative), never a per-card scorer.
         for a in all_assignments:
             if "_fit_reasoning" not in a.card:
                 a.card["_fit_reasoning"] = "Synergy-optimizer selected"
@@ -927,135 +920,13 @@ class DeckBuilder:
             "synergy_matrix_size": len(synergy.card_id_to_index),
             "role_targets": {r: t.target_count for r, t in role_targets.items()},
             "cards_swapped": swaps,
-            "llm_safety_cost": llm_cost,
+            "llm_safety_cost": 0.0,
             "objective_score": deck_objective(
                 [a.card for a in all_assignments], synergy, role_targets,
                 template, profile_signals=prof_signals,
             ),
         }
         return all_assignments, metrics
-
-    def _llm_safety_check(
-        self, deck, candidates, synergy, role_targets,
-        profile_result, request, n_weakest=8,
-        protected_names: set[str] | None = None,
-    ) -> tuple[list, float]:
-        """Score the N weakest picks via Haiku and swap out poor fits.
-
-        Args:
-            deck: Current deck assignments.
-            candidates: Full candidate pool.
-            synergy: Synergy matrix.
-            role_targets: Role targets.
-            profile_result: Commander profile result.
-            request: Build request.
-            n_weakest: Number of weakest cards to check.
-            protected_names: Card names that cannot be replaced (staple protection).
-
-        Returns:
-            Tuple of (possibly-modified deck, LLM cost).
-        """
-        from sabermetrics.pipeline.slot_assigner import SlotAssignment
-
-        protected = protected_names or set()
-
-        # Find N weakest non-land, non-protected cards by score
-        indexed = [
-            (i, a) for i, a in enumerate(deck)
-            if a.slot_role != "land"
-            and "land" not in (a.card.get("type_line") or "").lower()
-            and a.card.get("name", "") not in protected
-        ]
-        indexed.sort(key=lambda x: x[1].score)
-        weakest = indexed[:n_weakest]
-
-        if not weakest:
-            return deck, 0.0
-
-        profile_summary = self._build_profile_summary(profile_result)
-        total_cost = 0.0
-
-        try:
-            from sabermetrics.reasoning.fit import FitScorer
-
-            scorer = FitScorer(self.db_path)
-            weak_cards = [deck[i].card for i, _ in weakest]
-
-            results = scorer.score_cards(
-                cards=weak_cards,
-                profile_summary=profile_summary,
-                archetype_definition=profile_result.profile.strategic_profile.primary_archetype,
-                partial_deck=[a.card for a in deck],
-                slot_intents=[],
-            )
-
-            # Replace cards scored <= 3 with next-best candidate
-            deck_names = {a.card.get("name", "") for a in deck}
-            for (deck_idx, _assignment), (card, fit_response) in zip(weakest, results):
-                card["_fit_reasoning"] = fit_response.reasoning
-                card_name = card.get("name", "")
-                self._tracer.record(
-                    card_name=card_name,
-                    stage="llm_safety",
-                    action="considered",
-                    card_id=card.get("id"),
-                    score=float(fit_response.fit_score),
-                    reason=fit_response.reasoning,
-                    force=True,
-                )
-                if fit_response.fit_score <= 3:
-                    # Find replacement
-                    replacement = None
-                    for c in candidates:
-                        if (
-                            c.get("name", "") not in deck_names
-                            and "land" not in (c.get("type_line") or "").lower()
-                        ):
-                            replacement = c
-                            break
-
-                    if replacement:
-                        old_name = card.get("name", "")
-                        new_name = replacement.get("name", "")
-                        role = _heuristic_role(replacement)
-                        replacement["_fit_reasoning"] = (
-                            f"Replaced {old_name} (LLM score {fit_response.fit_score})"
-                        )
-                        deck[deck_idx] = SlotAssignment(
-                            card=replacement,
-                            slot_role=role,
-                            score=replacement.get("_cvar_score", 0.0),
-                            alternatives=[],
-                        )
-                        deck_names.discard(old_name)
-                        deck_names.add(new_name)
-                        self._tracer.record(
-                            card_name=old_name,
-                            stage="llm_safety",
-                            action="swapped_out",
-                            card_id=card.get("id"),
-                            score=float(fit_response.fit_score),
-                            reason=f"LLM fit score {fit_response.fit_score} <= 3",
-                            force=True,
-                        )
-                        self._tracer.record(
-                            card_name=new_name,
-                            stage="llm_safety",
-                            action="swapped_in",
-                            card_id=replacement.get("id"),
-                            score=replacement.get("_cvar_score", 0.0),
-                            reason=f"replaced {old_name} (LLM score {fit_response.fit_score})",
-                            force=True,
-                        )
-                        logger.info(
-                            "LLM safety: replaced %s (score %d) with %s",
-                            old_name, fit_response.fit_score, new_name,
-                        )
-
-        except Exception as e:
-            logger.warning("LLM safety net scoring failed: %s", e)
-
-        return deck, total_cost
 
     def _redistribute_budget(
         self,
@@ -1334,74 +1205,6 @@ class DeckBuilder:
                 "Legality repair produced %d cards (expected 99)", len(kept)
             )
         return kept
-
-    def _build_profile_summary(self, profile_result) -> str:
-        """Build the profile summary string for LLM fit scoring."""
-        # Unwrap: profile_result is ProfileResult, .profile is CommanderProfile
-        profile = profile_result.profile
-        sp = profile.strategic_profile
-        profile_summary = (
-            f"Commander: {profile.commander_name}\n"
-            f"Archetype: {sp.primary_archetype}\n"
-            f"Game Plan: {sp.game_plan_summary}\n"
-            f"Win Conditions: "
-            + ", ".join(
-                wc.description for wc in sp.win_conditions
-            )
-        )
-
-        # Add value inversions
-        if sp.value_inversions:
-            inversions = sp.value_inversions
-            inversion_text = (
-                "\n\nVALUE INVERSIONS "
-                "(cards with these traits are stronger than they appear):\n"
-            )
-            for vi in inversions:
-                inversion_text += (
-                    f"- {vi.normal_heuristic} → {vi.inverted_value}\n"
-                    f"  Look for: {', '.join(vi.desired_characteristics)}\n"
-                    f"  Evaluation: {vi.evaluation_guidance}\n"
-                )
-            profile_summary += inversion_text
-
-        # Add engine dependencies
-        if hasattr(sp, "engine_dependencies"):
-            deps = sp.engine_dependencies
-            if deps:
-                dep_text = (
-                    "\n\nENGINE DEPENDENCIES "
-                    "(cards must feed the engine, not just match outputs):\n"
-                )
-                for dep in deps:
-                    dep_text += (
-                        f"- Engine: {dep.engine}\n"
-                        f"  Engine card traits: "
-                        f"{', '.join(dep.engine_card_traits)}\n"
-                        f"  Dependent outputs: "
-                        f"{', '.join(dep.dependent_outputs)}\n"
-                        f"  FALSE SYNERGY WARNING: "
-                        f"{dep.false_synergy_warning}\n"
-                    )
-                profile_summary += dep_text
-
-        # Add mispriced card examples
-        if hasattr(sp, "mispriced_card_examples"):
-            examples = sp.mispriced_card_examples
-            if examples:
-                example_text = (
-                    "\n\nMISPRICED CARDS "
-                    "(these cards are better than they appear for this commander):\n"
-                )
-                for ex in examples:
-                    example_text += f"- {ex.card_name}: {ex.why_undervalued}\n"
-                example_text += (
-                    "\nCards similar to these mispriced examples should score 7-9. "
-                    "Use these as calibration anchors for the full scoring range.\n"
-                )
-                profile_summary += example_text
-
-        return profile_summary
 
     def _synthesize_narrative(self, profile_result, assembly, request):
         """Generate deck narrative via Sonnet."""
