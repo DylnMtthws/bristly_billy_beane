@@ -223,4 +223,28 @@ _(Append one dated entry per iteration: criterion touched, what changed, check r
   `test_models.test_cvar_weights_defaults` (sum==1.0) still holds. Check:
   `tests/test_calibration.py` asserts mean_percentile ≥ 0.70 on the n=40 sample. Full suite
   543 passed (542→543; calibration test adds ~43s), ruff clean.
-- (next: criterion 7 — final green/clean gate, then stop the loop)
+- **2026-07-15 — Criterion 7 DONE. LOOP COMPLETE.** Final gate: `ruff check src tests scripts`
+  clean; full `pytest` green — **543 passed, 1 skipped** (baseline was 521; +22 net, no
+  regressions). All eight DoD criteria (1, 2, 2b, 3, 4, 5, 6, 7) pass.
+
+## Final summary (all criteria met)
+
+| # | Criterion | Result |
+|---|-----------|--------|
+| 1 | Models valid + boot validation | Models were never broken (correction to the review); fixed the **mispriced cost ledger** (haiku/opus) + added validation. |
+| 2 | Legality is an enforced invariant | `_enforce_legality`: exactly 99, singleton, in color identity — repairs, doesn't warn. |
+| 2b | Canonical candidate source | `card_candidates` view: one row/name, cheapest printing (31,039 from 114,115). |
+| 3 | No scoring weight reads an empty table | Co-occurrence removed & renormalized (user decision); CWE read removed. |
+| 4 | LLM out of the selection hot path | Deleted the per-card `card_fit` net (~58 calls/deck → 0); LLM is narrator/auditor only. |
+| 5 | Observable degradation | `signals_used`/`signals_unavailable` on the deck + persisted. |
+| 6 | Constants calibrated vs real decks | 0.565 → **0.72**; target 0.70 met. |
+| 7 | Green + clean | 543 passed, ruff clean. |
+
+**Two decisions surfaced to the user:** removing the co-occurrence signal (criterion 3);
+implicit in that, leaving CWE/tournament dormant pending a real data source.
+**Findings flagged for follow-up:** the 44 `commander_profiles` are seed fixtures (no real
+profile-cache path — every build currently pays for Sonnet profile synthesis); a couple of
+throwaway test decks were written to the real DB before the copy-fixture landed.
+**Not touched (out of scope):** wiring real profile caching, a real tournament-outcome source,
+the O(n²) synergy-matrix performance. Branch `option-a-hardening` is ready for review; not
+merged to `main`.
