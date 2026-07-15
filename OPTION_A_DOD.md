@@ -108,4 +108,15 @@ Progress Log, commit, and stop the loop. Do not open a PR or touch `main` — le
 ## Progress Log
 _(Append one dated entry per iteration: criterion touched, what changed, check result.)_
 
-- (not started)
+- **2026-07-15 — Criterion 1 DONE.** Correction to the original review: `claude-sonnet-4-6`,
+  `claude-haiku-4-5`, and `claude-opus-4-6` are all *currently active* models (verified via
+  the claude-api skill catalog), not stale IDs — so nothing was 404-ing. The real bug in the
+  same area was `MODEL_PRICING`: haiku was $0.80/$4.00 (actual $1.00/$5.00) and opus was
+  $15/$75 (actual $5/$25), so `cost_log` under-counted haiku spend ~20-25% (haiku = 1,689 of
+  1,832 logged calls) — the $15 ceiling was being hit at higher real spend. Fixed pricing;
+  kept the valid models (did NOT upgrade to Opus 4.8 — would blow the $30/yr charter). Added
+  `validate_models()` (import-time) + `validate_configured_models()` (client `__init__`) +
+  `KNOWN_RETIRED_MODELS` guard so a genuinely stale ID now fails loud. Check: new
+  `tests/test_model_validation.py` (5 tests) pass; full suite 526 passed (521→526, no
+  regression); ruff clean.
+- (next: criterion 2 — deck legality invariant)
