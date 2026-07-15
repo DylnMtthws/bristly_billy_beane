@@ -101,7 +101,7 @@ class ScoringSettings(BaseModel):
     # Card Win Equity (CWE): additive boost from TopDeck.gg tournament outcomes,
     # revived once real data was ingested. Sample-gated so low-evidence entries
     # don't move scores; only a positive win-equity delta boosts a card.
-    cwe_weight: float = 0.10
+    cwe_weight: float = 0.20
     cwe_min_sample: int = 5
 
     # Greedy fill: marginal value of adding a card.
