@@ -15,6 +15,7 @@ from pathlib import Path
 
 import yaml
 
+from sabermetrics.analytics import oracle_patterns
 from sabermetrics.models.tags import RoleTagResult, TaggingStats
 
 logger = logging.getLogger(__name__)
@@ -25,68 +26,8 @@ ROLE_TAGS = [
 ]
 
 # --- Role detection patterns (oracle text) ---
-
-_ROLE_PATTERNS: dict[str, list[re.Pattern]] = {
-    "ramp": [
-        re.compile(r"add\s+\{[WUBRGC]", re.IGNORECASE),
-        re.compile(r"add\s+one mana of any", re.IGNORECASE),
-        re.compile(r"search your library for.*(?:basic )?land.*put.*(?:onto|on) the battlefield", re.IGNORECASE),
-        re.compile(r"put.*land.*(?:from|onto|on).*the battlefield", re.IGNORECASE),
-        re.compile(r"create.*treasure", re.IGNORECASE),
-    ],
-    "fixing": [
-        re.compile(r"add one mana of any color", re.IGNORECASE),
-        re.compile(r"add\s+\{[WUBRG]\}\s*(?:or|,)\s*\{[WUBRG]\}", re.IGNORECASE),
-    ],
-    "draw": [
-        re.compile(r"draw\s+(?:a\s+)?card", re.IGNORECASE),
-        re.compile(r"draws?\s+\d+\s+card", re.IGNORECASE),
-        re.compile(r"look at the top.*(?:put|draw)", re.IGNORECASE),
-        re.compile(r"reveal.*(?:put.*hand|draw)", re.IGNORECASE),
-    ],
-    "removal": [
-        re.compile(r"destroy target", re.IGNORECASE),
-        re.compile(r"exile target", re.IGNORECASE),
-        re.compile(r"deals?\s+\d+\s+damage\s+to\s+(?:target|any|each)", re.IGNORECASE),
-        re.compile(r"target.*gets?\s+\-\d+/\-\d+", re.IGNORECASE),
-        re.compile(r"counter target spell", re.IGNORECASE),
-        re.compile(r"return target.*to.*(?:owner|hand)", re.IGNORECASE),
-    ],
-    "board_wipe": [
-        re.compile(r"destroy all", re.IGNORECASE),
-        re.compile(r"exile all", re.IGNORECASE),
-        re.compile(r"(?:each|all) (?:creature|permanent|nonland).*gets?\s+\-\d+/\-\d+", re.IGNORECASE),
-        re.compile(r"return all.*to.*(?:owner|hand)", re.IGNORECASE),
-    ],
-    "tutor": [
-        re.compile(r"search your library for a card", re.IGNORECASE),
-        re.compile(r"search your library for an? (?:creature|instant|sorcery|artifact|enchantment)", re.IGNORECASE),
-    ],
-    "recursion": [
-        re.compile(r"return.*from.*graveyard.*(?:hand|battlefield|to the battlefield)", re.IGNORECASE),
-        re.compile(r"return.*(?:card|creature|permanent).*to the battlefield.*(?:under|from)", re.IGNORECASE),
-        re.compile(r"put.*from.*graveyard.*(?:onto|into).*(?:battlefield|hand)", re.IGNORECASE),
-        re.compile(r"cast.*from.*graveyard", re.IGNORECASE),
-    ],
-    "protection": [
-        re.compile(r"hexproof", re.IGNORECASE),
-        re.compile(r"indestructible", re.IGNORECASE),
-        re.compile(r"phase out", re.IGNORECASE),
-        re.compile(r"can't be (?:the target|countered|destroyed)", re.IGNORECASE),
-        re.compile(r"protection from", re.IGNORECASE),
-    ],
-    "wincon": [
-        re.compile(r"you win the game", re.IGNORECASE),
-        re.compile(r"extra turn", re.IGNORECASE),
-        re.compile(r"each opponent loses", re.IGNORECASE),
-        re.compile(r"infinite", re.IGNORECASE),
-        re.compile(r"damage to each opponent", re.IGNORECASE),
-    ],
-    "threat": [
-        re.compile(r"deals? combat damage to.*player", re.IGNORECASE),
-        re.compile(r"commander damage", re.IGNORECASE),
-    ],
-}
+# Canonical patterns live in analytics.oracle_patterns, shared with components.py.
+_ROLE_PATTERNS: dict[str, list[re.Pattern]] = oracle_patterns.ROLE_PATTERNS
 
 
 def _load_functional_categories() -> dict[str, dict]:
