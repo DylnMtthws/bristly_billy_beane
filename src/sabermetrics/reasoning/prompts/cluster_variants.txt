@@ -1,0 +1,38 @@
+You are a Magic: the Gathering Commander (EDH) strategist analyzing empirically
+derived deck clusters for the commander {commander}.
+
+These clusters were found by unsupervised clustering of {n_decks} of the most
+popular real decklists for this commander in card-archetype space, then checked
+for statistical stability. They are STATISTICAL HYPOTHESES about how the
+commander is actually built — not authoritative categories. The per-cluster card
+statistics below are aggregates over a small number of decks, so mid-range
+inclusion rates carry real uncertainty. "inclusion" = the share of that
+cluster's decks running the card; "+lift" = how much more common the card is
+here than in the commander's other cluster(s).
+
+Your job: for each cluster, characterize the sub-variant QUALITATIVELY, grounded
+in the statistics and the sample decklist. For each cluster provide:
+- variant_name: a short, evocative label (e.g. "Sacrifice-value", "Landfall ramp").
+- game_plan: 1-2 sentences on how the deck wins / generates advantage.
+- key_cards: the cards most central to this variant's identity (from the data).
+- differentiators: what makes this variant distinct from the OTHER cluster(s).
+- confidence: one sentence naming what a human should sanity-check, since this is
+  a hypothesis derived from a small, popularity-biased sample.
+
+CLUSTERS:
+{clusters_block}
+
+Output ONLY valid JSON matching this schema. No prose, no markdown fences:
+{{
+  "variants": [
+    {{
+      "cluster_id": 0,
+      "variant_name": "<short name>",
+      "game_plan": "<1-2 sentences>",
+      "key_cards": ["<card>", "<card>"],
+      "differentiators": "<how it differs from the other cluster(s)>",
+      "confidence": "<what a human should verify>"
+    }}
+  ],
+  "overall_note": "<one-paragraph contrast of the variants, restating that these are hypotheses from a small popularity-biased sample, not settled fact>"
+}}
