@@ -43,6 +43,12 @@ class ScoringContext(BaseModel):
     engine_keywords: list[str] = Field(default_factory=list)
     output_keywords: list[str] = Field(default_factory=list)
     edhrec_top_cards: dict[str, float] = Field(default_factory=dict)  # card_name_lower -> inclusion_pct
+    # Per-variant empirical inclusion from our own verified decklist corpus
+    # (card_name_lower -> rate 0-1). Sharper than pooled EDHREC; corroboration
+    # only — absence is neutral, never a penalty (preserves undervalued picks).
+    empirical_inclusion: dict[str, float] = Field(default_factory=dict)
+    empirical_reliable: set[str] = Field(default_factory=set)  # tight-CI card names
+    empirical_variant: Optional[str] = None
     desired_card_traits: list[str] = Field(default_factory=list)
     weights_synergy: float = 0.35
     weights_mana_efficiency: float = 0.25
@@ -188,11 +194,22 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
         if "creature" in type_line:
             score += 0.1
 
-    # EDHREC behavioral corroboration (ADR-005: triangulation, not authority)
+    # Behavioral corroboration (ADR-005: triangulation, not authority).
+    # Prefer sharper per-variant empirical inclusion from our own verified
+    # corpus; fall back to pooled EDHREC. Strictly additive — a card absent
+    # from popular decks is NOT penalized (it may be the undervalued pick the
+    # tool exists to surface).
     card_name = (card.get("name") or "").lower()
-    inclusion_pct = context.edhrec_top_cards.get(card_name, 0.0)
-    if inclusion_pct > 0:
-        score += min(0.2, inclusion_pct / 100.0 * 0.4)
+    empirical_rate = context.empirical_inclusion.get(card_name)
+    if empirical_rate is not None and empirical_rate > 0:
+        # Reliable (tight-CI) inclusion corroborates more strongly than a noisy
+        # mid-range rate; both cap below the sub-score ceiling.
+        weight = 0.30 if card_name in context.empirical_reliable else 0.18
+        score += min(0.30, empirical_rate * weight)
+    else:
+        inclusion_pct = context.edhrec_top_cards.get(card_name, 0.0)
+        if inclusion_pct > 0:
+            score += min(0.2, inclusion_pct / 100.0 * 0.4)
 
     # Value inversion desired trait matching
     if context.desired_card_traits:

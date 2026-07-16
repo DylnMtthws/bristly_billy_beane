@@ -40,6 +40,12 @@ from sabermetrics.models.deck import (
 
 logger = logging.getLogger(__name__)
 
+# Per-variant empirical Pareto protection: a card in >= MIN_INCLUSION of the
+# target variant's real decks is shielded from price-domination by a card that
+# is at least MIN_GAP rarer there. Mirrors the EDHREC-inclusion protection.
+_EMPIRICAL_PROTECT_MIN_INCLUSION = 0.30
+_EMPIRICAL_PROTECT_MIN_GAP = 0.20
+
 
 class DeckBuildRequest(BaseModel):
     """Request for deck generation."""
@@ -271,7 +277,10 @@ class DeckBuilder:
             profile_was_generated=not profile_result.cache_hit,
             total_cost_usd=round(total_cost, 4),
             total_time_seconds=round(total_time, 2),
-            pipeline_metrics=metrics,
+            pipeline_metrics={
+                **metrics,
+                "empirical_variant": getattr(self, "_empirical_variant", None),
+            },
         )
 
     # --- Step implementations ---
@@ -459,6 +468,28 @@ class DeckBuilder:
         except Exception as e:
             logger.warning("Failed to load EDHREC data: %s", e)
 
+        # Per-variant empirical grounding from the verified decklist corpus
+        # (Phase 6). Sharper than pooled EDHREC; None when no corpus exists,
+        # in which case scoring falls back cleanly to the pooled EDHREC signal.
+        empirical = None
+        try:
+            from sabermetrics.analytics.empirical_valuation import (
+                get_target_cluster_inclusion,
+            )
+            empirical = get_target_cluster_inclusion(
+                self.db_path, commander.id, strategy=request.strategy,
+            )
+        except Exception as e:
+            logger.warning("Empirical inclusion load failed: %s", e)
+        self._empirical_variant = empirical.variant if empirical else None
+        if empirical is not None:
+            logger.info(
+                "Empirical grounding active: variant='%s' from %d/%d decks, "
+                "%d cards (%d reliable)",
+                empirical.variant, empirical.variant_size, empirical.n_decks,
+                len(empirical.inclusion), len(empirical.reliable),
+            )
+
         context = ScoringContext(
             commander_id=commander.id,
             commander_name=commander.name,
@@ -470,6 +501,9 @@ class DeckBuilder:
             engine_keywords=[kw.lower() for kw in engine_keywords],
             output_keywords=[kw.lower() for kw in output_keywords],
             edhrec_top_cards=edhrec_top_cards,
+            empirical_inclusion=empirical.inclusion if empirical else {},
+            empirical_reliable=empirical.reliable if empirical else set(),
+            empirical_variant=empirical.variant if empirical else None,
             desired_card_traits=desired_traits,
             weights_synergy=weights.synergy,
             weights_mana_efficiency=weights.mana_efficiency,
@@ -483,6 +517,9 @@ class DeckBuilder:
             card["edhrec_inclusion_pct"] = edhrec_top_cards.get(
                 card_name_lower, 0.0
             )
+            if empirical is not None:
+                card["_empirical_inclusion"] = empirical.rate(card_name_lower)
+                card["_empirical_reliable"] = card_name_lower in empirical.reliable
             result = compute_cvar(card, context, self.db_path)
             card["_cvar_result"] = result.model_dump()
             card["_cvar_score"] = result.composite_score
@@ -566,12 +603,26 @@ class DeckBuilder:
                 dominated = False
                 dominator_name = ""
                 edhrec_saved = False
+                emp_saved = False
                 card_edhrec = card.get("edhrec_inclusion_pct", 0.0)
+                card_emp = card.get("_empirical_inclusion", 0.0)
+                card_emp_reliable = card.get("_empirical_reliable", False)
 
                 for f_card in frontier:
                     f_cvar = f_card.get("_cvar_score", 0)
                     f_price = float(f_card.get("price_usd", 0) or 0)
                     if f_cvar >= cvar and f_price <= price and (f_cvar > cvar or f_price < price):
+                        # Empirical protection: a card common in the target
+                        # variant's real decks cannot be dominated by one that is
+                        # much rarer there (per-variant, sharper than EDHREC).
+                        f_emp = f_card.get("_empirical_inclusion", 0.0)
+                        if (
+                            card_emp_reliable
+                            and card_emp >= _EMPIRICAL_PROTECT_MIN_INCLUSION
+                            and (card_emp - f_emp) >= _EMPIRICAL_PROTECT_MIN_GAP
+                        ):
+                            emp_saved = True
+                            continue  # This frontier card can't dominate; check others
                         # EDHREC protection: a card with strong empirical inclusion
                         # cannot be dominated by one the community doesn't use.
                         f_edhrec = f_card.get("edhrec_inclusion_pct", 0.0)
@@ -584,7 +635,17 @@ class DeckBuilder:
 
                 if not dominated:
                     frontier.append(card)
-                    if edhrec_saved:
+                    if emp_saved:
+                        self._tracer.record(
+                            card_name=card_name,
+                            stage="pareto",
+                            action="protected",
+                            card_id=card.get("id"),
+                            score=cvar,
+                            reason=f"empirical protected ({card_emp * 100:.0f}% "
+                                   "of variant decks)",
+                        )
+                    elif edhrec_saved:
                         self._tracer.record(
                             card_name=card_name,
                             stage="pareto",
