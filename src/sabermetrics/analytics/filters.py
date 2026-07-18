@@ -220,8 +220,22 @@ def apply_hard_filters(
 
     logger.info("Starting with %d legal cards", len(all_cards))
 
-    # Exclude the commander itself from the 99
-    all_cards = [c for c in all_cards if c["id"] != commander_id]
+    # Exclude the commander itself from the 99 -- by oracle_id, not printing id.
+    # Printings of the same card have distinct ids, and the later name-dedupe
+    # keeps the cheapest printing; excluding only the commander's own printing
+    # let a $0.57 Eriette printing survive into her own 99. oracle_id is shared
+    # across reprints (same reasoning as ADR-014); name is the fallback for the
+    # handful of cards without one.
+    cmdr_oracle = cmdr.get("oracle_id")
+    cmdr_name = cmdr.get("name", "")
+    all_cards = [
+        c for c in all_cards
+        if not (
+            c["id"] == commander_id
+            or (cmdr_oracle and c.get("oracle_id") == cmdr_oracle)
+            or c.get("name", "") == cmdr_name
+        )
+    ]
 
     # Apply filters in sequence
     filtered = filter_by_color_identity(all_cards, cmdr_colors)
