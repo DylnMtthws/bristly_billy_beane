@@ -137,6 +137,10 @@ def greedy_fill(
         c for c in candidates
         if c.get("name", "") not in deck_names
         and not is_playable_as_land(c.get("type_line") or "")
+        # Categorical, not a score penalty: greedy's marginal is 45% synergy
+        # matrix, which loves "enchantment" text -- Nova Cleric survived a
+        # 0.15x quality crush on synergy points alone.
+        and not c.get("_anti_engine")
     ]
 
     assignments: list[SlotAssignment] = []
@@ -312,6 +316,7 @@ def swap_refine(
         c for c in candidates
         if c.get("name", "") not in deck_names
         and not is_playable_as_land(c.get("type_line") or "")
+        and not c.get("_anti_engine")
     ]
 
     for pass_num in range(max_passes):
@@ -589,8 +594,16 @@ def rebalance_budget(
     pool = [
         c for c in candidates
         if not is_playable_as_land(c.get("type_line") or "")
+        and not c.get("_anti_engine")
     ]
-    pool.sort(key=lambda c: c.get("_cvar_score", 0.0), reverse=True)
+    # Rank the upgrade window by quality PLUS corpus support, so objective-
+    # relevant cards (Ondu Spiritdancer: syn 1.0, mid cvar) make the window
+    # a plain cvar sort excluded.
+    pool.sort(
+        key=lambda c: c.get("_cvar_score", 0.0)
+        + float(c.get("_empirical_inclusion", 0.0) or 0.0),
+        reverse=True,
+    )
 
     stats = {"upgrades": 0, "unbundles": 0, "downgrades": 0, "spent": 0.0}
 

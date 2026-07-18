@@ -230,7 +230,11 @@ def test_template_uses_corpus_composition() -> None:
     assert t.avg_cmc_target == 2.5
     # Karsten(2.5) is ~34; corpus median 36 is within the +/-3 clamp.
     assert t.land_count == 36
-    assert t.type_targets == {"enchantment": 36, "creature": 18, "artifact": 8}
+    # Auras dominate the enchantment engine (27/36 >= 60%), so the ~30-card
+    # engine rule adds an aura subtype target at max(median 27, 30) = 30.
+    assert t.type_targets == {
+        "enchantment": 36, "creature": 18, "artifact": 8, "aura": 30,
+    }
 
 
 def test_corpus_land_count_is_clamped_to_karsten_band() -> None:
