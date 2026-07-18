@@ -18,6 +18,11 @@ class DeckTemplate(BaseModel):
     differentiator_slots: int = Field(ge=10, le=45)
     avg_cmc_target: float = Field(ge=1.5, le=5.5, default=3.0)
     curve_shape: dict[int, int] = Field(default_factory=dict)
+    # Empirical type targets (median counts in the target variant's real
+    # decks). None when no reliable corpus -- selection then ignores them.
+    # These express what the archetype's engine runs on: an enchantress deck
+    # with 21 enchantments can't feed its payoffs regardless of card quality.
+    type_targets: dict[str, int] | None = None
 
     @property
     def infrastructure_slots(self) -> int:

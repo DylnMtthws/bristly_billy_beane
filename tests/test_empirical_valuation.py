@@ -122,3 +122,39 @@ def test_reliability_is_gated_on_variant_sample_size(tmp_path, monkeypatch) -> N
     assert big is not None
     assert "blood artist" in big.reliable
     assert big.reliable == set(big.inclusion)
+
+
+def test_compute_composition_medians_and_type_rules() -> None:
+    """Medians are quantity-aware; lands are excluded from other type counts."""
+    from sabermetrics.analytics.empirical_valuation import compute_composition
+
+    deck_a = (
+        [("Basic Land — Swamp", 0.0, 10)]
+        + [("Land", 0.0, 26)]
+        + [("Enchantment — Aura", 1.0, 20)]
+        + [("Enchantment", 2.0, 16)]
+        + [("Creature — Human", 2.0, 15)]
+        + [("Artifact", 2.0, 5)]
+        + [("Instant", 3.0, 7)]
+    )
+    deck_b = (
+        [("Land", 0.0, 34)]
+        + [("Enchantment — Aura", 1.0, 30)]
+        + [("Creature — Human", 3.0, 20)]
+        + [("Sorcery", 4.0, 15)]
+    )
+    comp = compute_composition({"a": deck_a, "b": deck_b})
+
+    assert comp is not None
+    assert comp.lands == 35            # median(36, 34)
+    assert comp.enchantments == 33     # median(36, 30)
+    assert comp.auras == 25            # median(20, 30)
+    assert comp.creatures == 18        # median(15, 20)
+    # Per-deck avg CMC is weighted by quantity and excludes lands.
+    assert 1.5 < comp.avg_cmc < 3.0
+
+
+def test_compute_composition_empty_returns_none() -> None:
+    from sabermetrics.analytics.empirical_valuation import compute_composition
+
+    assert compute_composition({}) is None

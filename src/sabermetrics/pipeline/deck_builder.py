@@ -541,6 +541,9 @@ class DeckBuilder:
         except Exception as e:
             logger.warning("Empirical inclusion load failed: %s", e)
         self._empirical_variant = empirical.variant if empirical else None
+        # Kept for later stages: template derivation reads the variant's
+        # median composition (Stage 3), reservation its inclusion (Stage 4.5).
+        self._empirical = empirical
         if empirical is not None:
             logger.info(
                 "Empirical grounding active: variant='%s' from %d/%d decks, "
@@ -778,14 +781,26 @@ class DeckBuilder:
         return kept
 
     def _derive_template(self, profile, request):
-        """Stage 3: Derive deck template from profile."""
+        """Stage 3: Derive deck template from profile.
+
+        When Stage 2 loaded a reliable decklist corpus, its median composition
+        grounds the template (lands, avg CMC, type targets) instead of the
+        power-target estimates.
+        """
         from sabermetrics.reasoning.template_deriver import derive_deck_template
 
+        empirical = getattr(self, "_empirical", None)
+        composition = (
+            empirical.composition
+            if empirical is not None and empirical.reliable
+            else None
+        )
         return derive_deck_template(
             profile=profile,
             budget=request.budget_usd,
             power_target=request.power_target,
             db_path=self.db_path,
+            empirical_composition=composition,
         )
 
     def _reserve_empirical_staples(
@@ -1106,6 +1121,7 @@ class DeckBuilder:
             slots_remaining=diff_slots,
             tracer=self._tracer,
             profile_signals=prof_signals,
+            type_targets=template.type_targets,
         )
         all_assignments = list(infrastructure) + diff_assignments
 

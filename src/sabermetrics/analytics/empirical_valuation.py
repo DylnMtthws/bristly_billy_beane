@@ -37,6 +37,21 @@ from sabermetrics.analytics.deck_clustering import (
 logger = logging.getLogger(__name__)
 
 
+class EmpiricalComposition(BaseModel):
+    """Median deck composition of one target variant's real decks.
+
+    Medians, not means: the plausibility window keeps 50-110 card decks, and
+    the stragglers skew means (Eriette: mean lands 32.3 vs median 36).
+    """
+
+    lands: int
+    enchantments: int          # non-land enchantments
+    creatures: int
+    artifacts: int
+    auras: int
+    avg_cmc: float             # median of per-deck avg non-land CMC
+
+
 class EmpiricalInclusion(BaseModel):
     """Per-card inclusion for one target variant of a commander."""
 
@@ -46,10 +61,98 @@ class EmpiricalInclusion(BaseModel):
     n_decks: int
     inclusion: dict[str, float] = Field(default_factory=dict)   # name_lower -> rate
     reliable: set[str] = Field(default_factory=set)             # tight-CI names
+    composition: EmpiricalComposition | None = None
 
     def rate(self, card_name: str) -> float:
         """Inclusion rate for a card (0.0 if unseen — neutral, never negative)."""
         return self.inclusion.get(card_name.lower(), 0.0)
+
+
+def compute_composition(
+    per_deck_rows: dict[str, list[tuple[str, float, int]]],
+) -> EmpiricalComposition | None:
+    """Median composition across decks from (type_line, cmc, quantity) rows.
+
+    Args:
+        per_deck_rows: deck_id -> list of (type_line, cmc, quantity) tuples.
+
+    Returns:
+        Median composition, or None when there are no decks.
+    """
+    import statistics
+
+    lands, enchs, creatures, artifacts, auras, cmcs = [], [], [], [], [], []
+    for rows in per_deck_rows.values():
+        n_land = n_ench = n_crea = n_art = n_aura = 0
+        cmc_sum = 0.0
+        cmc_n = 0
+        for type_line, cmc, qty in rows:
+            tl = (type_line or "").lower()
+            if "land" in tl:
+                n_land += qty
+                continue
+            if "enchantment" in tl:
+                n_ench += qty
+            if "creature" in tl:
+                n_crea += qty
+            if "artifact" in tl:
+                n_art += qty
+            if "aura" in tl:
+                n_aura += qty
+            cmc_sum += float(cmc or 0) * qty
+            cmc_n += qty
+        lands.append(n_land)
+        enchs.append(n_ench)
+        creatures.append(n_crea)
+        artifacts.append(n_art)
+        auras.append(n_aura)
+        cmcs.append(cmc_sum / cmc_n if cmc_n else 0.0)
+
+    if not lands:
+        return None
+    return EmpiricalComposition(
+        lands=round(statistics.median(lands)),
+        enchantments=round(statistics.median(enchs)),
+        creatures=round(statistics.median(creatures)),
+        artifacts=round(statistics.median(artifacts)),
+        auras=round(statistics.median(auras)),
+        avg_cmc=round(statistics.median(cmcs), 2),
+    )
+
+
+def _load_composition(db_path: Path, deck_ids: list[str]) -> EmpiricalComposition | None:
+    """Load quantity-aware composition rows for the given decks and reduce.
+
+    Queried from deck_cards directly rather than DeckRecord.card_names because
+    the record drops quantities -- a deck's 10 Swamps would count as 1 land.
+    """
+    import sqlite3
+
+    if not deck_ids:
+        return None
+    conn = sqlite3.connect(str(db_path))
+    try:
+        placeholders = ",".join("?" * len(deck_ids))
+        rows = conn.execute(
+            "SELECT dc.deck_id, ca.type_line, ca.cmc, dc.quantity "
+            f"FROM deck_cards dc JOIN cards ca ON dc.card_id = ca.id "
+            f"WHERE dc.deck_id IN ({placeholders})",
+            deck_ids,
+        ).fetchall()
+    except sqlite3.OperationalError as e:
+        # Composition is supplementary; degrade to None rather than sinking
+        # the whole inclusion signal (e.g. tests with a stub DB).
+        logger.warning("Composition load failed, degrading: %s", e)
+        return None
+    finally:
+        conn.close()
+
+    per_deck: dict[str, list[tuple[str, float, int]]] = {}
+    for deck_id, type_line, cmc, qty in rows:
+        per_deck.setdefault(deck_id, []).append(
+            (type_line or "", float(cmc or 0), int(qty or 1))
+        )
+    return compute_composition(per_deck)
 
 
 def empirical_bonus(
@@ -174,8 +277,10 @@ def get_target_cluster_inclusion(
     }
 
     members: dict[int, list[list[str]]] = {}
+    member_ids: dict[int, list[str]] = {}
     for deck, lbl in zip(decks, labels):
         members.setdefault(int(lbl), []).append(deck.card_names)
+        member_ids.setdefault(int(lbl), []).append(deck.deck_id)
     sizes = {cid: len(m) for cid, m in members.items()}
 
     target = _select_cluster(strategy, cluster_archetype, sizes)
@@ -200,14 +305,18 @@ def get_target_cluster_inclusion(
     variant_reliable = size > 0 and (hi - lo) / 2 <= moe_threshold
     reliable: set[str] = set(inclusion) if variant_reliable else set()
 
+    composition = _load_composition(db_path, member_ids.get(target, []))
+
     variant = cluster_archetype.get(target, "mixed")
     logger.info(
         "[empirical] '%s': variant='%s' (%d/%d decks), %d cards, "
-        "reliable=%s (worst-case margin %.3f vs %.2f bar)",
+        "reliable=%s (worst-case margin %.3f vs %.2f bar), composition=%s",
         commander, variant, size, len(decks), len(inclusion),
         variant_reliable, (hi - lo) / 2, moe_threshold,
+        composition.model_dump() if composition else None,
     )
     return EmpiricalInclusion(
         commander=commander, variant=variant, variant_size=size,
         n_decks=len(decks), inclusion=inclusion, reliable=reliable,
+        composition=composition,
     )

@@ -659,3 +659,77 @@ def test_greedy_ranking_unchanged_when_no_card_has_corpus_data() -> None:
 
     assert len(assignments) == 1
     assert assignments[0].card["name"] == "High"
+
+
+# --- Empirical type-composition targets ---
+
+
+def test_type_need_boosts_undersupplied_type() -> None:
+    """When the deck starves for enchantments, an enchantment beats a
+    slightly stronger non-enchantment (the Eriette failure: 21 enchantments
+    built vs a 36 median in real decks)."""
+    ench = _make_card(
+        card_id="e", name="Wanted Enchantment", cvar_score=0.50,
+    ) | {"type_line": "Enchantment — Aura"}
+    creature = _make_card(
+        card_id="c", name="Slightly Better Creature", cvar_score=0.60,
+    ) | {"type_line": "Creature — Human"}
+
+    all_cards = [ench, creature]
+    assignments = greedy_fill(
+        shell=[],
+        candidates=all_cards,
+        synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
+        slots_remaining=1,
+        type_targets={"enchantment": 30},
+    )
+
+    # ench: (0.35*0.5 + 0.20*0.5) * need(0,30)=1.8 -> 0.495
+    # creature: 0.35*0.6 + 0.20*0.6 = 0.33 (no targeted type -> mult 1.0)
+    assert assignments[0].card["name"] == "Wanted Enchantment"
+
+
+def test_type_need_damps_oversupplied_type() -> None:
+    """Past the target, more of the same type is damped, not stacked."""
+    shell = [
+        SlotAssignment(
+            card={"id": f"s{i}", "name": f"Shell Ench {i}",
+                  "type_line": "Enchantment"},
+            slot_role="utility", score=0.5,
+        )
+        for i in range(10)
+    ]
+    ench = _make_card(card_id="e", name="Yet Another Enchantment",
+                      cvar_score=0.60) | {"type_line": "Enchantment"}
+    creature = _make_card(card_id="c", name="Needed Creature",
+                          cvar_score=0.55) | {"type_line": "Creature"}
+
+    all_cards = [ench, creature]
+    assignments = greedy_fill(
+        shell=shell,
+        candidates=all_cards,
+        synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
+        slots_remaining=1,
+        # Target 5, shell already has 10 -> heavily over.
+        type_targets={"enchantment": 5},
+    )
+
+    assert assignments[0].card["name"] == "Needed Creature"
+
+
+def test_no_type_targets_changes_nothing() -> None:
+    """Without targets the ranking is exactly the pre-change behavior."""
+    low = _make_card(card_id="low", name="Low", cvar_score=0.40)
+    high = _make_card(card_id="high", name="High", cvar_score=0.80)
+    all_cards = [low, high]
+
+    a = greedy_fill(
+        shell=[], candidates=all_cards, synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(), budget_remaining=100.0,
+        slots_remaining=1, type_targets=None,
+    )
+    assert a[0].card["name"] == "High"

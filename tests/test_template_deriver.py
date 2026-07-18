@@ -199,3 +199,63 @@ def test_estimate_creature_density() -> None:
         ),
     )
     assert _estimate_creature_density(sp_tribal) > _estimate_creature_density(sp_spells)
+
+
+# --- Empirical composition grounding ---
+
+
+def _make_composition(**overrides):
+    from sabermetrics.analytics.empirical_valuation import EmpiricalComposition
+
+    defaults = dict(
+        lands=36, enchantments=36, creatures=18, artifacts=8,
+        auras=27, avg_cmc=2.5,
+    )
+    defaults.update(overrides)
+    return EmpiricalComposition(**defaults)
+
+
+def test_template_uses_corpus_composition() -> None:
+    """With a reliable corpus, lands/avg-CMC/type targets come from it.
+
+    The Eriette case: the formula estimated ~3.0+ avg CMC from power target
+    alone and built 39 lands; real decks run a 2.5 curve with 36 lands and 36
+    enchantments.
+    """
+    profile = _make_mock_profile()
+    comp = _make_composition()
+
+    t = derive_deck_template(profile, empirical_composition=comp)
+
+    assert t.avg_cmc_target == 2.5
+    # Karsten(2.5) is ~34; corpus median 36 is within the +/-3 clamp.
+    assert t.land_count == 36
+    assert t.type_targets == {"enchantment": 36, "creature": 18, "artifact": 8}
+
+
+def test_corpus_land_count_is_clamped_to_karsten_band() -> None:
+    """An outlier corpus median can't drag lands beyond Karsten +/-3."""
+    profile = _make_mock_profile()
+    comp = _make_composition(lands=45, avg_cmc=2.5)
+
+    t = derive_deck_template(profile, empirical_composition=comp)
+
+    from sabermetrics.pipeline.mana_base import target_land_count
+    assert t.land_count == min(42, target_land_count(2.5) + 3)
+
+
+def test_no_corpus_leaves_type_targets_none() -> None:
+    t = derive_deck_template(_make_mock_profile())
+    assert t.type_targets is None
+
+
+def test_cheap_curve_scales_ramp_down() -> None:
+    """A 2.4-curve deck wants less acceleration than a 3.4-curve deck."""
+    profile = _make_mock_profile()
+    cheap = derive_deck_template(
+        profile, empirical_composition=_make_composition(avg_cmc=2.4)
+    )
+    pricey = derive_deck_template(
+        profile, empirical_composition=_make_composition(avg_cmc=3.4)
+    )
+    assert cheap.ramp_count < pricey.ramp_count

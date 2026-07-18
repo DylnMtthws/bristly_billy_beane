@@ -83,6 +83,7 @@ def greedy_fill(
     slots_remaining: int,
     tracer: GenerationTracer | None = None,
     profile_signals: ProfileSignals | None = None,
+    type_targets: dict[str, int] | None = None,
 ) -> list[SlotAssignment]:
     """Fill remaining slots by marginal contribution to deck.
 
@@ -90,6 +91,7 @@ def greedy_fill(
     - synergy_contrib: mean synergy with cards already in deck
     - role_mult: how urgently the deck needs this card's roles
     - cvar_base: standalone card quality
+    - type_mult: how far the deck is from its empirical type composition
 
     Args:
         shell: Infrastructure cards already placed.
@@ -98,6 +100,10 @@ def greedy_fill(
         role_targets: Per-role reliability targets.
         budget_remaining: Dollars left to spend.
         slots_remaining: How many differentiator slots to fill.
+        type_targets: Optional card-type medians from the target variant's
+            real decks (e.g. {"enchantment": 36}). Cards of an under-target
+            type get the same need boost roles do; over-target types are
+            damped so the deck can't over-stuff one type.
 
     Returns:
         List of SlotAssignments for the differentiator slots.
@@ -116,6 +122,15 @@ def greedy_fill(
         roles = _get_card_roles(a.card)
         for r in roles:
             role_counts[r] = role_counts.get(r, 0) + 1
+
+    # Count current card types from shell (only the targeted types)
+    type_counts: dict[str, int] = {}
+    if type_targets:
+        for a in shell:
+            tl = (a.card.get("type_line") or "").lower()
+            for t in type_targets:
+                if t in tl:
+                    type_counts[t] = type_counts.get(t, 0) + 1
 
     # Filter eligible candidates
     eligible = [
@@ -173,6 +188,18 @@ def greedy_fill(
                 + _empirical_bonus(card)
             )
 
+            # Type-composition need: boost under-target types, damp over-target
+            # (same hypergeometric multiplier the roles use).
+            if type_targets:
+                tl = (card.get("type_line") or "").lower()
+                t_mults = [
+                    role_need_multiplier(type_counts.get(t, 0), tgt)
+                    for t, tgt in type_targets.items()
+                    if t in tl
+                ]
+                if t_mults:
+                    marginal *= max(t_mults)
+
             if marginal > best_score:
                 best_score = marginal
                 best_card = card
@@ -196,6 +223,12 @@ def greedy_fill(
 
         for r in card_roles:
             role_counts[r] = role_counts.get(r, 0) + 1
+
+        if type_targets:
+            best_tl = (best_card.get("type_line") or "").lower()
+            for t in type_targets:
+                if t in best_tl:
+                    type_counts[t] = type_counts.get(t, 0) + 1
 
         assignments.append(SlotAssignment(
             card=best_card,
