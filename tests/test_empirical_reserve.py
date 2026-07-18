@@ -116,3 +116,21 @@ def test_generic_auto_includes_are_not_reserved(builder):
         _card("Real Staple", 0.60),
     ]
     assert _reserved_names(builder, cards) == ["Real Staple"]
+
+
+def test_generator_placed_cards_are_excluded(builder):
+    """A high-inclusion card the generator already placed is not re-reserved.
+
+    This is the refinement: a good ramp card the ramp generator took (e.g.
+    Birds of Paradise) must not spend a reserved slot, so the slot goes to the
+    engine payoff the generator rejected instead.
+    """
+    cards = [
+        _card("Birds of Paradise", 0.70),   # placed by ramp generator
+        _card("Pitiless Plunderer", 0.65),  # rejected as ramp, needs reserving
+    ]
+    out = builder._reserve_empirical_staples(
+        cards, _request(), _template(),
+        exclude_names={"Birds of Paradise"},
+    )
+    assert [a.card["name"] for a in out] == ["Pitiless Plunderer"]
