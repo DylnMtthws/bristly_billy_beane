@@ -249,21 +249,38 @@ class FitScorer:
             system=system,
             messages=[{"role": "user", "content": prompt}],
             cache_breakpoints=[0],
-            max_tokens=6000,
+            max_tokens=12000,
             call_type="card_fit_batch",
         )
 
         by_name: dict[str, CardFitResponse] = {}
+        text = result.content.strip()
         try:
-            text = result.content.strip()
             start, end = text.find("["), text.rfind("]")
-            for item in json.loads(text[start:end + 1]):
+            items = json.loads(text[start:end + 1])
+        except Exception:
+            # Truncated output loses the closing bracket and the whole-array
+            # parse fails -- build9 defaulted all 47 verdicts to 5 and the
+            # vet fired blanks. Salvage every complete object individually.
+            import re as _re
+            items = []
+            for m in _re.finditer(r"\{[^{}]*\}", text):
+                try:
+                    items.append(json.loads(m.group(0)))
+                except Exception:
+                    continue
+            logger.warning(
+                "Batch fit array parse failed; salvaged %d/%d verdicts "
+                "(tail: %r)", len(items), len(cards), text[-120:],
+            )
+        for item in items:
+            try:
                 by_name[str(item.get("name", "")).lower()] = CardFitResponse(
                     fit_score=max(1, min(10, int(item.get("fit_score", 5)))),
                     reasoning=str(item.get("reasoning", ""))[:500],
                 )
-        except Exception as e:
-            logger.warning("Batch fit parse failed (%s); defaulting to 5s", e)
+            except Exception:
+                continue
 
         out: list[tuple[dict, CardFitResponse]] = []
         for card in cards:

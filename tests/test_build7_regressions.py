@@ -114,3 +114,27 @@ def test_fill_infrastructure_smoke():
     )
     infra, used = b._fill_infrastructure(cands, cmdr, req, template)
     assert isinstance(infra, list) and used >= 0
+
+
+def test_batch_vet_salvages_truncated_json():
+    """Build9: truncated output failed the whole-array parse and every card
+    defaulted to 5 -- the vet fired blanks. Complete objects are salvaged."""
+    from pathlib import Path
+    from unittest.mock import MagicMock, patch
+    from sabermetrics.reasoning.fit import FitScorer
+
+    truncated = ('[{"name": "Card A", "fit_score": 2, "reasoning": "bad"}, '
+                 '{"name": "Card B", "fit_score": 8, "reasoning": "good"}, '
+                 '{"name": "Card C", "fit_sco')  # cut off mid-object
+    cards = [{"name": n, "type_line": "Enchantment", "price_usd": 1.0}
+             for n in ("Card A", "Card B", "Card C")]
+    fake = MagicMock()
+    fake.call_with_cache.return_value = MagicMock(content=truncated)
+    with patch("sabermetrics.reasoning.client.AnthropicClient") as C:
+        C.get_instance.return_value = fake
+        out = FitScorer(Path("/nonexistent.db")).score_cards_batch(
+            cards=cards, profile_summary="t")
+    scores = {c["name"]: r.fit_score for c, r in out}
+    assert scores["Card A"] == 2      # salvaged verdict, not a default 5
+    assert scores["Card B"] == 8
+    assert scores["Card C"] == 5      # genuinely lost -> neutral default
