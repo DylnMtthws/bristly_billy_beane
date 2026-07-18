@@ -415,7 +415,8 @@ class RemovalPackageGenerator:
         for search_pool in search_pools:
             for card in search_pool:
                 name = card.get("name", "")
-                if name in auto_removal_set and name not in used_names:
+                if name in auto_removal_set and name not in used_names \
+                        and not card.get("_anti_engine"):
                     price = float(card.get("price_usd", 0) or 0)
                     if budget_remaining <= 0 or running_price + price <= budget_remaining:
                         assignments.append(SlotAssignment(

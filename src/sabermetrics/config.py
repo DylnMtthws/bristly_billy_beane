@@ -29,7 +29,7 @@ class LLMSettings(BaseModel):
     """LLM model and cost settings."""
 
     profile_model: str = "claude-sonnet-4-6"
-    fit_model: str = "claude-haiku-4-5"
+    fit_model: str = "claude-sonnet-4-6"
     synthesis_model: str = "claude-sonnet-4-6"
     refresh_model: str = "claude-haiku-4-5"
     template_model: str = "claude-haiku-4-5"
@@ -125,6 +125,16 @@ class ScoringSettings(BaseModel):
     generator_empirical_weight: float = 0.20
     generator_empirical_noisy_weight: float = 0.12
 
+    # Ramp color fit: bonus (x overlap fraction) for rocks producing the
+    # deck's colors in 2+ color identities. Ramp-and-fix beats ramp alone.
+    ramp_color_fit_weight: float = 0.20
+
+    # Anti-synergy veto: multiplier applied to the quality score of a card
+    # that mass-removes the deck's own engine type ("destroy all enchantments"
+    # in an enchantress deck). Near-zero so it never wins a slot on points;
+    # auto-include placement excludes such cards outright.
+    anti_synergy_penalty: float = 0.15
+
     # Budget rebalancing (Stage 7): minimum deck-objective gain for any move.
     # This is the spend-down stopping rule: keep buying upgrades while real
     # gains exist, stop when they go asymptotic -- leftover budget then means
@@ -155,12 +165,16 @@ class ScoringSettings(BaseModel):
     empirical_reserve_max_slots: int = 12
     empirical_reserve_max_fraction: float = 0.5
 
-    # Deck-level objective (components, all 0-1 normalized).
-    objective_synergy_density_weight: float = 0.30
-    objective_role_coverage_weight: float = 0.25
-    objective_alignment_weight: float = 0.20
-    objective_avg_cvar_weight: float = 0.15
-    objective_curve_coherence_weight: float = 0.10
+    # Deck-level objective (components, all 0-1 normalized). Type coherence
+    # keeps swap/rebalance from trading the engine type away -- the objective
+    # is what those stages maximize, and it previously had no notion that an
+    # enchantress deck must stay enchantment-dense.
+    objective_synergy_density_weight: float = 0.28
+    objective_role_coverage_weight: float = 0.22
+    objective_alignment_weight: float = 0.18
+    objective_avg_cvar_weight: float = 0.14
+    objective_curve_coherence_weight: float = 0.08
+    objective_type_coherence_weight: float = 0.10
 
 
 class Settings(BaseModel):

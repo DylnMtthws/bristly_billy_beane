@@ -11,7 +11,7 @@ user:
 
 llm:
   profile_model: "claude-sonnet-4-6"
-  fit_model: "claude-haiku-4-5"
+  fit_model: "claude-sonnet-4-6"
   synthesis_model: "claude-sonnet-4-6"
   refresh_model: "claude-haiku-4-5"
   max_candidates_for_llm_fit: 50
@@ -86,9 +86,14 @@ scoring:
   # Budget rebalancing: minimum deck-objective gain per move (spend-down
   # stops when gains go below this, whatever budget remains).
   rebalance_min_gain: 0.003
+  # Bonus for rocks that produce the deck's colors (2+ color decks).
+  ramp_color_fit_weight: 0.20
+  # Score multiplier for cards that mass-remove the deck's engine type.
+  anti_synergy_penalty: 0.15
   # Deck-level objective (components, all 0-1 normalized).
-  objective_synergy_density_weight: 0.30
-  objective_role_coverage_weight: 0.25
-  objective_alignment_weight: 0.20
-  objective_avg_cvar_weight: 0.15
-  objective_curve_coherence_weight: 0.10
+  objective_synergy_density_weight: 0.28
+  objective_role_coverage_weight: 0.22
+  objective_alignment_weight: 0.18
+  objective_avg_cvar_weight: 0.14
+  objective_curve_coherence_weight: 0.08
+  objective_type_coherence_weight: 0.10

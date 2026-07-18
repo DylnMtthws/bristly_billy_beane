@@ -568,6 +568,20 @@ class DeckBuilder:
             max_budget=request.budget_usd,
         )
 
+        # Engine types for the anti-synergy veto: a card that mass-removes the
+        # type the deck is built on ("destroy all enchantments" in an
+        # enchantress shell) must never win a slot on text-match points.
+        from sabermetrics.analytics.anti_synergy import engine_types, is_anti_engine
+        from sabermetrics.config import settings
+
+        engine: set[str] = set()
+        if empirical is not None and empirical.composition is not None:
+            comp = empirical.composition
+            engine = engine_types({
+                "enchantment": comp.enchantments,
+                "artifact": comp.artifacts,
+            })
+
         for card in candidates:
             card_name_lower = (card.get("name") or "").lower()
             card["edhrec_inclusion_pct"] = edhrec_top_cards.get(
@@ -579,6 +593,12 @@ class DeckBuilder:
             result = compute_cvar(card, context, self.db_path)
             card["_cvar_result"] = result.model_dump()
             card["_cvar_score"] = result.composite_score
+            if engine and is_anti_engine(card, engine):
+                card["_anti_engine"] = True
+                card["_cvar_score"] = round(
+                    card["_cvar_score"]
+                    * settings.scoring.anti_synergy_penalty, 4,
+                )
 
         return candidates
 
@@ -965,6 +985,7 @@ class DeckBuilder:
             role_tag_pool=_pool_by_role("ramp"),
             commander_colors=colors,
             avg_cmc=template.avg_cmc_target,
+            commander_cmc=float(commander.cmc or 0),
         )
         all_assignments.extend(ramp)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in ramp)
@@ -1034,12 +1055,21 @@ class DeckBuilder:
         _trace_infra(protection, "infra_protection")
         self._protected_names |= prot_gen.protected_names
 
-        # 5. Lands (last, so it knows what spells need color support)
+        # 5. Lands (last, so it knows what spells need color support).
+        # Budget capped at the corpus's median land spend share (x1.25 slack):
+        # price-neutral scoring otherwise buys premium mana bases -- one build
+        # put ~$110 of a $200 budget into lands, topped by a $45 Gemstone
+        # Caverns. Real decks of the variant define what lands should cost.
+        land_budget = request.budget_usd - budget_used
+        if template.land_budget_share > 0:
+            land_budget = min(
+                land_budget, request.budget_usd * template.land_budget_share * 1.25
+            )
         land_gen = LandPackageGenerator(self.db_path)
         lands = land_gen.generate(
             color_identity=colors,
             target_count=template.land_count,
-            budget_remaining=request.budget_usd - budget_used,
+            budget_remaining=land_budget,
             template=template,
             already_placed=placed_cards(),
             role_tag_pool=_land_pool(),
@@ -1133,20 +1163,11 @@ class DeckBuilder:
             profile_signals=prof_signals,
         )
 
-        # 5. Reduced LLM safety net: score weakest picks via Haiku
-        llm_cost = 0.0
-        try:
-            all_assignments, llm_cost = self._llm_safety_check(
-                all_assignments, candidates, synergy, role_targets,
-                profile_result, request, n_weakest=8,
-                protected_names=protected,
-            )
-        except Exception as e:
-            logger.warning("LLM safety check failed, skipping: %s", e)
-
-        # 6. Budget rebalancing: spend-down upgrades, sell-one-buy-many audit
-        # of expensive picks, downgrade safety net. Runs last so it audits the
-        # final composition (LLM safety swaps don't check price).
+        # 5. Budget rebalancing: spend-down upgrades, sell-one-buy-many audit
+        # of expensive picks, downgrade safety net. Runs BEFORE the LLM vet:
+        # the numeric objective cannot read oracle text, and in one build it
+        # re-admitted Paraselene ("destroy all enchantments") right after the
+        # vet had removed it. The LLM must be the final gate nothing bypasses.
         from sabermetrics.pipeline.greedy_optimizer import rebalance_budget
 
         all_assignments, rebalance_stats = rebalance_budget(
@@ -1155,6 +1176,18 @@ class DeckBuilder:
             profile_signals=prof_signals, protected_names=protected,
             tracer=self._tracer,
         )
+
+        # 6. LLM safety net LAST: one batched Sonnet call over the riskiest
+        # ~14 picks, with corpus evidence in the prompt.
+        llm_cost = 0.0
+        try:
+            all_assignments, llm_cost = self._llm_safety_check(
+                all_assignments, candidates, synergy, role_targets,
+                profile_result, request, n_weakest=14,
+                protected_names=protected,
+            )
+        except Exception as e:
+            logger.warning("LLM safety check failed, skipping: %s", e)
 
         # Add fit reasoning for cards that lack it
         for a in all_assignments:
@@ -1204,7 +1237,7 @@ class DeckBuilder:
         return sorted(indexed, key=sort_key)
 
     @staticmethod
-    def _best_replacement(candidates, deck_names: set[str]):
+    def _best_replacement(candidates, deck_names: set[str], max_price: float | None = None):
         """Pick the strongest eligible replacement, not the first in list order.
 
         Ranked by CVAR plus the empirical bonus, so a corpus-validated card is
@@ -1218,7 +1251,10 @@ class DeckBuilder:
             if (
                 c.get("name", "") in deck_names
                 or "land" in (c.get("type_line") or "").lower()
+                or c.get("_anti_engine")
             ):
+                continue
+            if max_price is not None and float(c.get("price_usd", 0) or 0) > max_price:
                 continue
             value = float(c.get("_cvar_score", 0.0) or 0.0) + empirical_bonus(
                 c,
@@ -1281,12 +1317,12 @@ class DeckBuilder:
             scorer = FitScorer(self.db_path)
             weak_cards = [deck[i].card for i, _ in weakest]
 
-            results = scorer.score_cards(
+            results = scorer.score_cards_batch(
                 cards=weak_cards,
                 profile_summary=profile_summary,
                 archetype_definition=profile_result.profile.strategic_profile.primary_archetype,
                 partial_deck=[a.card for a in deck],
-                slot_intents=[],
+                empirical_variant=getattr(self, "_empirical_variant", None),
             )
 
             # Replace cards scored <= 3 with next-best candidate
@@ -1304,7 +1340,14 @@ class DeckBuilder:
                     force=True,
                 )
                 if fit_response.fit_score <= 3:
-                    replacement = self._best_replacement(candidates, deck_names)
+                    budget_left = request.budget_usd - sum(
+                        float(a.card.get("price_usd", 0) or 0) for a in deck
+                    )
+                    old_price = float(card.get("price_usd", 0) or 0)
+                    replacement = self._best_replacement(
+                        candidates, deck_names,
+                        max_price=old_price + max(0.0, budget_left),
+                    )
 
                     if replacement:
                         old_name = card.get("name", "")

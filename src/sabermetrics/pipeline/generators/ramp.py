@@ -143,8 +143,14 @@ def _score_ramp(
     Returns:
         Combined quality score (higher is better).
     """
+    from sabermetrics.analytics.ramp_detector import _effective_cmc
+
     oracle = card.get("oracle_text") or ""
-    cmc = float(card.get("cmc", 3) or 3)
+    # Suspend/alternative-cost cards are costed by time-to-mana, not the fake
+    # cmc 0 (Sol Talisman scored a perfect rate as a "free" rock).
+    cmc = _effective_cmc(card, oracle.lower())
+    if cmc == 0:
+        cmc = float(card.get("cmc", 3) or 3)
     cvar = float(card.get("_cvar_score", 0.3) or 0.3)
 
     # --- Net mana rate ---
@@ -234,6 +240,7 @@ class RampPackageGenerator:
                 "SELECT c.id, c.name, c.oracle_text, c.type_line, c.cmc, "
                 "c.color_identity, c.mana_cost, c.role_tags, c.keywords, "
                 "r.ramp_type, r.ramp_score, r.produces_colored, r.is_conditional, "
+                "r.produced_colors, "
                 "r.net_mana_rate, r.resilience_tier "
                 "FROM ramp_candidates r "
                 "JOIN cards c ON r.card_id = c.id "
@@ -283,6 +290,7 @@ class RampPackageGenerator:
         role_tag_pool: list[dict],
         commander_colors: list[str] | None = None,
         avg_cmc: float | None = None,
+        commander_cmc: float | None = None,
     ) -> list[SlotAssignment]:
         """Generate ramp package with auto-includes and role-specific scoring.
 
@@ -374,7 +382,19 @@ class RampPackageGenerator:
         for search_pool in search_pools:
             for card in search_pool:
                 name = card.get("name", "")
-                if name in auto_ramp_set and name not in used_names:
+                # Curve check: a rock costing as much as a cheap commander
+                # competes with casting it (Commander's Sphere at 3 for a
+                # 3-CMC commander). Applies to artifacts only -- land-ramp
+                # sorceries at 3 still fix and survive wipes.
+                if (
+                    commander_cmc is not None
+                    and commander_cmc <= 3
+                    and "artifact" in (card.get("type_line") or "").lower()
+                    and float(card.get("cmc", 0) or 0) >= commander_cmc
+                ):
+                    continue
+                if name in auto_ramp_set and name not in used_names \
+                        and not card.get("_anti_engine"):
                     price = float(card.get("price_usd", 0) or 0)
                     if budget_remaining <= 0 or running_price + price <= budget_remaining:
                         assignments.append(SlotAssignment(
@@ -389,6 +409,7 @@ class RampPackageGenerator:
 
         # Score remaining candidates with role-specific function
         needed_types = template.unmet_type_targets(already_placed)
+        identity_set = set(commander_colors or color_identity or [])
         candidates: list[tuple[dict, float]] = []
         for card in pool:
             name = card.get("name", "")
@@ -414,6 +435,24 @@ class RampPackageGenerator:
                 tl = (card.get("type_line") or "").lower()
                 if any(t in tl for t in needed_types):
                     score += settings.scoring.generator_type_need_weight
+
+            # Color fit: in multicolor decks a rock that produces the deck's
+            # colors (signet/talisman) is worth more than a colorless producer
+            # of equal rate -- it ramps AND fixes. Scored against the identity
+            # rather than a fixed list, so it generalizes to any pairing.
+            if identity_set and len(identity_set) >= 2:
+                produced = card.get("produced_colors")
+                if produced is None:
+                    from sabermetrics.analytics.ramp_detector import (
+                        _produced_colors,
+                    )
+                    produced = _produced_colors(
+                        (card.get("oracle_text") or "").lower()
+                    )
+                overlap = len(set(produced or "") & identity_set)
+                score += settings.scoring.ramp_color_fit_weight * (
+                    overlap / len(identity_set)
+                )
 
             # Budget awareness: prefer $0.25-$2 range
             price = float(card.get("price_usd", 0) or 0)
