@@ -82,6 +82,36 @@ def empirical_bonus(
     return weight * rate
 
 
+def annotate_empirical(cards: list[dict], source: list[dict]) -> None:
+    """Carry empirical annotations from ``source`` onto ``cards`` by card name.
+
+    The Stage 4 generators load their pre-scored candidate-table cards fresh
+    from SQL, so those dicts lack the ``_empirical_inclusion`` /
+    ``_empirical_reliable`` fields that ``deck_builder._structural_score`` set
+    on the deck's candidate pool. This copies them over by name so
+    :func:`empirical_bonus` works on the candidate-table path too, not only the
+    role-tag fallback. Cards with no match are left neutral (rate 0.0, no
+    bonus), preserving absence-neutrality (ADR-005).
+
+    Mutates ``cards`` in place.
+
+    Args:
+        cards: Card dicts to annotate (e.g. candidate-table rows).
+        source: Card dicts already carrying the empirical fields.
+    """
+    lookup = {
+        c.get("name", ""): (
+            float(c.get("_empirical_inclusion", 0.0) or 0.0),
+            bool(c.get("_empirical_reliable", False)),
+        )
+        for c in source
+    }
+    for card in cards:
+        rate, reliable = lookup.get(card.get("name", ""), (0.0, False))
+        card["_empirical_inclusion"] = rate
+        card["_empirical_reliable"] = reliable
+
+
 def _select_cluster(
     strategy: str | None,
     cluster_archetype: dict[int, str],

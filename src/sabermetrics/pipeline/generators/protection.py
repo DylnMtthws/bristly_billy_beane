@@ -13,7 +13,10 @@ from pathlib import Path
 
 import yaml
 
-from sabermetrics.analytics.empirical_valuation import empirical_bonus
+from sabermetrics.analytics.empirical_valuation import (
+    annotate_empirical,
+    empirical_bonus,
+)
 from sabermetrics.config import settings
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
@@ -311,6 +314,9 @@ class ProtectionPackageGenerator:
 
         if use_candidates_table:
             pool = prot_candidates
+            # Candidate-table cards are loaded fresh from SQL; carry the
+            # empirical annotations over from role_tag_pool so the bonus applies.
+            annotate_empirical(pool, role_tag_pool)
             logger.info("Using protection_candidates table (%d cards)", len(pool))
         else:
             pool = role_tag_pool
@@ -344,9 +350,16 @@ class ProtectionPackageGenerator:
             if name in used_names:
                 continue
 
-            # Use pre-computed protection_score if available, otherwise compute
+            # Use pre-computed protection_score if available, otherwise compute.
+            # The stored score comes from the variant-agnostic detector, so the
+            # empirical bonus must be added here; the _score_protection fallback
+            # already includes it (do not add it twice).
             if "protection_score" in card and card["protection_score"] is not None:
-                score = float(card["protection_score"])
+                score = float(card["protection_score"]) + empirical_bonus(
+                    card,
+                    settings.scoring.generator_empirical_weight,
+                    settings.scoring.generator_empirical_noisy_weight,
+                )
             else:
                 score = _score_protection(card, colors, deck_avg_cmc)
 

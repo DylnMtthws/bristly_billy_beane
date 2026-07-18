@@ -15,6 +15,31 @@ def _base_ctx(**kw) -> ScoringContext:
     )
 
 
+def test_annotate_empirical_carries_fields_by_name() -> None:
+    """Candidate-table cards inherit empirical fields from the source by name.
+
+    The Stage 4 generators load candidate-table cards fresh from SQL, so they
+    lack the fields _structural_score set on the deck pool. annotate_empirical
+    carries them over; unmatched cards stay neutral.
+    """
+    from sabermetrics.analytics.empirical_valuation import annotate_empirical
+
+    source = [
+        {"name": "Pitiless Plunderer", "_empirical_inclusion": 0.65,
+         "_empirical_reliable": True},
+    ]
+    cards = [
+        {"name": "Pitiless Plunderer", "ramp_score": 0.5},   # matched
+        {"name": "Random Jank", "ramp_score": 0.5},          # unmatched -> neutral
+    ]
+    annotate_empirical(cards, source)
+
+    assert cards[0]["_empirical_inclusion"] == 0.65
+    assert cards[0]["_empirical_reliable"] is True
+    assert cards[1]["_empirical_inclusion"] == 0.0
+    assert cards[1]["_empirical_reliable"] is False
+
+
 def test_empirical_boost_raises_score_and_absence_is_neutral() -> None:
     card = {"name": "Pitiless Plunderer", "oracle_text": "", "keywords": "[]",
             "color_identity": '["B"]', "type_line": "Creature"}
