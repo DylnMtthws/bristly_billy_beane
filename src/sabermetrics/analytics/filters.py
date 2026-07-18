@@ -88,7 +88,6 @@ def filter_by_budget(rows: list[dict], max_price: float) -> list[dict]:
     Returns:
         Filtered list of card dicts.
     """
-    from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
     from sabermetrics.config import settings
 
     per_card_ceiling = max_price * settings.pipeline.per_card_budget_fraction
@@ -96,7 +95,11 @@ def filter_by_budget(rows: list[dict], max_price: float) -> list[dict]:
     for row in rows:
         price = row.get("price_usd")
         if price is None:
-            price = PRICE_FLOOR_USD
+            # Unknown price must NOT mean "assume nearly free": the latest
+            # snapshot missing a row let $87 Mana Vault into a $50-ceiling
+            # pool as a floor-priced bargain. Budget-constrained selection
+            # excludes cards it cannot price.
+            continue
         if float(price) <= per_card_ceiling:
             result.append(row)
     return result

@@ -59,6 +59,8 @@ class DrawPackageGenerator:
             # the deck's land total past the template target.
             if is_playable_as_land(card.get("type_line") or ""):
                 continue
+            if card.get("_anti_engine"):
+                continue
 
             cvar = card.get("_cvar_score", 0.3)
             oracle = (card.get("oracle_text") or "").lower()

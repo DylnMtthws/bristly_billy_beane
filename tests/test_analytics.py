@@ -79,7 +79,9 @@ def test_budget_filter() -> None:
     filtered = filter_by_budget(cards, 200.0)
     names = {c["name"] for c in filtered}
     assert "Cheap Card" in names
-    assert "No Price Card" in names
+    # Unknown price now EXCLUDES: a stale price snapshot let $87 Mana Vault
+    # into a $50-ceiling pool as a floor-priced bargain.
+    assert "No Price Card" not in names
     assert "Premium Staple" in names
     assert "Too Concentrated" not in names
 

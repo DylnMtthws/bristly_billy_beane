@@ -283,6 +283,10 @@ def _build_deck_composition_context(
             "text-based justification to score above 3 -- community absence "
             "is evidence, though genuinely synergistic sleepers do exist. "
             "Judge cards relative to each other and to the deck context. "
+            "Mechanics checks: planeswalkers need board presence to "
+            "survive (check the deck's creature count); vehicles need "
+            "crew bodies and must survive blocks (crew cost vs toughness); "
+            "score any card that mass-removes the deck's own engine type 1. "
             "Output ONLY a JSON array, one object per card, in the same "
             'order: [{"name": str, "fit_score": int, "reasoning": str}]'
         )
@@ -298,7 +302,7 @@ def _build_deck_composition_context(
             system=system,
             messages=[{"role": "user", "content": prompt}],
             cache_breakpoints=[0],
-            max_tokens=3000,
+            max_tokens=6000,
             call_type="card_fit_batch",
         )
 

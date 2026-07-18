@@ -328,6 +328,7 @@ class ProtectionPackageGenerator:
         pool = [
             c for c in pool
             if not is_playable_as_land(c.get("type_line") or "")
+            and not c.get("_anti_engine")
         ]
 
         # Place auto-includes from pool (or role_tag_pool as backup)

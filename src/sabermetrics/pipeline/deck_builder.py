@@ -582,8 +582,29 @@ class DeckBuilder:
                 "artifact": comp.artifacts,
             })
 
+        # Game-changer gate: bracket data exists (game_changers.yaml) but was
+        # never consulted at selection -- Mana Vault-class fast mana has no
+        # place in a power<=3 pool. Reuses the categorical-exclusion flag.
+        gc_names: set[str] = set()
+        if request.power_target <= 3:
+            try:
+                import yaml as _yaml
+                _gc = _yaml.safe_load(
+                    (Path(__file__).resolve().parents[3] / "config"
+                     / "game_changers.yaml").read_text()
+                ) or {}
+                for v in (_gc.values() if isinstance(_gc, dict) else [_gc]):
+                    if isinstance(v, list):
+                        gc_names |= {str(x).lower() if not isinstance(x, dict)
+                                     else str(x.get("name", "")).lower() for x in v}
+            except Exception:
+                pass
+            gc_names.discard("sol ring")  # ubiquitous at every power level
+
         for card in candidates:
             card_name_lower = (card.get("name") or "").lower()
+            if card_name_lower in gc_names:
+                card["_anti_engine"] = True
             card["edhrec_inclusion_pct"] = edhrec_top_cards.get(
                 card_name_lower, 0.0
             )
@@ -1183,7 +1204,7 @@ class DeckBuilder:
         try:
             all_assignments, llm_cost = self._llm_safety_check(
                 all_assignments, candidates, synergy, role_targets,
-                profile_result, request, n_weakest=14,
+                profile_result, request, n_weakest=99,  # full-deck review: every non-staple pick faces the gate
                 protected_names=protected,
             )
         except Exception as e:
