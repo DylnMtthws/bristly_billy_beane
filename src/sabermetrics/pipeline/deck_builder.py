@@ -840,6 +840,10 @@ class DeckBuilder:
                 card_id=card.get("id"),
                 score=rate,
                 reason=f"empirical staple ({rate * 100:.0f}% of variant decks)",
+                # Low-volume, load-bearing stage: trace every reservation
+                # regardless of watchlist (like swap_refine), so the grounding
+                # is auditable.
+                force=True,
             )
         if reserved:
             logger.info(
