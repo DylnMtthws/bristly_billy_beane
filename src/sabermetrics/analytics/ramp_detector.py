@@ -23,7 +23,7 @@ from sabermetrics.analytics.detectors.base import (
 _strip_reminder_text = strip_reminder_text
 
 # Detection version — bump when patterns change to force re-computation
-DETECTION_VERSION = "1.0.0"
+DETECTION_VERSION = "1.1.0"
 
 
 # --- Positive patterns (applied to reminder-stripped text) ---
@@ -179,18 +179,53 @@ _CONDITIONAL_MANA = re.compile(
 )
 
 
+_SUSPEND = re.compile(r"suspend (\d+)", re.IGNORECASE)
+_ADD_SYMBOLS = re.compile(r"\{([WUBRG])\}", re.IGNORECASE)
+_ANY_COLOR = re.compile(r"add (?:one mana of any|mana of any|.*mana in any combination of)", re.IGNORECASE)
+
+
+def _effective_cmc(card: dict, oracle: str) -> float:
+    """Cost adjusted for when the mana actually arrives.
+
+    Suspend and other alternative-cost cards have cmc 0, which made the
+    net-rate math score Sol Talisman ("wait three turns for {C}{C}") a perfect
+    1.000 -- the best rock in Magic, per the old table. Time-to-mana is the
+    real cost: suspend N at cost {X} is roughly X + N turns of waiting.
+    """
+    cmc = float(card.get("cmc", 0) or 0)
+    m = _SUSPEND.search(oracle)
+    if m:
+        return max(cmc, 1.0) + float(m.group(1))
+    if cmc == 0 and not (card.get("mana_cost") or "").strip():
+        # No castable mana cost at all: some alternative-cost mechanic the
+        # parser doesn't model. Assume late availability rather than free.
+        return 4.0
+    return cmc
+
+
+def _produced_colors(oracle: str) -> str:
+    """Colors this source can produce, as a WUBRG-ordered string.
+
+    "Any color" producers report all five; colorless-only report "".
+    """
+    if _ANY_COLOR.search(oracle):
+        return "WUBRG"
+    found = {m.group(1).upper() for m in _ADD_SYMBOLS.finditer(oracle)}
+    return "".join(c for c in "WUBRG" if c in found)
+
+
 def _extract_ramp(card: dict, oracle_stripped: str) -> dict:
     """Build the ramp metadata dict for a qualifying card."""
     type_line = card.get("type_line") or ""
-    cmc = float(card.get("cmc", 0) or 0)
 
     ramp_type = _classify_ramp_type(type_line, oracle_stripped)
     mana_output, produces_colored = _estimate_mana_output(oracle_stripped)
     is_conditional = bool(_CONDITIONAL_MANA.search(oracle_stripped))
-    net_mana_rate = mana_output / max(cmc, 0.5)
+    eff_cmc = _effective_cmc(card, oracle_stripped)
+    net_mana_rate = mana_output / max(eff_cmc, 0.5)
 
     ramp_score = _score_ramp_card(
-        cmc=cmc,
+        cmc=eff_cmc,
         mana_output=mana_output,
         produces_colored=produces_colored,
         is_conditional=is_conditional,
@@ -206,6 +241,7 @@ def _extract_ramp(card: dict, oracle_stripped: str) -> dict:
         "is_restricted": False,  # Restricted cards are excluded by negative patterns
         "resilience_tier": _resilience_tier(ramp_type),
         "ramp_score": round(ramp_score, 4),
+        "produced_colors": _produced_colors(oracle_stripped),
     }
 
 
@@ -225,6 +261,7 @@ RAMP_DETECTOR = Detector(
         "is_restricted",
         "resilience_tier",
         "ramp_score",
+        "produced_colors",
     ],
     create_table_sql="""
         CREATE TABLE IF NOT EXISTS ramp_candidates (
@@ -237,6 +274,7 @@ RAMP_DETECTOR = Detector(
             is_restricted BOOLEAN,
             resilience_tier INTEGER,
             ramp_score REAL,
+            produced_colors TEXT,
             detection_version TEXT,
             computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (card_id) REFERENCES cards(id)
@@ -270,4 +308,14 @@ def populate_ramp_candidates(db_path: Path) -> dict:
     Returns:
         Dict with population statistics.
     """
+    import sqlite3
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute("ALTER TABLE ramp_candidates ADD COLUMN produced_colors TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column exists or table not created yet
+    finally:
+        conn.close()
     return populate_candidates(RAMP_DETECTOR, db_path)

@@ -12,10 +12,25 @@ from pathlib import Path
 
 import yaml
 
+from sabermetrics.analytics.empirical_valuation import (
+    annotate_empirical,
+    empirical_bonus,
+)
+from sabermetrics.config import settings
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
 logger = logging.getLogger(__name__)
+
+# One-sided wipe detection (SME ruling): a wipe whose condition spares a
+# low-to-the-ground board ("power 4 or greater", "mana value 3 or greater")
+# is asymmetric by construction; an unconditional "destroy all creatures"
+# costs a few-creature deck real value with no recursion to rebuild.
+_CONDITIONAL_WIPE = re.compile(
+    r"(?:power|toughness|mana value)\s+\d+\s+or\s+greater",
+    re.IGNORECASE,
+)
 
 # --- Removal quality regexes ---
 
@@ -184,6 +199,13 @@ def _score_removal(
     normalized_role = min(role_score / 9.5, 1.0)
     final_score = 0.60 * normalized_role + 0.40 * cvar
 
+    # --- Empirical grounding: additive, never penalizes absence (ADR-005) ---
+    final_score += empirical_bonus(
+        card,
+        settings.scoring.generator_empirical_weight,
+        settings.scoring.generator_empirical_noisy_weight,
+    )
+
     return final_score
 
 
@@ -286,6 +308,7 @@ class RemovalPackageGenerator:
         board_wipe_target: int = 2,
         commander_colors: list[str] | None = None,
         avg_cmc: float | None = None,
+        pool_index: dict[str, dict] | None = None,
     ) -> list[SlotAssignment]:
         """Generate removal package with auto-includes and role-specific scoring.
 
@@ -379,10 +402,39 @@ class RemovalPackageGenerator:
 
         if use_candidates_table:
             pool = removal_candidates
+            # Candidate-table cards are loaded fresh from SQL; carry the
+            # empirical annotations over from role_tag_pool so the bonus applies.
+            annotate_empirical(pool, role_tag_pool)
             logger.info("Using removal_candidates table (%d cards)", len(pool))
         else:
             pool = role_tag_pool
             logger.info("Falling back to role_tag_pool (%d cards)", len(pool))
+
+        # Lands are the land package's domain; placing one here inflates the
+        # deck's land total past the template target.
+        pool = [
+            c for c in pool
+            if not is_playable_as_land(c.get("type_line") or "")
+            and not c.get("_anti_engine")
+        ]
+        # Inherit the filtered pool's gates: drop table rows not in the pool
+        # (excluded there for price/legality/ceiling reasons) and copy its
+        # flags and scores onto the survivors.
+        if pool_index is not None:
+            gated = []
+            for c in pool:
+                src = pool_index.get(c.get("name", ""))
+                if src is None:
+                    continue
+                for k in ("_anti_engine", "_cvar_score",
+                          "_empirical_inclusion", "_empirical_reliable"):
+                    if k in src:
+                        c[k] = src[k]
+                if c.get("_anti_engine"):
+                    continue
+                gated.append(c)
+            pool = gated
+
 
         # Place auto-includes from pool (or role_tag_pool as backup)
         search_pools = [pool] if use_candidates_table else [role_tag_pool]
@@ -392,7 +444,8 @@ class RemovalPackageGenerator:
         for search_pool in search_pools:
             for card in search_pool:
                 name = card.get("name", "")
-                if name in auto_removal_set and name not in used_names:
+                if name in auto_removal_set and name not in used_names \
+                        and not card.get("_anti_engine"):
                     price = float(card.get("price_usd", 0) or 0)
                     if budget_remaining <= 0 or running_price + price <= budget_remaining:
                         assignments.append(SlotAssignment(
@@ -406,6 +459,7 @@ class RemovalPackageGenerator:
                         auto_removal_set.discard(name)
 
         # --- Score and sort remaining candidates ---
+        needed_types = template.unmet_type_targets(already_placed)
         board_wipe_candidates: list[tuple[dict, float]] = []
         single_removal_candidates: list[tuple[dict, float]] = []
 
@@ -433,11 +487,25 @@ class RemovalPackageGenerator:
             if card.get("removal_type") == "board_wipe":
                 is_board_wipe = True
 
-            # Use pre-computed removal_score if available, otherwise compute
+            # Use pre-computed removal_score if available, otherwise compute.
+            # The stored score comes from the variant-agnostic detector, so the
+            # empirical bonus must be added here; the _score_removal fallback
+            # already includes it (do not add it twice).
             if "removal_score" in card and card["removal_score"] is not None:
-                score = float(card["removal_score"])
+                score = float(card["removal_score"]) + empirical_bonus(
+                    card,
+                    settings.scoring.generator_empirical_weight,
+                    settings.scoring.generator_empirical_noisy_weight,
+                )
             else:
                 score = _score_removal(card, colors, deck_avg_cmc)
+
+            # Type-need: prefer on-type cards while the archetype's engine
+            # type is undersupplied (corpus targets; empty without one).
+            if needed_types:
+                tl = (card.get("type_line") or "").lower()
+                if any(t in tl for t in needed_types):
+                    score += settings.scoring.generator_type_need_weight
 
             # Budget preference
             price = float(card.get("price_usd", 0) or 0)
@@ -445,6 +513,13 @@ class RemovalPackageGenerator:
                 score += 0.01
 
             if is_board_wipe:
+                low_creature_deck = (
+                    (template.type_targets or {}).get("creature", 99) < 25
+                )
+                if _CONDITIONAL_WIPE.search(card.get("oracle_text") or ""):
+                    score += 0.20   # asymmetric: spares our small board
+                elif low_creature_deck:
+                    score -= 0.25   # uniform wipe hurts us more than them
                 board_wipe_candidates.append((card, score))
             else:
                 single_removal_candidates.append((card, score))

@@ -166,6 +166,136 @@ class FitScorer:
         return CardFitResponse(**data)
 
 
+    def score_cards_batch(
+        self,
+        cards: list[dict],
+        profile_summary: str,
+        archetype_definition: str = "",
+        partial_deck: list[dict] | None = None,
+        empirical_variant: str | None = None,
+    ) -> list[tuple[dict, CardFitResponse]]:
+        """Score all cards in ONE call, with per-card corpus evidence.
+
+        Replaces the per-card loop for the safety-net vet. One call sends the
+        shared context once instead of N times (the per-card shape cost ~3x
+        more at the same model tier) and lets the model judge the docket
+        holistically -- cards are compared against each other and the deck,
+        which is exactly the "is this worth a slot HERE" question.
+
+        Each card line carries the evidence the vet previously never saw:
+        corpus inclusion in the target variant (the Gravebreaker Lamia miss --
+        0 of 59 real decks ran it, and the vet scored it 4/10 because nobody
+        told it), price, and roles.
+
+        Args:
+            cards: Cards under review (carry _empirical_inclusion etc.).
+            profile_summary: Compressed profile text.
+            archetype_definition: Archetype text from the reference layer.
+            partial_deck: Current deck for composition context.
+            empirical_variant: Name of the corpus variant, for the evidence line.
+
+        Returns:
+            List of (card, CardFitResponse) aligned with the input order.
+        """
+        from sabermetrics.config import settings
+        from sabermetrics.reasoning.client import AnthropicClient
+
+        client = AnthropicClient.get_instance(self.db_path)
+
+        deck_context = _build_deck_composition_context(partial_deck, None)
+        variant = empirical_variant or "unknown"
+
+        card_lines = []
+        for i, card in enumerate(cards):
+            rate = float(card.get("_empirical_inclusion", 0.0) or 0.0)
+            card_lines.append(
+                f"{i + 1}. {card.get('name', '?')} | {card.get('mana_cost', 'N/A')} | "
+                f"{card.get('type_line', '?')} | ${card.get('price_usd', 0) or 0:.2f}\n"
+                f"   Text: {(card.get('oracle_text') or 'No text')[:400]}\n"
+                f"   Evidence: appears in {rate * 100:.0f}% of real "
+                f"'{variant}' decks for this commander."
+            )
+
+        system = (
+            "You are the final quality gate for a Commander deck generator. "
+            "Score each listed card 1-10 for fit with the deck's strategy. "
+            "A card with near-zero real-deck inclusion needs a strong "
+            "text-based justification to score above 3 -- community absence "
+            "is evidence, though genuinely synergistic sleepers do exist. "
+            "Judge cards relative to each other and to the deck context. "
+            "Mechanics checks: planeswalkers need board presence to "
+            "survive (check the deck's creature count); vehicles need "
+            "crew bodies and must survive blocks (crew cost vs toughness); "
+            "score any card that mass-removes the deck's own engine type 1. "
+            "For aura-engine decks: cheap (1-2 mana) auras that stop an "
+            "attacker are legitimate engine fuel even if generically weak; "
+            "commander-protection effects are top value (the deck does "
+            "nothing without its commander, and debuff auras backfire if "
+            "it leaves); cantrip auras stack with enchantress draw "
+            "engines; board wipes must be one-sided (condition sparing "
+            "a small, cheap board) -- uniform wipes score low. "
+            "Output ONLY a JSON array, one object per card, in the same "
+            'order: [{"name": str, "fit_score": int, "reasoning": str}]'
+        )
+        prompt = (
+            f"DECK STRATEGY:\n{profile_summary}\n\n"
+            f"ARCHETYPE: {archetype_definition or 'n/a'}\n\n"
+            f"CURRENT DECK:\n{deck_context}\n\n"
+            f"CARDS UNDER REVIEW ({len(cards)}):\n" + "\n".join(card_lines)
+        )
+
+        result = client.call_with_cache(
+            model=settings.llm.fit_model,
+            system=system,
+            messages=[{"role": "user", "content": prompt}],
+            cache_breakpoints=[0],
+            max_tokens=12000,
+            call_type="card_fit_batch",
+        )
+
+        by_name: dict[str, CardFitResponse] = {}
+        text = result.content.strip()
+        try:
+            start, end = text.find("["), text.rfind("]")
+            items = json.loads(text[start:end + 1])
+        except Exception:
+            # Truncated output loses the closing bracket and the whole-array
+            # parse fails -- build9 defaulted all 47 verdicts to 5 and the
+            # vet fired blanks. Salvage every complete object individually.
+            import re as _re
+            items = []
+            for m in _re.finditer(r"\{[^{}]*\}", text):
+                try:
+                    items.append(json.loads(m.group(0)))
+                except Exception:
+                    continue
+            logger.warning(
+                "Batch fit array parse failed; salvaged %d/%d verdicts "
+                "(tail: %r)", len(items), len(cards), text[-120:],
+            )
+        for item in items:
+            try:
+                by_name[str(item.get("name", "")).lower()] = CardFitResponse(
+                    fit_score=max(1, min(10, int(item.get("fit_score", 5)))),
+                    reasoning=str(item.get("reasoning", ""))[:500],
+                )
+            except Exception:
+                continue
+
+        out: list[tuple[dict, CardFitResponse]] = []
+        for card in cards:
+            resp = by_name.get(
+                (card.get("name") or "").lower(),
+                CardFitResponse(fit_score=5, reasoning="No verdict returned."),
+            )
+            out.append((card, resp))
+        logger.info(
+            "Batch vet: %d cards in one call, %d verdicts parsed",
+            len(cards), len(by_name),
+        )
+        return out
+
+
 def _build_deck_composition_context(
     partial_deck: list[dict] | None,
     slot_intents: list[SlotIntent] | None,

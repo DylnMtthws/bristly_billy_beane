@@ -3,16 +3,15 @@
 # protect_from_swap: true prevents swap_refine() from replacing these staples.
 
 always:
-  # Sol Ring is the best mana rock in Commander, period
+  # Sol Ring is the best mana rock in Commander, period. It and Arcane Signet
+  # (below) are the only unconditional rocks: every other rock competes in the
+  # color-aware scored pool, where signets/talismans that fix the deck's
+  # colors outrank colorless producers (Mind Stone, Thought Vessel and
+  # Commander's Sphere were demoted from this list for exactly that reason --
+  # fixed 0.95 placements were beating color-fixing rocks scoring could rank).
   - name: "Sol Ring"
     role: "ramp"
     protect_from_swap: true
-  - name: "Mind Stone"
-    role: "ramp"
-  - name: "Thought Vessel"
-    role: "ramp"
-  - name: "Wayfarer's Bauble"
-    role: "ramp"
 
 multicolor:
   # Command Tower and Arcane Signet for any deck with 2+ colors
@@ -21,19 +20,11 @@ multicolor:
   - name: "Arcane Signet"
     role: "ramp"
     protect_from_swap: true
-  - name: "Fellwar Stone"
-    role: "ramp"
-    protect_from_swap: true
-  - name: "Commander's Sphere"
-    role: "ramp"
 
 three_plus_colors:
   # Exotic Orchard for 3+ color decks
   - name: "Exotic Orchard"
     role: "land"
-  - name: "Chromatic Lantern"
-    role: "ramp"
-    protect_from_swap: true
 
 has_black:
   # Bojuka Bog for any deck with black (free graveyard hate)

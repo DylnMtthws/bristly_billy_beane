@@ -24,11 +24,14 @@ def test_scoring_defaults_match_prior_literals() -> None:
     assert s.marginal_role_cvar_weight == 0.35
     assert s.marginal_cvar_weight == 0.20
     # greedy_optimizer.py — deck_objective
-    assert s.objective_synergy_density_weight == 0.30
-    assert s.objective_role_coverage_weight == 0.25
-    assert s.objective_alignment_weight == 0.20
-    assert s.objective_avg_cvar_weight == 0.15
-    assert s.objective_curve_coherence_weight == 0.10
+    # Rescaled when type coherence joined the objective (sums to 1.0):
+    # swap/rebalance previously had no notion of engine-type density.
+    assert s.objective_synergy_density_weight == 0.28
+    assert s.objective_role_coverage_weight == 0.22
+    assert s.objective_alignment_weight == 0.18
+    assert s.objective_avg_cvar_weight == 0.14
+    assert s.objective_curve_coherence_weight == 0.08
+    assert s.objective_type_coherence_weight == 0.10
 
 
 def test_loaded_settings_match_defaults() -> None:

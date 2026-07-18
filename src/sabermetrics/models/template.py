@@ -18,11 +18,43 @@ class DeckTemplate(BaseModel):
     differentiator_slots: int = Field(ge=10, le=45)
     avg_cmc_target: float = Field(ge=1.5, le=5.5, default=3.0)
     curve_shape: dict[int, int] = Field(default_factory=dict)
+    # Empirical type targets (median counts in the target variant's real
+    # decks). None when no reliable corpus -- selection then ignores them.
+    # These express what the archetype's engine runs on: an enchantress deck
+    # with 21 enchantments can't feed its payoffs regardless of card quality.
+    type_targets: dict[str, int] | None = None
+    # Corpus-median fraction of deck value spent on lands (0 = no corpus;
+    # the land generator then gets the full remaining budget as before).
+    land_budget_share: float = 0.0
 
     @property
     def infrastructure_slots(self) -> int:
         """Total infrastructure slots (everything except differentiators)."""
         return 99 - self.differentiator_slots
+
+    def unmet_type_targets(self, placed_cards: list[dict]) -> set[str]:
+        """Card types still below their empirical target given placements.
+
+        Lets the infrastructure generators prefer on-type cards (an
+        enchantment-based removal spell over an equal instant) while the
+        archetype's engine type is undersupplied. Empty when the template has
+        no corpus-derived targets, so behavior is unchanged without one.
+
+        Args:
+            placed_cards: Card dicts already placed in the deck.
+
+        Returns:
+            The targeted type names currently under target.
+        """
+        if not self.type_targets:
+            return set()
+        counts = dict.fromkeys(self.type_targets, 0)
+        for card in placed_cards:
+            tl = (card.get("type_line") or "").lower()
+            for t in counts:
+                if t in tl:
+                    counts[t] += 1
+        return {t for t, tgt in self.type_targets.items() if counts[t] < tgt}
 
     def to_composition(self) -> dict[str, int]:
         """Convert to legacy composition dict for backward compatibility."""

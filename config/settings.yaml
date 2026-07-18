@@ -1,16 +1,20 @@
 user:
   default_budget_usd: 200
   default_power_target: 3
+  # price_efficiency carries no composite weight: price is a constraint
+  # (budget cap, Pareto axis, rebalancing), not a quality signal.
   default_weights:
-    # Calibrated against real decklists (Option A criterion 6).
-    synergy: 0.45
-    replacement_value: 0.25
-    mana_efficiency: 0.25
-    price_efficiency: 0.05
+    # Price is a constraint, not a ranking term (both branches converged on
+    # this; ours removes the weight entirely and enforces budget via the
+    # Pareto price axis + rebalancing).
+    synergy: 0.40
+    replacement_value: 0.30
+    mana_efficiency: 0.30
+    price_efficiency: 0.0
 
 llm:
   profile_model: "claude-sonnet-4-6"
-  fit_model: "claude-haiku-4-5"
+  fit_model: "claude-sonnet-4-6"
   synthesis_model: "claude-sonnet-4-6"
   refresh_model: "claude-haiku-4-5"
   max_candidates_for_llm_fit: 50
@@ -27,6 +31,10 @@ pipeline:
   embedding_filter_target: 200
   structural_filter_target: 200
   candidates_per_slot: 5
+  # Per-card ceiling as fraction of budget (0.25 => $50 cards at $200).
+  per_card_budget_fraction: 0.25
+  # Dollars reserved per unfilled slot in greedy affordability checks.
+  budget_reserve_per_slot: 0.25
 
 refresh:
   scryfall_daily: true
@@ -66,9 +74,36 @@ scoring:
   marginal_synergy_weight: 0.45
   marginal_role_cvar_weight: 0.35
   marginal_cvar_weight: 0.20
+  # Greedy fill: bonus for cards common in the target variant's real decks.
+  # Additive on top of the three weights above -- absence must never penalize.
+  marginal_empirical_weight: 0.25
+  marginal_empirical_noisy_weight: 0.15
+  # Stage 4 role generators: same bonus, on the generators' 0-1 score scale.
+  generator_empirical_weight: 0.20
+  generator_empirical_noisy_weight: 0.12
+  # Empirical staple reservation (Stage 3.5): reserve differentiator slots for
+  # strong-consensus corpus cards. Bounded so most slots stay open for the
+  # reasoning engine's undervalued picks.
+  empirical_reserve_min_inclusion: 0.45
+  empirical_reserve_max_slots: 12
+  empirical_reserve_max_fraction: 0.5
+  # LLM safety net: review uncorroborated picks (corpus inclusion below this)
+  # before merely weak ones.
+  safety_uncorroborated_max_inclusion: 0.10
+  # Infrastructure generators: bonus for cards of a type still below its
+  # empirical target (e.g. enchantment removal while enchantments are short).
+  generator_type_need_weight: 0.15
+  # Budget rebalancing: minimum deck-objective gain per move (spend-down
+  # stops when gains go below this, whatever budget remains).
+  rebalance_min_gain: 0.003
+  # Bonus for rocks that produce the deck's colors (2+ color decks).
+  ramp_color_fit_weight: 0.20
+  # Score multiplier for cards that mass-remove the deck's engine type.
+  anti_synergy_penalty: 0.15
   # Deck-level objective (components, all 0-1 normalized).
-  objective_synergy_density_weight: 0.30
-  objective_role_coverage_weight: 0.25
-  objective_alignment_weight: 0.20
-  objective_avg_cvar_weight: 0.15
-  objective_curve_coherence_weight: 0.10
+  objective_synergy_density_weight: 0.28
+  objective_role_coverage_weight: 0.22
+  objective_alignment_weight: 0.18
+  objective_avg_cvar_weight: 0.14
+  objective_curve_coherence_weight: 0.08
+  objective_type_coherence_weight: 0.10

@@ -76,6 +76,7 @@ def profile(commander_name: str, user_intent: str | None, force_refresh: bool) -
     default=None,
     help="Output format.",
 )
+@click.option("--deck-name", default=None, help="Label shown in the UI deck list.")
 def build(
     commander_name: str,
     budget: float | None,
@@ -83,6 +84,7 @@ def build(
     strategy: str | None,
     user_intent: str | None,
     output_format: str | None,
+    deck_name: str | None,
 ) -> None:
     """Generate an optimized deck for a commander."""
     import sqlite3
@@ -117,6 +119,7 @@ def build(
         power_target=power or settings.user.default_power_target,
         strategy=strategy,
         user_intent=user_intent,
+        deck_name=deck_name,
     )
 
     try:
@@ -207,6 +210,37 @@ def serve(port: int, host: str) -> None:
 def report(period: str) -> None:
     """Show cost and usage report."""
     click.echo("Not implemented yet")
+
+
+@cli.command(name="refresh-candidates")
+def refresh_candidates() -> None:
+    """Rebuild the ramp/removal/protection candidate tables.
+
+    These pre-scored tables are what the Stage 4 role generators prefer over
+    the slower role-tag fallback. setup-db and build-kb create the tables but
+    do not fill them -- only the nightly refresh does -- so a freshly built DB
+    runs the generators degraded until this is run. Idempotent: skips a table
+    already populated at the current detection version.
+    """
+    from sabermetrics.analytics.protection_detector import (
+        populate_protection_candidates,
+    )
+    from sabermetrics.analytics.ramp_detector import populate_ramp_candidates
+    from sabermetrics.analytics.removal_detector import populate_removal_candidates
+
+    db_path = _default_db_path()
+    populators = [
+        ("ramp", populate_ramp_candidates),
+        ("removal", populate_removal_candidates),
+        ("protection", populate_protection_candidates),
+    ]
+    for name, fn in populators:
+        stats = fn(db_path)
+        state = "up to date" if stats.get("skipped") else "rebuilt"
+        click.echo(
+            f"{name + '_candidates':<24} {stats.get('rows', 0):>6} rows "
+            f"({state}, v{stats.get('version', '?')})"
+        )
 
 
 @cli.command()
@@ -304,6 +338,240 @@ def index_mechanics(skip_download: bool, force_reindex: bool) -> None:
         click.echo("Set mechanics articles indexed successfully.")
 
 
+def _report_pulled_corpus(db_path: Path, commander_query: str) -> None:
+    """Print visible, honest reporting for a commander's pulled deck corpus.
+
+    Surfaces popularity_rank range, creator-tag / bracket coverage, and the tag
+    distribution — the Phase 2 requirement that the popularity-proxy bias and
+    label sparsity stay visible, not hidden inside a downstream aggregate.
+    """
+    import json
+    import sqlite3
+    from collections import Counter
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT d.popularity_rank AS rank, d.power_tier AS bracket, "
+            "d.archetype_tags AS tags "
+            "FROM decks d JOIN cards c ON d.commander_id = c.id "
+            "WHERE d.source = 'archidekt' AND c.name LIKE ? "
+            "ORDER BY d.popularity_rank",
+            (f"%{commander_query}%",),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return
+
+    n = len(rows)
+    ranks = [r["rank"] for r in rows if r["rank"] is not None]
+    tagged = [r for r in rows if r["tags"] and r["tags"] != "[]"]
+    bracketed = [r for r in rows if r["bracket"] is not None]
+
+    tag_counter: Counter[str] = Counter()
+    for r in tagged:
+        try:
+            for t in json.loads(r["tags"]):
+                tag_counter[t] += 1
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    rank_span = f"{min(ranks)}–{max(ranks)}" if ranks else "n/a"
+    click.echo(f"  corpus now: {n} decks (popularity_rank {rank_span})")
+    click.echo(
+        f"  creator-tag coverage: {len(tagged)}/{n} ({round(100 * len(tagged) / n)}%)"
+        f"  |  bracket coverage: {len(bracketed)}/{n} "
+        f"({round(100 * len(bracketed) / n)}%)"
+    )
+    if tag_counter:
+        top = ", ".join(f"{t}({c})" for t, c in tag_counter.most_common(8))
+        click.echo(f"  top creator tags: {top}")
+
+
+@cli.command(name="pull-decks")
+@click.argument("commander_names", nargs=-1, required=True)
+@click.option("--target", type=int, default=100, help="Verified decks per commander.")
+@click.option(
+    "--sort",
+    type=click.Choice(["-favorites", "-viewCount", "-createdAt", "-numFollowers"]),
+    default="-favorites",
+    help="Popularity sort (a proxy, not power).",
+)
+@click.option(
+    "--max-candidates", type=int, default=600,
+    help="Cost cap: candidate decks examined per commander.",
+)
+@click.option("--full", is_flag=True, help="Re-fetch decks already stored.")
+def pull_decks(
+    commander_names: tuple[str, ...],
+    target: int,
+    sort: str,
+    max_candidates: int,
+    full: bool,
+) -> None:
+    """Pull a commander's most-popular Archidekt decks into the corpus (Phase 2).
+
+    Stops at TARGET verified decks or MAX_CANDIDATES examined, whichever first.
+    Each deck is verified to actually be commanded by the named commander.
+    """
+    import logging
+
+    from sabermetrics.ingestion.archidekt import ArchidektIngestion
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    db_path = _default_db_path()
+    ingestion = ArchidektIngestion(db_path)
+
+    click.echo(
+        f"Pulling up to {target} decks per commander, sorted by '{sort}' "
+        f"(cap {max_candidates} candidates).\n"
+        "NOTE: sort order is a POPULARITY PROXY, not a power or correctness\n"
+        "signal. It biases toward early-posted decks, established creators, and\n"
+        "decks with writeups. popularity_rank is stored per deck so this bias\n"
+        "stays visible to every downstream consumer."
+    )
+
+    for name in commander_names:
+        click.echo(f"\n=== {name} ===")
+        try:
+            result = ingestion.ingest_commander(
+                name, target=target, sort=sort, full=full,
+                max_candidates=max_candidates,
+            )
+        except Exception as e:  # noqa: BLE001 — one bad commander shouldn't halt a batch
+            click.echo(f"  FAILED: {e}")
+            continue
+
+        if result.items_ingested == 0 and not result.success:
+            click.echo(f"  {result.errors[0] if result.errors else 'no decks stored'}")
+            continue
+
+        click.echo(
+            f"  stored={result.items_ingested}  "
+            f"rejected/failed={result.items_failed}"
+        )
+        if result.items_ingested < target:
+            click.echo(
+                f"  (fewer than {target} — commander likely lacks that many "
+                "distinct popular decks; see logged warning)"
+            )
+        _report_pulled_corpus(db_path, name)
+
+
+@cli.command(name="cluster-decks")
+@click.argument("commander_name")
+@click.option("--k", type=int, default=None, help="Cluster count (default: data-driven).")
+@click.option("--bootstrap", type=int, default=100, help="Bootstrap resamples for ARI stability.")
+@click.option("--floor", type=int, default=20, help="Min decks/cluster for validity (plan: 20-40).")
+@click.option("--no-normalize", is_flag=True, help="Cluster on raw scores, not archetype profile.")
+def cluster_decks_cmd(
+    commander_name: str,
+    k: int | None,
+    bootstrap: int,
+    floor: int,
+    no_normalize: bool,
+) -> None:
+    """Cluster a commander's decks into macro-archetypes (Phase 3).
+
+    Runs on the commander's pulled Archidekt corpus. Reports cluster sizes vs
+    the validity floor and a bootstrap adjusted-Rand-index stability verdict —
+    if the split isn't stable at this sample size, it says so.
+    """
+    from sabermetrics.analytics.deck_clustering import format_report, run_clustering
+
+    db_path = _default_db_path()
+    report = run_clustering(
+        db_path, commander_name, k=k, n_bootstrap=bootstrap,
+        floor=floor, normalize=not no_normalize,
+    )
+    click.echo(format_report(report))
+
+
+@cli.command(name="value-cards")
+@click.argument("commander_name")
+@click.option("--k", type=int, default=None, help="Cluster count (default: floor-aware auto).")
+@click.option("--floor", type=int, default=20, help="Min decks/cluster for validity.")
+@click.option("--top", type=int, default=12, help="Cards shown per list.")
+def value_cards_cmd(
+    commander_name: str, k: int | None, floor: int, top: int
+) -> None:
+    """Per-cluster card valuation with confidence bands (Phase 4).
+
+    Reports each sub-archetype cluster's confident staples (tight CI) and the
+    cards that distinguish it from the commander's other clusters. Mid-range
+    inclusion rates are flagged low-confidence — only reliable rates are shown
+    as staples.
+    """
+    from sabermetrics.analytics.cluster_valuation import (
+        compute_cluster_valuation,
+        format_valuation,
+    )
+
+    db_path = _default_db_path()
+    valuation = compute_cluster_valuation(db_path, commander_name, k=k, floor=floor)
+    click.echo(format_valuation(valuation, top_n=top))
+
+
+@cli.command(name="characterize-variants")
+@click.argument("commander_name")
+@click.option("--sample-decks", type=int, default=1, help="Sample decklists per cluster sent to the LLM.")
+def characterize_variants_cmd(commander_name: str, sample_decks: int) -> None:
+    """LLM variant characterization over a commander's clusters (Phase 4b).
+
+    Reads each cluster's Phase 4 statistics + a representative decklist and asks
+    the model to name and contrast the sub-variants. Output is an explicit
+    HYPOTHESIS to sanity-check, not a statistic. Incurs a small LLM cost.
+    """
+    from sabermetrics.reasoning.variant_characterization import (
+        characterize_variants,
+        format_variants,
+    )
+
+    db_path = _default_db_path()
+    try:
+        response, cost, valuation = characterize_variants(
+            db_path, commander_name, sample_decks=sample_decks
+        )
+    except Exception as e:  # noqa: BLE001 — surface API/key errors cleanly
+        click.echo(f"Variant characterization failed: {e}")
+        return
+    click.echo(format_variants(response, valuation))
+    click.echo(f"\nLLM cost: ${cost:.4f}")
+
+
+@cli.command(name="validate-clusters")
+@click.argument("commander_name")
+@click.option("--test-frac", type=float, default=0.2, help="Held-out fraction.")
+@click.option("--splits", type=int, default=25, help="Random splits to average.")
+@click.option("--top", type=int, default=45, help="Consensus-decklist cards per cluster.")
+def validate_clusters_cmd(
+    commander_name: str, test_frac: float, splits: int, top: int
+) -> None:
+    """Held-out validation + consensus decklists for a commander (Phase 5).
+
+    Repeated 80/20 splits check whether the clustering and its predicted staples
+    generalize to unseen decks, then the inclusion-ranked consensus decklist per
+    cluster is printed for manual (domain-expert) review.
+    """
+    from sabermetrics.analytics.cluster_validation import (
+        aggregate_decklist,
+        format_aggregate,
+        format_holdout,
+        holdout_validation,
+    )
+
+    db_path = _default_db_path()
+    report = holdout_validation(
+        db_path, commander_name, test_frac=test_frac, n_splits=splits
+    )
+    click.echo(format_holdout(report))
+    click.echo("")
+    click.echo(format_aggregate(aggregate_decklist(db_path, commander_name, top_n=top)))
+
+
 @cli.command()
 @click.option("--source", default=None, help="Specific source to sync.")
 @click.option("--full", is_flag=True, help="Full refresh instead of incremental.")
@@ -354,3 +622,7 @@ def sync(source: str | None, full: bool) -> None:
                     click.echo(f"  Error: {err}")
         except Exception as e:
             click.echo(f"  {name}: FAILED - {e}")
+
+
+if __name__ == "__main__":
+    cli()

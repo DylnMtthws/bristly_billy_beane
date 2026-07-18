@@ -13,6 +13,12 @@ from pathlib import Path
 
 import yaml
 
+from sabermetrics.analytics.empirical_valuation import (
+    annotate_empirical,
+    empirical_bonus,
+)
+from sabermetrics.config import settings
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -161,6 +167,13 @@ def _score_protection(
     normalized_role = min(role_score / 10.5, 1.0)
     final_score = 0.60 * normalized_role + 0.40 * cvar
 
+    # --- Empirical grounding: additive, never penalizes absence (ADR-005) ---
+    final_score += empirical_bonus(
+        card,
+        settings.scoring.generator_empirical_weight,
+        settings.scoring.generator_empirical_noisy_weight,
+    )
+
     return final_score
 
 
@@ -262,6 +275,7 @@ class ProtectionPackageGenerator:
         role_tag_pool: list[dict],
         commander_colors: list[str] | None = None,
         avg_cmc: float | None = None,
+        pool_index: dict[str, dict] | None = None,
     ) -> list[SlotAssignment]:
         """Generate protection package with auto-includes and role-specific scoring.
 
@@ -302,10 +316,39 @@ class ProtectionPackageGenerator:
 
         if use_candidates_table:
             pool = prot_candidates
+            # Candidate-table cards are loaded fresh from SQL; carry the
+            # empirical annotations over from role_tag_pool so the bonus applies.
+            annotate_empirical(pool, role_tag_pool)
             logger.info("Using protection_candidates table (%d cards)", len(pool))
         else:
             pool = role_tag_pool
             logger.info("Falling back to role_tag_pool (%d cards)", len(pool))
+
+        # Lands are the land package's domain; placing one here inflates the
+        # deck's land total past the template target.
+        pool = [
+            c for c in pool
+            if not is_playable_as_land(c.get("type_line") or "")
+            and not c.get("_anti_engine")
+        ]
+        # Inherit the filtered pool's gates: drop table rows not in the pool
+        # (excluded there for price/legality/ceiling reasons) and copy its
+        # flags and scores onto the survivors.
+        if pool_index is not None:
+            gated = []
+            for c in pool:
+                src = pool_index.get(c.get("name", ""))
+                if src is None:
+                    continue
+                for k in ("_anti_engine", "_cvar_score",
+                          "_empirical_inclusion", "_empirical_reliable"):
+                    if k in src:
+                        c[k] = src[k]
+                if c.get("_anti_engine"):
+                    continue
+                gated.append(c)
+            pool = gated
+
 
         # Place auto-includes from pool (or role_tag_pool as backup)
         search_pools = [pool] if use_candidates_table else [role_tag_pool]
@@ -315,7 +358,8 @@ class ProtectionPackageGenerator:
         for search_pool in search_pools:
             for card in search_pool:
                 name = card.get("name", "")
-                if name in auto_prot_names and name not in used_names:
+                if name in auto_prot_names and name not in used_names \
+                        and not card.get("_anti_engine"):
                     price = float(card.get("price_usd", 0) or 0)
                     if budget_remaining <= 0 or running_price + price <= budget_remaining:
                         assignments.append(SlotAssignment(
@@ -329,17 +373,32 @@ class ProtectionPackageGenerator:
                         auto_prot_names.discard(name)
 
         # --- Score remaining candidates ---
+        needed_types = template.unmet_type_targets(already_placed)
         candidates: list[tuple[dict, float]] = []
         for card in pool:
             name = card.get("name", "")
             if name in used_names:
                 continue
 
-            # Use pre-computed protection_score if available, otherwise compute
+            # Use pre-computed protection_score if available, otherwise compute.
+            # The stored score comes from the variant-agnostic detector, so the
+            # empirical bonus must be added here; the _score_protection fallback
+            # already includes it (do not add it twice).
             if "protection_score" in card and card["protection_score"] is not None:
-                score = float(card["protection_score"])
+                score = float(card["protection_score"]) + empirical_bonus(
+                    card,
+                    settings.scoring.generator_empirical_weight,
+                    settings.scoring.generator_empirical_noisy_weight,
+                )
             else:
                 score = _score_protection(card, colors, deck_avg_cmc)
+
+            # Type-need: prefer on-type cards while the archetype's engine
+            # type is undersupplied (corpus targets; empty without one).
+            if needed_types:
+                tl = (card.get("type_line") or "").lower()
+                if any(t in tl for t in needed_types):
+                    score += settings.scoring.generator_type_need_weight
 
             # Budget preference
             price = float(card.get("price_usd", 0) or 0)

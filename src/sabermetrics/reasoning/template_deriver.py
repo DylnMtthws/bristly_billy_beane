@@ -7,10 +7,14 @@ for avg_cmc_target and creature_density interpretation.
 
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sabermetrics.models.profile import CommanderProfile
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.mana_base import target_land_count
+
+if TYPE_CHECKING:
+    from sabermetrics.analytics.empirical_valuation import EmpiricalComposition
 
 logger = logging.getLogger(__name__)
 
@@ -35,34 +39,55 @@ def derive_deck_template(
     budget: float = 200.0,
     power_target: int = 3,
     db_path: Path | None = None,
+    empirical_composition: "EmpiricalComposition | None" = None,
 ) -> DeckTemplate:
     """Derive a deck template from commander profile.
 
-    Mostly formulaic with profile-driven adjustments.
+    Mostly formulaic with profile-driven adjustments. When a reliable decklist
+    corpus exists, its median composition overrides the estimates: the formula
+    guesses average CMC from power target alone (before a single card is
+    picked), which overshot Eriette's real 2.48 curve by ~0.8 and produced 39
+    lands where real decks run 36.
 
     Args:
         profile: The commander's strategic profile.
         budget: Total deck budget in USD.
         power_target: Target power bracket 1-5.
         db_path: Path to database (for optional Haiku call).
+        empirical_composition: Median composition of the target variant's real
+            decks; pass only when the variant is reliable.
 
     Returns:
         DeckTemplate with profile-derived composition targets.
     """
     sp = profile.strategic_profile
+    comp = empirical_composition
 
     # --- Commander CMC ---
     cmdr_cmc = _parse_commander_cmc(profile)
 
-    # --- Avg CMC target ---
-    avg_cmc = _estimate_avg_cmc(sp, power_target)
+    # --- Avg CMC target: corpus median when available, else estimate ---
+    if comp is not None and comp.avg_cmc > 0:
+        avg_cmc = round(max(1.5, min(5.5, comp.avg_cmc)), 2)
+    else:
+        avg_cmc = _estimate_avg_cmc(sp, power_target, cmdr_cmc)
 
-    # --- Land count from Karsten ---
+    # --- Land count from Karsten (corpus median clamped to Karsten +/-3) ---
     land_count = target_land_count(avg_cmc)
+    if comp is not None and comp.lands > 0:
+        land_count = max(land_count - 3, min(land_count + 3, comp.lands))
+    land_count = max(30, min(42, land_count))
 
     # --- Ramp count ---
     base_ramp = _BASE_RAMP.get(power_target, 10)
     ramp_count = base_ramp + max(0, cmdr_cmc - 3)
+    # A cheap curve needs less acceleration: scale down below avg CMC 3.0.
+    ramp_count -= max(0, round((3.0 - avg_cmc) * 2))
+    # SME ruling: for cheap commanders, ramp is a play-sequencing cost, not
+    # just a slot cost -- by turn 4-5 the deck wants engine pushes, not
+    # Fellwar Stones. Each rock displaces a value piece AND a cast window.
+    if cmdr_cmc <= 3:
+        ramp_count -= 2
     ramp_count = max(5, min(18, ramp_count))
 
     # --- Draw count ---
@@ -105,6 +130,12 @@ def derive_deck_template(
         differentiator_slots=differentiator_slots,
         avg_cmc_target=avg_cmc,
         curve_shape=curve_shape,
+        land_budget_share=(
+            comp.land_budget_share if comp is not None else 0.0
+        ),
+        type_targets=(
+            _type_targets_with_engine_floor(comp) if comp is not None else None
+        ),
     )
 
     logger.info(
@@ -139,8 +170,14 @@ def _parse_commander_cmc(profile: CommanderProfile) -> int:
     return max(1, cmc)
 
 
-def _estimate_avg_cmc(sp, power_target: int) -> float:
-    """Estimate target average CMC from profile and power target."""
+def _estimate_avg_cmc(sp, power_target: int, cmdr_cmc: int = 4) -> float:
+    """Estimate target average CMC from profile, power target and commander.
+
+    A blind guess used only when no decklist corpus exists -- prefer the
+    corpus median. The commander term nudges the estimate toward reality: a
+    cheap commander usually anchors a cheap curve (Eriette at 3 CMC leads a
+    2.5-avg deck), an expensive one the reverse.
+    """
     speed = sp.strategic_constraints.speed_tier
     base = {1: 3.5, 2: 3.2, 3: 3.0, 4: 2.8, 5: 2.3}
     avg = base.get(power_target, 3.0)
@@ -149,6 +186,8 @@ def _estimate_avg_cmc(sp, power_target: int) -> float:
         avg -= 0.3
     elif speed == "slow":
         avg += 0.3
+
+    avg += max(-0.3, min(0.3, (cmdr_cmc - 4) * 0.15))
 
     return round(max(1.5, min(5.0, avg)), 1)
 
@@ -182,3 +221,22 @@ def _estimate_curve(avg_cmc: float, power_target: int) -> dict[int, int]:
         dist = {k: max(0, round(v * total_spells / total)) for k, v in dist.items()}
 
     return dist
+
+
+def _type_targets_with_engine_floor(comp) -> dict[str, int]:
+    """Type targets with the ~30-card engine rule (SME ruling).
+
+    A deck's engine should be ~30 cards. When auras dominate the enchantment
+    engine (>=60% of enchantments), they get their own subtype target at
+    max(corpus median, 30) -- Eriette's corpus median is 27 but good lists
+    run 31-33, and engine auras multi-task as removal/draw/protection.
+    """
+    targets = {
+        "enchantment": comp.enchantments,
+        "creature": comp.creatures,
+        "artifact": comp.artifacts,
+    }
+    if comp.enchantments > 0 and comp.auras >= 0.6 * comp.enchantments:
+        targets["aura"] = max(comp.auras, 30)
+        targets["enchantment"] = max(targets["enchantment"], targets["aura"])
+    return targets

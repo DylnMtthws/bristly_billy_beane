@@ -12,6 +12,12 @@ from pathlib import Path
 
 import yaml
 
+from sabermetrics.analytics.empirical_valuation import (
+    annotate_empirical,
+    empirical_bonus,
+)
+from sabermetrics.config import settings
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -137,8 +143,14 @@ def _score_ramp(
     Returns:
         Combined quality score (higher is better).
     """
+    from sabermetrics.analytics.ramp_detector import _effective_cmc
+
     oracle = card.get("oracle_text") or ""
-    cmc = float(card.get("cmc", 3) or 3)
+    # Suspend/alternative-cost cards are costed by time-to-mana, not the fake
+    # cmc 0 (Sol Talisman scored a perfect rate as a "free" rock).
+    cmc = _effective_cmc(card, oracle.lower())
+    if cmc == 0:
+        cmc = float(card.get("cmc", 3) or 3)
     cvar = float(card.get("_cvar_score", 0.3) or 0.3)
 
     # --- Net mana rate ---
@@ -186,6 +198,13 @@ def _score_ramp(
     normalized_role = min(role_score / 3.0, 1.0)
     final_score = 0.65 * normalized_role + 0.35 * cvar
 
+    # --- Empirical grounding: additive, never penalizes absence (ADR-005) ---
+    final_score += empirical_bonus(
+        card,
+        settings.scoring.generator_empirical_weight,
+        settings.scoring.generator_empirical_noisy_weight,
+    )
+
     return final_score
 
 
@@ -221,6 +240,7 @@ class RampPackageGenerator:
                 "SELECT c.id, c.name, c.oracle_text, c.type_line, c.cmc, "
                 "c.color_identity, c.mana_cost, c.role_tags, c.keywords, "
                 "r.ramp_type, r.ramp_score, r.produces_colored, r.is_conditional, "
+                "r.produced_colors, "
                 "r.net_mana_rate, r.resilience_tier "
                 "FROM ramp_candidates r "
                 "JOIN cards c ON r.card_id = c.id "
@@ -270,6 +290,8 @@ class RampPackageGenerator:
         role_tag_pool: list[dict],
         commander_colors: list[str] | None = None,
         avg_cmc: float | None = None,
+        commander_cmc: float | None = None,
+        pool_index: dict[str, dict] | None = None,
     ) -> list[SlotAssignment]:
         """Generate ramp package with auto-includes and role-specific scoring.
 
@@ -336,10 +358,41 @@ class RampPackageGenerator:
         # Combine: use ramp_candidates as primary source, role_tag_pool as fallback
         if use_candidates_table:
             pool = ramp_candidates
+            # Candidate-table cards are loaded fresh from SQL; carry the
+            # empirical annotations over from role_tag_pool so the bonus applies.
+            annotate_empirical(pool, role_tag_pool)
             logger.info("Using ramp_candidates table (%d cards)", len(pool))
         else:
             pool = role_tag_pool
             logger.info("Falling back to role_tag_pool (%d cards)", len(pool))
+
+        # Lands are the land package's domain. A Krosan Verge placed as "ramp"
+        # inflates the deck's land total past the template target (the source
+        # of a +2 land overshoot), and the land pool already offers such lands
+        # on their own merit.
+        pool = [
+            c for c in pool
+            if not is_playable_as_land(c.get("type_line") or "")
+            and not c.get("_anti_engine")
+        ]
+        # Inherit the filtered pool's gates: drop table rows not in the pool
+        # (excluded there for price/legality/ceiling reasons) and copy its
+        # flags and scores onto the survivors.
+        if pool_index is not None:
+            gated = []
+            for c in pool:
+                src = pool_index.get(c.get("name", ""))
+                if src is None:
+                    continue
+                for k in ("_anti_engine", "_cvar_score",
+                          "_empirical_inclusion", "_empirical_reliable"):
+                    if k in src:
+                        c[k] = src[k]
+                if c.get("_anti_engine"):
+                    continue
+                gated.append(c)
+            pool = gated
+
 
         # Place auto-includes from pool (or role_tag_pool as backup)
         search_pools = [pool] if use_candidates_table else [role_tag_pool]
@@ -349,7 +402,19 @@ class RampPackageGenerator:
         for search_pool in search_pools:
             for card in search_pool:
                 name = card.get("name", "")
-                if name in auto_ramp_set and name not in used_names:
+                # Curve check: a rock costing as much as a cheap commander
+                # competes with casting it (Commander's Sphere at 3 for a
+                # 3-CMC commander). Applies to artifacts only -- land-ramp
+                # sorceries at 3 still fix and survive wipes.
+                if (
+                    commander_cmc is not None
+                    and commander_cmc <= 3
+                    and "artifact" in (card.get("type_line") or "").lower()
+                    and float(card.get("cmc", 0) or 0) >= commander_cmc
+                ):
+                    continue
+                if name in auto_ramp_set and name not in used_names \
+                        and not card.get("_anti_engine"):
                     price = float(card.get("price_usd", 0) or 0)
                     if budget_remaining <= 0 or running_price + price <= budget_remaining:
                         assignments.append(SlotAssignment(
@@ -363,17 +428,51 @@ class RampPackageGenerator:
                         auto_ramp_set.discard(name)
 
         # Score remaining candidates with role-specific function
+        needed_types = template.unmet_type_targets(already_placed)
+        identity_set = set(commander_colors or color_identity or [])
         candidates: list[tuple[dict, float]] = []
         for card in pool:
             name = card.get("name", "")
             if name in used_names:
                 continue
 
-            # Use pre-computed ramp_score if available, otherwise compute
+            # Use pre-computed ramp_score if available, otherwise compute.
+            # The stored score comes from the variant-agnostic detector, so the
+            # empirical bonus must be added here; the _score_ramp fallback
+            # already includes it (do not add it twice).
             if "ramp_score" in card and card["ramp_score"] is not None:
-                score = float(card["ramp_score"])
+                score = float(card["ramp_score"]) + empirical_bonus(
+                    card,
+                    settings.scoring.generator_empirical_weight,
+                    settings.scoring.generator_empirical_noisy_weight,
+                )
             else:
                 score = _score_ramp(card, colors, deck_avg_cmc)
+
+            # Type-need: prefer on-type cards while the archetype's engine
+            # type is undersupplied (corpus targets; empty without one).
+            if needed_types:
+                tl = (card.get("type_line") or "").lower()
+                if any(t in tl for t in needed_types):
+                    score += settings.scoring.generator_type_need_weight
+
+            # Color fit: in multicolor decks a rock that produces the deck's
+            # colors (signet/talisman) is worth more than a colorless producer
+            # of equal rate -- it ramps AND fixes. Scored against the identity
+            # rather than a fixed list, so it generalizes to any pairing.
+            if identity_set and len(identity_set) >= 2:
+                produced = card.get("produced_colors")
+                if produced is None:
+                    from sabermetrics.analytics.ramp_detector import (
+                        _produced_colors,
+                    )
+                    produced = _produced_colors(
+                        (card.get("oracle_text") or "").lower()
+                    )
+                overlap = len(set(produced or "") & identity_set)
+                score += settings.scoring.ramp_color_fit_weight * (
+                    overlap / len(identity_set)
+                )
 
             # Budget awareness: prefer $0.25-$2 range
             price = float(card.get("price_usd", 0) or 0)

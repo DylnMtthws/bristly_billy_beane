@@ -115,9 +115,12 @@ def filter_by_legality(
 def filter_by_budget(rows: list[dict], max_price: float) -> list[dict]:
     """Remove cards that exceed the per-card budget threshold.
 
-    Uses a per-card ceiling of max_price / 10 (no single card should
-    consume more than 10% of total budget). Cards without prices are
-    treated as floor-priced ($0.05).
+    The ceiling is ``per_card_budget_fraction`` of the total budget (default
+    0.25 -- $50 cards at a $200 budget). The old 10% ceiling hard-excluded
+    premium staples from the pool before any scoring saw them; the total
+    budget is enforced downstream, so the pool ceiling is a concentration
+    policy, not the budget mechanism. Cards without prices are treated as
+    floor-priced ($0.05).
 
     Args:
         rows: Card dicts; price looked up from 'price_usd' key.
@@ -126,14 +129,18 @@ def filter_by_budget(rows: list[dict], max_price: float) -> list[dict]:
     Returns:
         Filtered list of card dicts.
     """
-    from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
+    from sabermetrics.config import settings
 
-    per_card_ceiling = max_price / 10.0
+    per_card_ceiling = max_price * settings.pipeline.per_card_budget_fraction
     result = []
     for row in rows:
         price = row.get("price_usd")
         if price is None:
-            price = PRICE_FLOOR_USD
+            # Unknown price must NOT mean "assume nearly free": the latest
+            # snapshot missing a row let $87 Mana Vault into a $50-ceiling
+            # pool as a floor-priced bargain. Budget-constrained selection
+            # excludes cards it cannot price.
+            continue
         if float(price) <= per_card_ceiling:
             result.append(row)
     return result
@@ -256,12 +263,24 @@ def apply_hard_filters(
 
     logger.info("Starting with %d canonical candidates", len(all_cards))
 
-    # Exclude the commander itself from the 99. Match by NAME, not printing id:
-    # the canonical view keeps one (cheapest) printing per name, which may be a
-    # different id than the requested commander printing, so an id comparison
-    # would let the commander slip into its own candidate pool.
-    cmdr_name = cmdr.get("name")
-    all_cards = [c for c in all_cards if c.get("name") != cmdr_name]
+    # Exclude the commander itself from the 99 -- by oracle_id, not printing id.
+    # Printings of the same card have distinct ids, and the later name-dedupe
+    # keeps the cheapest printing; excluding only the commander's own printing
+    # let a $0.57 Eriette printing survive into her own 99. oracle_id is shared
+    # across reprints (same reasoning as ADR-014); name is the fallback for the
+    # handful of cards without one. (Both branches hit this bug: main fixed
+    # it by name against the canonical view; oracle_id also covers MDFC
+    # printings whose combined name differs.)
+    cmdr_oracle = cmdr.get("oracle_id")
+    cmdr_name = cmdr.get("name", "")
+    all_cards = [
+        c for c in all_cards
+        if not (
+            c["id"] == commander_id
+            or (cmdr_oracle and c.get("oracle_id") == cmdr_oracle)
+            or c.get("name", "") == cmdr_name
+        )
+    ]
 
     # Apply filters in sequence (singleton is already guaranteed by the view)
     filtered = filter_by_color_identity(all_cards, cmdr_colors)

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from pydantic import BaseModel, Field
 
+from sabermetrics.analytics.empirical_valuation import empirical_bonus
 from sabermetrics.analytics.role_targets import RoleTarget, role_need_multiplier
 from sabermetrics.analytics.synergy_matrix import SynergyMatrix
 from sabermetrics.config import settings
@@ -82,6 +83,7 @@ def greedy_fill(
     slots_remaining: int,
     tracer: GenerationTracer | None = None,
     profile_signals: ProfileSignals | None = None,
+    type_targets: dict[str, int] | None = None,
 ) -> list[SlotAssignment]:
     """Fill remaining slots by marginal contribution to deck.
 
@@ -89,6 +91,7 @@ def greedy_fill(
     - synergy_contrib: mean synergy with cards already in deck
     - role_mult: how urgently the deck needs this card's roles
     - cvar_base: standalone card quality
+    - type_mult: how far the deck is from its empirical type composition
 
     Args:
         shell: Infrastructure cards already placed.
@@ -97,6 +100,10 @@ def greedy_fill(
         role_targets: Per-role reliability targets.
         budget_remaining: Dollars left to spend.
         slots_remaining: How many differentiator slots to fill.
+        type_targets: Optional card-type medians from the target variant's
+            real decks (e.g. {"enchantment": 36}). Cards of an under-target
+            type get the same need boost roles do; over-target types are
+            damped so the deck can't over-stuff one type.
 
     Returns:
         List of SlotAssignments for the differentiator slots.
@@ -116,19 +123,40 @@ def greedy_fill(
         for r in roles:
             role_counts[r] = role_counts.get(r, 0) + 1
 
+    # Count current card types from shell (only the targeted types)
+    type_counts: dict[str, int] = {}
+    if type_targets:
+        for a in shell:
+            tl = (a.card.get("type_line") or "").lower()
+            for t in type_targets:
+                if t in tl:
+                    type_counts[t] = type_counts.get(t, 0) + 1
+
     # Filter eligible candidates
     eligible = [
         c for c in candidates
         if c.get("name", "") not in deck_names
         and not is_playable_as_land(c.get("type_line") or "")
+        # Categorical, not a score penalty: greedy's marginal is 45% synergy
+        # matrix, which loves "enchantment" text -- Nova Cleric survived a
+        # 0.15x quality crush on synergy points alone.
+        and not c.get("_anti_engine")
     ]
 
     assignments: list[SlotAssignment] = []
     budget_left = budget_remaining
+    reserve_per_slot = settings.pipeline.budget_reserve_per_slot
 
     for _ in range(slots_remaining):
         if not eligible:
             break
+
+        # Affordability floor: keep enough budget reserved to fill every
+        # remaining slot at a minimum price, so a single expensive pick can
+        # never starve the rest of the deck (price is otherwise uncapped
+        # here -- quality-seeking picks are audited by rebalance_budget).
+        slots_after_this = slots_remaining - len(assignments) - 1
+        spendable = budget_left - slots_after_this * reserve_per_slot
 
         best_card = None
         best_score = -1.0
@@ -136,7 +164,7 @@ def greedy_fill(
 
         for ci, card in enumerate(eligible):
             price = float(card.get("price_usd", 0) or 0)
-            if price > budget_left:
+            if price > spendable:
                 continue
 
             card_id = card.get("id", "")
@@ -169,7 +197,20 @@ def greedy_fill(
                 _SCORING.marginal_synergy_weight * synergy_contrib
                 + _SCORING.marginal_role_cvar_weight * (role_mult * cvar_base)
                 + _SCORING.marginal_cvar_weight * cvar_base
+                + _empirical_bonus(card)
             )
+
+            # Type-composition need: boost under-target types, damp over-target
+            # (same hypergeometric multiplier the roles use).
+            if type_targets:
+                tl = (card.get("type_line") or "").lower()
+                t_mults = [
+                    role_need_multiplier(type_counts.get(t, 0), tgt)
+                    for t, tgt in type_targets.items()
+                    if t in tl
+                ]
+                if t_mults:
+                    marginal *= max(t_mults)
 
             if marginal > best_score:
                 best_score = marginal
@@ -194,6 +235,12 @@ def greedy_fill(
 
         for r in card_roles:
             role_counts[r] = role_counts.get(r, 0) + 1
+
+        if type_targets:
+            best_tl = (best_card.get("type_line") or "").lower()
+            for t in type_targets:
+                if t in best_tl:
+                    type_counts[t] = type_counts.get(t, 0) + 1
 
         assignments.append(SlotAssignment(
             card=best_card,
@@ -269,6 +316,7 @@ def swap_refine(
         c for c in candidates
         if c.get("name", "") not in deck_names
         and not is_playable_as_land(c.get("type_line") or "")
+        and not c.get("_anti_engine")
     ]
 
     for pass_num in range(max_passes):
@@ -415,6 +463,296 @@ def swap_refine(
     return deck, total_swaps
 
 
+def _swap_eligible(a: SlotAssignment, protected: set[str]) -> bool:
+    """Whether a deck slot may be touched by rebalancing."""
+    return (
+        a.slot_role != "land"
+        and not is_playable_as_land(a.card.get("type_line") or "")
+        and a.card.get("name", "") not in protected
+    )
+
+
+def _best_single_upgrade(
+    deck: list[SlotAssignment],
+    pool: list[dict],
+    budget_left: float,
+    min_gain: float,
+    protected: set[str],
+    objective,
+    slots_considered: int = 15,
+    candidates_considered: int = 40,
+):
+    """Find the single 1-for-1 swap with the best objective gain.
+
+    Bounded search: the weakest ``slots_considered`` eligible slots against
+    the strongest ``candidates_considered`` pool cards.
+
+    Returns:
+        (slot_index, candidate, gain, price_diff) or None if no swap clears
+        ``min_gain`` within ``budget_left``.
+    """
+    base = objective(deck)
+    deck_names = {a.card.get("name", "") for a in deck}
+
+    slots = [
+        (i, a) for i, a in enumerate(deck) if _swap_eligible(a, protected)
+    ]
+    slots.sort(key=lambda x: x[1].score)
+    slots = slots[:slots_considered]
+
+    best = None
+    best_gain = min_gain
+    for i, a in slots:
+        cur_price = float(a.card.get("price_usd", 0) or 0)
+        for cand in pool[:candidates_considered]:
+            if cand.get("name", "") in deck_names:
+                continue
+            price_diff = float(cand.get("price_usd", 0) or 0) - cur_price
+            if price_diff > budget_left:
+                continue
+            trial = list(deck)
+            trial[i] = SlotAssignment(
+                card=cand, slot_role=a.slot_role,
+                score=float(cand.get("_cvar_score", 0.0) or 0.0),
+            )
+            gain = objective(trial) - base
+            if gain > best_gain:
+                best_gain = gain
+                best = (i, cand, gain, price_diff)
+    return best
+
+
+def rebalance_budget(
+    deck: list[SlotAssignment],
+    candidates: list[dict],
+    synergy: SynergyMatrix,
+    role_targets: dict[str, RoleTarget],
+    budget: float,
+    template: DeckTemplate | None = None,
+    profile_signals: ProfileSignals | None = None,
+    protected_names: set[str] | None = None,
+    max_upgrade_moves: int = 12,
+    max_expensive_checked: int = 5,
+    tracer: GenerationTracer | None = None,
+) -> tuple[list[SlotAssignment], dict]:
+    """Stage 7: portfolio rebalancing under the budget constraint.
+
+    Price is a constraint, not a quality signal, so this pass is where the
+    budget actually gets managed. Three move types, all judged by the same
+    deck-objective gain:
+
+      1. Upgrade (spend-down): while budget remains, apply the best 1-for-1
+         quality upgrades. Stops when the best available gain falls below
+         ``rebalance_min_gain`` -- leftover budget then means the market had
+         nothing left worth buying, which is a legitimate outcome (unspent
+         budget is real money, not waste).
+      2. Unbundle (sell-one-buy-many): each of the most expensive cards must
+         prove its price. Its contribution (objective with it vs with its
+         best cheap substitute) is compared against what its freed dollars
+         buy as upgrades spread across other slots. If splitting the money
+         wins, the package is committed. This is what makes power-seeking
+         greedy safe: an early expensive pick is reversible once it is clear
+         the money serves the deck better elsewhere.
+      3. Downgrade (safety net): if the deck somehow exceeds budget, shed
+         cost with minimum objective loss.
+
+    Args:
+        deck: Current assignments (all slots).
+        candidates: Full candidate pool.
+        synergy: Precomputed synergy matrix.
+        role_targets: Role targets for the objective.
+        budget: Total deck budget in USD.
+        template: Template for curve coherence in the objective.
+        profile_signals: Profile signals for alignment in the objective.
+        protected_names: Names never touched (staples, auto-includes).
+        max_upgrade_moves: Cap on Phase 1 moves.
+        max_expensive_checked: How many expensive cards Phase 2 audits.
+        tracer: Optional tracer; all moves are recorded with force=True.
+
+    Returns:
+        Tuple of (rebalanced deck, stats dict).
+    """
+    protected = protected_names or set()
+    min_gain = _SCORING.rebalance_min_gain
+
+    def objective(assignments: list[SlotAssignment]) -> float:
+        return deck_objective(
+            [a.card for a in assignments], synergy, role_targets,
+            template=template, profile_signals=profile_signals,
+        )
+
+    def total_price(assignments: list[SlotAssignment]) -> float:
+        return sum(float(a.card.get("price_usd", 0) or 0) for a in assignments)
+
+    def record(card_name, action, reason, score=None):
+        if tracer is not None:
+            tracer.record(
+                card_name=card_name, stage="rebalance", action=action,
+                score=score, reason=reason, force=True,
+            )
+
+    pool = [
+        c for c in candidates
+        if not is_playable_as_land(c.get("type_line") or "")
+        and not c.get("_anti_engine")
+    ]
+    # Rank the upgrade window by quality PLUS corpus support, so objective-
+    # relevant cards (Ondu Spiritdancer: syn 1.0, mid cvar) make the window
+    # a plain cvar sort excluded.
+    pool.sort(
+        key=lambda c: c.get("_cvar_score", 0.0)
+        + float(c.get("_empirical_inclusion", 0.0) or 0.0),
+        reverse=True,
+    )
+
+    stats = {"upgrades": 0, "unbundles": 0, "downgrades": 0, "spent": 0.0}
+
+    # --- Phase 1: spend-down upgrades ---
+    budget_left = budget - total_price(deck)
+    for _ in range(max_upgrade_moves):
+        if budget_left <= 0:
+            break
+        move = _best_single_upgrade(
+            deck, pool, budget_left, min_gain, protected, objective
+        )
+        if move is None:
+            break
+        i, cand, gain, price_diff = move
+        old_name = deck[i].card.get("name", "")
+        deck[i] = SlotAssignment(
+            card=cand, slot_role=deck[i].slot_role,
+            score=float(cand.get("_cvar_score", 0.0) or 0.0),
+        )
+        budget_left -= price_diff
+        stats["upgrades"] += 1
+        stats["spent"] += price_diff
+        record(old_name, "swapped_out", f"upgrade: obj +{gain:.4f}")
+        record(cand.get("name", ""), "swapped_in",
+               f"upgrade over {old_name}: obj +{gain:.4f}, ${price_diff:+.2f}",
+               score=gain)
+
+    # --- Phase 2: unbundle audit (sell-one-buy-many) ---
+    expensive = sorted(
+        (
+            (i, a) for i, a in enumerate(deck)
+            if _swap_eligible(a, protected)
+        ),
+        key=lambda x: float(x[1].card.get("price_usd", 0) or 0),
+        reverse=True,
+    )[:max_expensive_checked]
+
+    for i, a in expensive:
+        price = float(a.card.get("price_usd", 0) or 0)
+        if price <= 1.0:
+            break  # nothing expensive enough to audit
+        base_obj = objective(deck)
+        deck_names = {x.card.get("name", "") for x in deck}
+
+        # Best cheap substitute for this slot (frees the card's dollars).
+        best_sub, best_sub_obj = None, -1.0
+        for cand in pool[:60]:
+            if cand.get("name", "") in deck_names:
+                continue
+            if float(cand.get("price_usd", 0) or 0) > min(1.0, price / 4):
+                continue
+            trial = list(deck)
+            trial[i] = SlotAssignment(
+                card=cand, slot_role=a.slot_role,
+                score=float(cand.get("_cvar_score", 0.0) or 0.0),
+            )
+            obj = objective(trial)
+            if obj > best_sub_obj:
+                best_sub_obj, best_sub = obj, cand
+        if best_sub is None:
+            continue
+
+        contribution = base_obj - best_sub_obj
+        freed = price - float(best_sub.get("price_usd", 0) or 0)
+
+        # Hypothetical: substitute in, then spend the freed dollars.
+        trial = list(deck)
+        trial[i] = SlotAssignment(
+            card=best_sub, slot_role=a.slot_role,
+            score=float(best_sub.get("_cvar_score", 0.0) or 0.0),
+        )
+        trial_budget = freed + budget_left
+        realloc_gain = 0.0
+        for _ in range(6):
+            move = _best_single_upgrade(
+                trial, pool, trial_budget, min_gain, protected, objective
+            )
+            if move is None:
+                break
+            j, cand, gain, price_diff = move
+            trial[j] = SlotAssignment(
+                card=cand, slot_role=trial[j].slot_role,
+                score=float(cand.get("_cvar_score", 0.0) or 0.0),
+            )
+            trial_budget -= price_diff
+            realloc_gain += gain
+
+        if realloc_gain > contribution + min_gain:
+            old_name = a.card.get("name", "")
+            deck[:] = trial
+            budget_left = trial_budget
+            stats["unbundles"] += 1
+            record(old_name, "unbundled",
+                   f"sold ${price:.2f}: reallocation +{realloc_gain:.4f} beats "
+                   f"contribution +{contribution:.4f}")
+        else:
+            record(a.card.get("name", ""), "kept",
+                   f"${price:.2f} proved its price: contribution "
+                   f"+{contribution:.4f} >= reallocation +{realloc_gain:.4f}",
+                   score=contribution)
+
+    # --- Phase 3: downgrade safety net ---
+    while total_price(deck) > budget:
+        over = total_price(deck) - budget
+        worst = None
+        worst_loss = float("inf")
+        base_obj = objective(deck)
+        deck_names = {x.card.get("name", "") for x in deck}
+        for i, a in enumerate(deck):
+            if not _swap_eligible(a, protected):
+                continue
+            cur_price = float(a.card.get("price_usd", 0) or 0)
+            for cand in pool[:60]:
+                if cand.get("name", "") in deck_names:
+                    continue
+                saving = cur_price - float(cand.get("price_usd", 0) or 0)
+                if saving <= 0:
+                    continue
+                trial = list(deck)
+                trial[i] = SlotAssignment(
+                    card=cand, slot_role=a.slot_role,
+                    score=float(cand.get("_cvar_score", 0.0) or 0.0),
+                )
+                loss = base_obj - objective(trial)
+                if loss < worst_loss and saving >= min(over, saving):
+                    worst_loss = loss
+                    worst = (i, cand)
+        if worst is None:
+            break
+        i, cand = worst
+        record(deck[i].card.get("name", ""), "downgraded",
+               f"over budget by ${over:.2f}")
+        deck[i] = SlotAssignment(
+            card=cand, slot_role=deck[i].slot_role,
+            score=float(cand.get("_cvar_score", 0.0) or 0.0),
+        )
+        stats["downgrades"] += 1
+
+    stats["final_total"] = round(total_price(deck), 2)
+    stats["utilization"] = round(stats["final_total"] / budget, 3) if budget else 0.0
+    logger.info(
+        "Rebalance: %d upgrades (+$%.2f), %d unbundles, %d downgrades — "
+        "total $%.2f (%.0f%% of budget)",
+        stats["upgrades"], stats["spent"], stats["unbundles"],
+        stats["downgrades"], stats["final_total"], stats["utilization"] * 100,
+    )
+    return deck, stats
+
+
 def deck_objective(
     deck_cards: list[dict],
     synergy: SynergyMatrix,
@@ -455,6 +793,7 @@ def deck_objective(
     role_cov = _compute_role_coverage(deck_cards, role_targets)
     avg_cvar = _compute_avg_cvar(non_lands)
     curve_coh = _compute_curve_coherence(deck_cards, template) if template else 0.5
+    type_coh = _compute_type_coherence(deck_cards, template) if template else 0.5
     alignment = _compute_profile_alignment(non_lands, profile_signals)
 
     return (
@@ -462,6 +801,7 @@ def deck_objective(
         + _SCORING.objective_role_coverage_weight * role_cov
         + _SCORING.objective_alignment_weight * alignment
         + _SCORING.objective_avg_cvar_weight * avg_cvar
+        + _SCORING.objective_type_coherence_weight * type_coh
         + _SCORING.objective_curve_coherence_weight * curve_coh
     )
 
@@ -577,6 +917,32 @@ def _compute_profile_alignment(
     return min(1.0, fraction / 0.4)
 
 
+def _compute_type_coherence(
+    deck_cards: list[dict], template: DeckTemplate | None
+) -> float:
+    """How close the deck is to its empirical type targets (0-1).
+
+    This is what stops swap_refine and the rebalancer trading the engine
+    away: a numeric-objective swap that drops an enchantment for an equal
+    off-type card now costs objective points. Neutral (0.5) without corpus
+    targets, so behavior is unchanged for commanders with no corpus.
+    """
+    targets = getattr(template, "type_targets", None) if template else None
+    if not targets:
+        return 0.5
+    counts = dict.fromkeys(targets, 0)
+    for card in deck_cards:
+        tl = (card.get("type_line") or "").lower()
+        for t in counts:
+            if t in tl:
+                counts[t] += 1
+    devs = [
+        min(1.0, abs(counts[t] - target) / target)
+        for t, target in targets.items() if target > 0
+    ]
+    return 1.0 - (sum(devs) / len(devs)) if devs else 0.5
+
+
 def _compute_curve_coherence(
     deck_cards: list[dict],
     template: DeckTemplate | None,
@@ -613,6 +979,25 @@ def _compute_curve_coherence(
     # Normalize: KL can be unbounded, but typical values 0-2
     coherence = max(0.0, 1.0 - kl / 2.0)
     return coherence
+
+
+def _empirical_bonus(card: dict) -> float:
+    """Empirical inclusion bonus for the greedy marginal value.
+
+    Thin wrapper over the shared scoring rule with the greedy-scale weights;
+    see :func:`empirical_bonus` for the contract.
+
+    Args:
+        card: Candidate card dict.
+
+    Returns:
+        A non-negative bonus to add to the card's marginal value.
+    """
+    return empirical_bonus(
+        card,
+        _SCORING.marginal_empirical_weight,
+        _SCORING.marginal_empirical_noisy_weight,
+    )
 
 
 def _get_card_roles(card: dict) -> list[str]:

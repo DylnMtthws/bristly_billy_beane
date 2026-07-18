@@ -64,18 +64,26 @@ def test_legality_filter() -> None:
 
 
 def test_budget_filter() -> None:
-    """Budget filter removes cards above per-card ceiling."""
+    """Budget filter removes cards above the per-card ceiling.
+
+    Ceiling is per_card_budget_fraction (0.25) of budget: $50 at $200. A $50
+    premium staple (Smothering Tithe class) is admitted; a $78 card
+    (Sheoldred class) is judged too much concentration and excluded.
+    """
     cards = [
         {"name": "Cheap Card", "price_usd": 1.0},
-        {"name": "Expensive Card", "price_usd": 50.0},
+        {"name": "Premium Staple", "price_usd": 50.0},
+        {"name": "Too Concentrated", "price_usd": 78.0},
         {"name": "No Price Card"},
     ]
-    # $200 budget → $20 per-card ceiling
     filtered = filter_by_budget(cards, 200.0)
     names = {c["name"] for c in filtered}
     assert "Cheap Card" in names
-    assert "No Price Card" in names
-    assert "Expensive Card" not in names
+    # Unknown price now EXCLUDES: a stale price snapshot let $87 Mana Vault
+    # into a $50-ceiling pool as a floor-priced bargain.
+    assert "No Price Card" not in names
+    assert "Premium Staple" in names
+    assert "Too Concentrated" not in names
 
 
 def test_singleton_filter() -> None:

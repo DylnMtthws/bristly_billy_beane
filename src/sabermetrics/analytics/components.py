@@ -10,55 +10,17 @@ import re
 
 from pydantic import BaseModel
 
+from sabermetrics.analytics import oracle_patterns
+
 logger = logging.getLogger(__name__)
 
-# Pattern lists for component detection
-RAMP_PATTERNS = [
-    r"add\s+\{?\w\}?",  # adds mana
-    r"add\s+\w+ mana",
-    r"search your library for a .* land",
-    r"put .* land .* onto the battlefield",
-    r"mana\s+dork",
-]
-
-DRAW_PATTERNS = [
-    r"draw\s+\w+\s+cards?",
-    r"draw\s+a\s+card",
-    r"look at the top .* cards? of your library",
-    r"scry\s+\d",
-    r"whenever .* draw",
-]
-
-REMOVAL_PATTERNS = [
-    r"destroy target",
-    r"exile target",
-    r"target .* gets? -\d+/-\d+",
-    r"deals? \d+ damage to .* target",
-    r"counter target spell",
-    r"return target .* to .* owner's hand",
-]
-
-BOARD_WIPE_PATTERNS = [
-    r"destroy all",
-    r"exile all",
-    r"all creatures get -\d+/-\d+",
-    r"each (?:player|opponent) .* sacrifice",
-    r"deals? \d+ damage to each",
-]
-
-TUTOR_PATTERNS = [
-    r"search your library for a card",
-    r"search your library for .* card",
-    r"search your library for a .* card .* put .* hand",
-    r"search your library for a .* card .* put .* battlefield",
-]
-
-# Compiled patterns for performance
-_RAMP_RE = [re.compile(p, re.IGNORECASE) for p in RAMP_PATTERNS]
-_DRAW_RE = [re.compile(p, re.IGNORECASE) for p in DRAW_PATTERNS]
-_REMOVAL_RE = [re.compile(p, re.IGNORECASE) for p in REMOVAL_PATTERNS]
-_WIPE_RE = [re.compile(p, re.IGNORECASE) for p in BOARD_WIPE_PATTERNS]
-_TUTOR_RE = [re.compile(p, re.IGNORECASE) for p in TUTOR_PATTERNS]
+# Component-detection patterns, from the shared canonical source so this module
+# and role_tagger agree on what counts as ramp/draw/removal/etc.
+_RAMP_RE = oracle_patterns.RAMP
+_DRAW_RE = oracle_patterns.DRAW
+_REMOVAL_RE = oracle_patterns.REMOVAL
+_WIPE_RE = oracle_patterns.BOARD_WIPE
+_TUTOR_RE = oracle_patterns.TUTOR
 
 
 class ManaBaseScore(BaseModel):

@@ -8,6 +8,7 @@ from sabermetrics.analytics.synergy_matrix import SynergyMatrix
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.greedy_optimizer import (
     ProfileSignals,
+    _empirical_bonus,
     deck_objective,
     greedy_fill,
     is_playable_as_land,
@@ -580,3 +581,173 @@ class TestIsPlayableAsLand:
 
     def test_none_type_line(self):
         assert is_playable_as_land(None) is False
+
+
+# --- Empirical grounding at selection ---
+
+
+def test_empirical_bonus_is_zero_without_corpus_data() -> None:
+    """A card with no corpus data must score exactly 0.0, not a penalty.
+
+    Absence has to stay neutral: an unpopular card is the moneyball thesis,
+    not a defect (ADR-005).
+    """
+    assert _empirical_bonus(_make_card()) == 0.0
+    assert _empirical_bonus(_make_card() | {"_empirical_inclusion": 0.0}) == 0.0
+
+
+def test_empirical_bonus_scales_with_inclusion_and_reliability() -> None:
+    """Reliable inclusion is weighted above noisy inclusion at the same rate."""
+    reliable = _make_card() | {
+        "_empirical_inclusion": 0.9, "_empirical_reliable": True,
+    }
+    noisy = _make_card() | {
+        "_empirical_inclusion": 0.9, "_empirical_reliable": False,
+    }
+
+    assert _empirical_bonus(reliable) == pytest.approx(0.25 * 0.9)
+    assert _empirical_bonus(noisy) == pytest.approx(0.15 * 0.9)
+    assert _empirical_bonus(reliable) > _empirical_bonus(noisy)
+
+
+def test_greedy_picks_empirical_staple_over_cheaper_jank() -> None:
+    """The Phase 6 failure: a proven staple loses to on-theme jank.
+
+    Mirrors Pitiless Plunderer (in 90% of real aristocrats decks) losing to a
+    marginally higher-CVAR card with no corpus support. Without the empirical
+    term the jank wins on CVAR alone.
+    """
+    staple = _make_card(
+        card_id="staple", name="Pitiless Plunderer",
+        role_tags='["utility"]', cvar_score=0.50,
+    ) | {"_empirical_inclusion": 0.90, "_empirical_reliable": True}
+    jank = _make_card(
+        card_id="jank", name="On-Theme Jank",
+        role_tags='["utility"]', cvar_score=0.60,
+    )
+
+    all_cards = [staple, jank]
+    assignments = greedy_fill(
+        shell=[],
+        candidates=all_cards,
+        synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
+        slots_remaining=1,
+    )
+
+    # jank marginal   = 0.35*1.0*0.60 + 0.20*0.60 = 0.330
+    # staple marginal = 0.35*1.0*0.50 + 0.20*0.50 + 0.25*0.90 = 0.500
+    assert len(assignments) == 1
+    assert assignments[0].card["name"] == "Pitiless Plunderer"
+
+
+def test_greedy_ranking_unchanged_when_no_card_has_corpus_data() -> None:
+    """With no corpus, selection must be identical to the pre-grounding rule."""
+    low = _make_card(card_id="low", name="Low", cvar_score=0.40)
+    high = _make_card(card_id="high", name="High", cvar_score=0.80)
+
+    all_cards = [low, high]
+    assignments = greedy_fill(
+        shell=[],
+        candidates=all_cards,
+        synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
+        slots_remaining=1,
+    )
+
+    assert len(assignments) == 1
+    assert assignments[0].card["name"] == "High"
+
+
+# --- Empirical type-composition targets ---
+
+
+def test_type_need_boosts_undersupplied_type() -> None:
+    """When the deck starves for enchantments, an enchantment beats a
+    slightly stronger non-enchantment (the Eriette failure: 21 enchantments
+    built vs a 36 median in real decks)."""
+    ench = _make_card(
+        card_id="e", name="Wanted Enchantment", cvar_score=0.50,
+    ) | {"type_line": "Enchantment — Aura"}
+    creature = _make_card(
+        card_id="c", name="Slightly Better Creature", cvar_score=0.60,
+    ) | {"type_line": "Creature — Human"}
+
+    all_cards = [ench, creature]
+    assignments = greedy_fill(
+        shell=[],
+        candidates=all_cards,
+        synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
+        slots_remaining=1,
+        type_targets={"enchantment": 30},
+    )
+
+    # ench: (0.35*0.5 + 0.20*0.5) * need(0,30)=1.8 -> 0.495
+    # creature: 0.35*0.6 + 0.20*0.6 = 0.33 (no targeted type -> mult 1.0)
+    assert assignments[0].card["name"] == "Wanted Enchantment"
+
+
+def test_type_need_damps_oversupplied_type() -> None:
+    """Past the target, more of the same type is damped, not stacked."""
+    shell = [
+        SlotAssignment(
+            card={"id": f"s{i}", "name": f"Shell Ench {i}",
+                  "type_line": "Enchantment"},
+            slot_role="utility", score=0.5,
+        )
+        for i in range(10)
+    ]
+    ench = _make_card(card_id="e", name="Yet Another Enchantment",
+                      cvar_score=0.60) | {"type_line": "Enchantment"}
+    creature = _make_card(card_id="c", name="Needed Creature",
+                          cvar_score=0.55) | {"type_line": "Creature"}
+
+    all_cards = [ench, creature]
+    assignments = greedy_fill(
+        shell=shell,
+        candidates=all_cards,
+        synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
+        slots_remaining=1,
+        # Target 5, shell already has 10 -> heavily over.
+        type_targets={"enchantment": 5},
+    )
+
+    assert assignments[0].card["name"] == "Needed Creature"
+
+
+def test_no_type_targets_changes_nothing() -> None:
+    """Without targets the ranking is exactly the pre-change behavior."""
+    low = _make_card(card_id="low", name="Low", cvar_score=0.40)
+    high = _make_card(card_id="high", name="High", cvar_score=0.80)
+    all_cards = [low, high]
+
+    a = greedy_fill(
+        shell=[], candidates=all_cards, synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(), budget_remaining=100.0,
+        slots_remaining=1, type_targets=None,
+    )
+    assert a[0].card["name"] == "High"
+
+
+def test_type_coherence_component() -> None:
+    """Objective rewards decks near their type targets, neutral without them."""
+    from sabermetrics.pipeline.greedy_optimizer import _compute_type_coherence
+    from sabermetrics.models.template import DeckTemplate
+
+    t = DeckTemplate(
+        land_count=36, ramp_count=10, draw_count=8, removal_count=6,
+        board_wipe_count=2, differentiator_slots=37, avg_cmc_target=3.0,
+        type_targets={"enchantment": 10},
+    )
+    on_target = [{"type_line": "Enchantment"}] * 10
+    off_target = [{"type_line": "Creature"}] * 10
+    assert _compute_type_coherence(on_target, t) == 1.0
+    assert _compute_type_coherence(off_target, t) == 0.0
+    t_none = t.model_copy(update={"type_targets": None})
+    assert _compute_type_coherence(on_target, t_none) == 0.5

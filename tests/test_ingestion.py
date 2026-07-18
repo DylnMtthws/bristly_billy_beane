@@ -190,3 +190,146 @@ def test_health_monitor_init() -> None:
     monitor = SourceHealthMonitor(db_path)
     report = monitor.get_health_report()
     assert isinstance(report, list)
+
+
+# --- Corrected Archidekt ingestion: pure parse/verify helpers ---------------
+
+
+def _archidekt_detail_fixture() -> dict:
+    """Minimal /api/decks/{id}/ payload with a commander + two 99-cards."""
+    return {
+        "name": "Korvold Treasure Tyrant",
+        "cards": [
+            {
+                "quantity": 1,
+                "categories": ["Commander"],
+                "card": {"oracleCard": {"name": "Korvold, Fae-Cursed King"}},
+            },
+            {
+                "quantity": 1,
+                "categories": ["Ramp"],
+                "card": {"oracleCard": {"name": "Sol Ring"}},
+            },
+            {
+                "quantity": 1,
+                "categories": [],
+                "card": {"oracleCard": {"name": "Dockside Extortionist"}},
+            },
+        ],
+    }
+
+
+def test_parse_deck_detail_extracts_commander_and_cards() -> None:
+    """parse_deck_detail separates the Commander slot from the 99."""
+    from sabermetrics.ingestion.archidekt import parse_deck_detail
+
+    commanders, cards = parse_deck_detail(_archidekt_detail_fixture())
+    assert commanders == ["Korvold, Fae-Cursed King"]
+    assert len(cards) == 3
+    assert ("Sol Ring", 1, False) in cards
+    assert ("Korvold, Fae-Cursed King", 1, True) in cards
+
+
+def test_parse_deck_detail_skips_nameless_and_empty() -> None:
+    """Entries without an oracle name are ignored; empty payload is safe."""
+    from sabermetrics.ingestion.archidekt import parse_deck_detail
+
+    commanders, cards = parse_deck_detail({"cards": [{"quantity": 1}]})
+    assert commanders == []
+    assert cards == []
+    assert parse_deck_detail({}) == ([], [])
+
+
+def test_commander_matches_accepts_commander_slot() -> None:
+    """A deck where the card is the commander verifies (case-insensitive)."""
+    from sabermetrics.ingestion.archidekt import commander_matches
+
+    assert commander_matches("Korvold, Fae-Cursed King", ["Korvold, Fae-Cursed King"])
+    assert commander_matches("korvold, fae-cursed king", ["Korvold, Fae-Cursed King"])
+
+
+def test_commander_matches_rejects_card_only_in_99() -> None:
+    """The core fix: a card present but NOT in the Commander slot is rejected."""
+    from sabermetrics.ingestion.archidekt import commander_matches
+
+    # e.g. a World Shaper deck that merely runs Korvold in the 99.
+    assert not commander_matches("Korvold, Fae-Cursed King", ["World Shaper"])
+    assert not commander_matches("Korvold, Fae-Cursed King", [])
+
+
+def test_commander_matches_partner_deck() -> None:
+    """Partner decks list two commanders; either one verifies."""
+    from sabermetrics.ingestion.archidekt import commander_matches
+
+    slot = ["Thrasios, Triton Hero", "Tymna the Weaver"]
+    assert commander_matches("Tymna the Weaver", slot)
+    assert commander_matches("Thrasios, Triton Hero", slot)
+
+
+def test_extract_summary_metadata_pulls_tags_and_bracket() -> None:
+    """Creator tags, bracket, and creator are pulled from a search summary."""
+    from sabermetrics.ingestion.archidekt import extract_summary_metadata
+
+    summary = {
+        "owner": {"username": "someUser"},
+        "edhBracket": 3,
+        "viewCount": 12345,
+        "hasPrimer": True,
+        "tags": [
+            {"name": "Sacrifice"},
+            {"name": "Aristocrats"},
+            {"id": 1},  # malformed tag without a name — skipped
+        ],
+        "createdAt": "2023-01-01",
+        "updatedAt": "2024-01-01",
+    }
+    meta = extract_summary_metadata(summary)
+    assert meta["creator"] == "someUser"
+    assert meta["power_tier"] == 3
+    assert meta["tags"] == ["Sacrifice", "Aristocrats"]
+    assert meta["view_count"] == 12345
+    assert meta["has_primer"] is True
+
+
+def test_extract_summary_metadata_handles_missing_fields() -> None:
+    """A bare summary yields Nones/empties, not exceptions."""
+    from sabermetrics.ingestion.archidekt import extract_summary_metadata
+
+    meta = extract_summary_metadata({})
+    assert meta["creator"] is None
+    assert meta["power_tier"] is None
+    assert meta["tags"] == []
+    assert meta["has_primer"] is False
+
+
+def test_parse_deck_detail_excludes_maybeboard() -> None:
+    """Cards only in includedInDeck=false categories are dropped from the deck."""
+    from sabermetrics.ingestion.archidekt import parse_deck_detail
+
+    data = {
+        "categories": [
+            {"name": "Commander", "includedInDeck": True},
+            {"name": "Ramp", "includedInDeck": True},
+            {"name": "Maybeboard", "includedInDeck": False},
+            {"name": "Consider Adding", "includedInDeck": False},
+        ],
+        "cards": [
+            {"quantity": 1, "categories": ["Commander"],
+             "card": {"oracleCard": {"name": "Korvold, Fae-Cursed King"}}},
+            {"quantity": 1, "categories": ["Ramp"],
+             "card": {"oracleCard": {"name": "Sol Ring"}}},
+            {"quantity": 1, "categories": ["Maybeboard"],
+             "card": {"oracleCard": {"name": "Dockside Extortionist"}}},
+            {"quantity": 1, "categories": ["Consider Adding", "Maybeboard"],
+             "card": {"oracleCard": {"name": "Mana Crypt"}}},
+            # In both an excluded and an included category -> kept.
+            {"quantity": 1, "categories": ["Maybeboard", "Ramp"],
+             "card": {"oracleCard": {"name": "Arcane Signet"}}},
+        ],
+    }
+    commanders, cards = parse_deck_detail(data)
+    names = {c[0] for c in cards}
+    assert commanders == ["Korvold, Fae-Cursed King"]
+    assert "Sol Ring" in names and "Arcane Signet" in names
+    assert "Dockside Extortionist" not in names  # maybeboard only
+    assert "Mana Crypt" not in names             # excluded categories only

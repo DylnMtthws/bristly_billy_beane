@@ -6,9 +6,10 @@
 3. Template derivation (profile-driven composition)
 4. Infrastructure fill (4 deterministic generators)
 5. Role targets + synergy matrix computation
-6. Greedy optimizer + swap refinement (deterministic; no per-card LLM)
-7. Budget redistribution (upgrade/downgrade passes)
+6. Greedy optimizer + swap refinement
+7. Budget rebalancing (spend-down, sell-one-buy-many, downgrade)
 7b. Enforce Commander legality (exactly 99, singleton, in color identity)
+8. LLM safety vet (one batched call, final gate)
 8. Synthesis + classify + persist
 """
 
@@ -40,6 +41,24 @@ from sabermetrics.models.deck import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Per-variant empirical Pareto protection: a card in >= MIN_INCLUSION of the
+# target variant's real decks is shielded from price-domination outright.
+#
+# Protection deliberately does NOT depend on how the dominator compares. An
+# earlier version also required the dominator to be some margin rarer, on the
+# theory that domination picks between substitutes and the corpus should break
+# the tie. That is the wrong model: real decks run Pitiless Plunderer (65%) AND
+# Deadly Dispute (55%) together. Cards that co-occur in most real decks are
+# complements, so the margin between them is always small -- which meant the
+# protection could never fire for the staples it existed to protect. Measured
+# on Korvold, every one of the 6 eliminated staples was killed by another card
+# from the same corpus, gaps ranging +0.02 to +0.18.
+#
+# The card's own inclusion rate is the whole signal: if it is in 65% of the
+# variant's real decks, the corpus has already said it earns a slot. Only 68 of
+# 1154 scored cards clear 0.30, so the exempt set stays small.
+_EMPIRICAL_PROTECT_MIN_INCLUSION = 0.30
 
 
 class DeckBuildRequest(BaseModel):
@@ -177,16 +196,32 @@ class DeckBuilder:
             candidates, commander, request, template
         )
         metrics["6_infrastructure"] = time.time() - t
+
+        # --- Stage 4.5: Reserve empirical staples the generators didn't place ---
+        # After Stage 4 so it can exclude cards already placed -- reserving only
+        # the consensus engine pieces the role scorers reject, not good role
+        # cards the generators took anyway. Reserved staples occupy differentiator
+        # slots, so greedy (Stage 5+6) fills that many fewer (deck stays 99).
+        placed_names = {a.card.get("name", "") for a in infrastructure}
+        reserved = self._reserve_empirical_staples(
+            candidates, request, template, exclude_names=placed_names,
+        )
+        infrastructure = list(reserved) + infrastructure
+        budget_used += sum(
+            float(a.card.get("price_usd", 0) or 0) for a in reserved
+        )
+        # Don't let swap_refine trade away a card the corpus told us to keep.
+        self._protected_names |= {a.card.get("name", "") for a in reserved}
         logger.info(
-            "Stage 4: %d infrastructure cards placed ($%.2f)",
-            len(infrastructure), budget_used,
+            "Stage 4: %d cards placed ($%.2f), %d reserved as staples",
+            len(infrastructure), budget_used, len(reserved),
         )
 
         # --- Stage 5+6: Synergy optimizer (role targets + matrix + greedy + swap) ---
         t = time.time()
         all_assignments, opt_metrics = self._optimize_differentiators(
             candidates, infrastructure, profile_result, commander,
-            request, template, budget_used,
+            request, template, budget_used, reserved_count=len(reserved),
         )
         total_cost += opt_metrics.get("llm_safety_cost", 0.0)
         metrics["7_optimizer"] = time.time() - t
@@ -201,22 +236,17 @@ class DeckBuilder:
             opt_metrics.get("objective_score", 0),
         )
 
-        # --- Stage 7: Budget Redistribution ---
-        t = time.time()
-        protected = getattr(self, "_protected_names", None) or set()
-        all_assignments = self._redistribute_budget(
-            all_assignments, request.budget_usd, candidates,
-            protected_names=protected,
-        )
-        metrics["9_budget"] = time.time() - t
+        # (Stage 7 budget rebalancing now runs inside _optimize_differentiators,
+        # where the synergy matrix and role targets it evaluates against live.)
 
         # --- Stage 7b: Enforce Commander legality as a hard invariant ---
         all_assignments = self._enforce_legality(
-            all_assignments, commander, protected_names=protected,
+            all_assignments, commander, protected_names=self._protected_names,
         )
 
         # --- Stage 8: Synthesis + Classify + Persist ---
         t = time.time()
+        self._validate_no_commander_in_99(all_assignments, commander)
         total_price = sum(
             float(a.card.get("price_usd", 0) or 0) for a in all_assignments
         )
@@ -279,10 +309,43 @@ class DeckBuilder:
             profile_was_generated=not profile_result.cache_hit,
             total_cost_usd=round(total_cost, 4),
             total_time_seconds=round(total_time, 2),
-            pipeline_metrics=metrics,
+            pipeline_metrics={
+                **metrics,
+                "empirical_variant": getattr(self, "_empirical_variant", None),
+            },
         )
 
     # --- Step implementations ---
+
+    @staticmethod
+    def _validate_no_commander_in_99(assignments: list, commander: Card) -> None:
+        """Hard-fail if the commander leaked into the 99.
+
+        The commander sharing a slot with itself violates the format's core
+        rule, so this is a FatalError, not a warning. Matches by oracle_id
+        (shared across printings -- excluding only the commander's own printing
+        id once let a cheaper printing of the commander into its own deck) with
+        name as the fallback for cards without one.
+
+        Args:
+            assignments: All slot assignments about to be assembled.
+            commander: The commander card.
+
+        Raises:
+            FatalError: If any assignment is a printing of the commander.
+        """
+        for a in assignments:
+            card = a.card
+            same = (
+                commander.oracle_id
+                and card.get("oracle_id") == commander.oracle_id
+            ) or card.get("name", "") == commander.name
+            if same:
+                raise FatalError(
+                    f"Commander '{commander.name}' leaked into the 99 "
+                    f"(printing {card.get('id')}, slot {a.slot_role}). "
+                    "This is a generator bug; the deck is illegal."
+                )
 
     def _validate_request(self, request: DeckBuildRequest) -> Card:
         """Validate the build request and load commander."""
@@ -481,6 +544,31 @@ class DeckBuilder:
         if hasattr(self, "_signals"):
             self._signals["tournament_cwe"] = bool(cwe_by_card)
 
+        # Per-variant empirical grounding from the verified decklist corpus
+        # (Phase 6). Sharper than pooled EDHREC; None when no corpus exists,
+        # in which case scoring falls back cleanly to the pooled EDHREC signal.
+        empirical = None
+        try:
+            from sabermetrics.analytics.empirical_valuation import (
+                get_target_cluster_inclusion,
+            )
+            empirical = get_target_cluster_inclusion(
+                self.db_path, commander.id, strategy=request.strategy,
+            )
+        except Exception as e:
+            logger.warning("Empirical inclusion load failed: %s", e)
+        self._empirical_variant = empirical.variant if empirical else None
+        # Kept for later stages: template derivation reads the variant's
+        # median composition (Stage 3), reservation its inclusion (Stage 4.5).
+        self._empirical = empirical
+        if empirical is not None:
+            logger.info(
+                "Empirical grounding active: variant='%s' from %d/%d decks, "
+                "%d cards (%d reliable)",
+                empirical.variant, empirical.variant_size, empirical.n_decks,
+                len(empirical.inclusion), len(empirical.reliable),
+            )
+
         context = ScoringContext(
             commander_id=commander.id,
             commander_name=commander.name,
@@ -492,6 +580,9 @@ class DeckBuilder:
             engine_keywords=[kw.lower() for kw in engine_keywords],
             output_keywords=[kw.lower() for kw in output_keywords],
             edhrec_top_cards=edhrec_top_cards,
+            empirical_inclusion=empirical.inclusion if empirical else {},
+            empirical_reliable=empirical.reliable if empirical else set(),
+            empirical_variant=empirical.variant if empirical else None,
             cwe_by_card=cwe_by_card,
             cwe_sample_by_card=cwe_sample_by_card,
             desired_card_traits=desired_traits,
@@ -502,14 +593,74 @@ class DeckBuilder:
             max_budget=request.budget_usd,
         )
 
+        # Engine types for the anti-synergy veto: a card that mass-removes the
+        # type the deck is built on ("destroy all enchantments" in an
+        # enchantress shell) must never win a slot on text-match points.
+        from sabermetrics.analytics.anti_synergy import engine_types, is_anti_engine
+        from sabermetrics.config import settings
+
+        engine: set[str] = set()
+        aura_engine = False
+        if empirical is not None and empirical.composition is not None:
+            comp = empirical.composition
+            engine = engine_types({
+                "enchantment": comp.enchantments,
+                "artifact": comp.artifacts,
+            })
+            aura_engine = (
+                comp.enchantments > 0
+                and comp.auras >= 0.6 * comp.enchantments
+            )
+
+        # Game-changer gate: bracket data exists (game_changers.yaml) but was
+        # never consulted at selection -- Mana Vault-class fast mana has no
+        # place in a power<=3 pool. Reuses the categorical-exclusion flag.
+        gc_names: set[str] = set()
+        if request.power_target <= 3:
+            try:
+                import yaml as _yaml
+                _gc = _yaml.safe_load(
+                    (Path(__file__).resolve().parents[3] / "config"
+                     / "game_changers.yaml").read_text()
+                ) or {}
+                for v in (_gc.values() if isinstance(_gc, dict) else [_gc]):
+                    if isinstance(v, list):
+                        gc_names |= {str(x).lower() if not isinstance(x, dict)
+                                     else str(x.get("name", "")).lower() for x in v}
+            except Exception:
+                pass
+            gc_names.discard("sol ring")  # ubiquitous at every power level
+
         for card in candidates:
             card_name_lower = (card.get("name") or "").lower()
+            if card_name_lower in gc_names:
+                card["_anti_engine"] = True
             card["edhrec_inclusion_pct"] = edhrec_top_cards.get(
                 card_name_lower, 0.0
             )
+            if empirical is not None:
+                card["_empirical_inclusion"] = empirical.rate(card_name_lower)
+                card["_empirical_reliable"] = card_name_lower in empirical.reliable
             result = compute_cvar(card, context, self.db_path)
             card["_cvar_result"] = result.model_dump()
             card["_cvar_score"] = result.composite_score
+            # SME value-inversion rule: in an aura-engine deck, any 1-2
+            # mana Aura is "one mana to stop an attacker" -- playable
+            # regardless of generic quality. Generic scoring rates Crippling
+            # Blight-class cards near zero and Pareto kills them before any
+            # later stage can save the engine fuel. Floor, don't boost:
+            # multi-taskers still rank higher via synergy/empirical signals.
+            if aura_engine:
+                tl = (card.get("type_line") or "").lower()
+                if "aura" in tl and float(card.get("cmc", 0) or 0) <= 2:
+                    card["_cvar_score"] = max(card["_cvar_score"], 0.55)
+                    card["_engine_fuel"] = True
+            if engine and is_anti_engine(card, engine):
+                card["_anti_engine"] = True
+                card["_cvar_score"] = round(
+                    card["_cvar_score"]
+                    * settings.scoring.anti_synergy_penalty, 4,
+                )
 
         return candidates
 
@@ -590,12 +741,24 @@ class DeckBuilder:
                 dominated = False
                 dominator_name = ""
                 edhrec_saved = False
+                emp_saved = False
                 card_edhrec = card.get("edhrec_inclusion_pct", 0.0)
+                card_emp = card.get("_empirical_inclusion", 0.0)
+                card_emp_reliable = card.get("_empirical_reliable", False)
 
                 for f_card in frontier:
                     f_cvar = f_card.get("_cvar_score", 0)
                     f_price = float(f_card.get("price_usd", 0) or 0)
                     if f_cvar >= cvar and f_price <= price and (f_cvar > cvar or f_price < price):
+                        # Empirical protection: a card common in the target
+                        # variant's real decks earns its slot outright, whatever
+                        # dominates it (per-variant, sharper than EDHREC).
+                        if (
+                            card_emp_reliable
+                            and card_emp >= _EMPIRICAL_PROTECT_MIN_INCLUSION
+                        ):
+                            emp_saved = True
+                            continue  # This frontier card can't dominate; check others
                         # EDHREC protection: a card with strong empirical inclusion
                         # cannot be dominated by one the community doesn't use.
                         f_edhrec = f_card.get("edhrec_inclusion_pct", 0.0)
@@ -608,7 +771,17 @@ class DeckBuilder:
 
                 if not dominated:
                     frontier.append(card)
-                    if edhrec_saved:
+                    if emp_saved:
+                        self._tracer.record(
+                            card_name=card_name,
+                            stage="pareto",
+                            action="protected",
+                            card_id=card.get("id"),
+                            score=cvar,
+                            reason=f"empirical protected ({card_emp * 100:.0f}% "
+                                   "of variant decks)",
+                        )
+                    elif edhrec_saved:
                         self._tracer.record(
                             card_name=card_name,
                             stage="pareto",
@@ -684,15 +857,123 @@ class DeckBuilder:
         return kept
 
     def _derive_template(self, profile, request):
-        """Stage 3: Derive deck template from profile."""
+        """Stage 3: Derive deck template from profile.
+
+        When Stage 2 loaded a reliable decklist corpus, its median composition
+        grounds the template (lands, avg CMC, type targets) instead of the
+        power-target estimates.
+        """
         from sabermetrics.reasoning.template_deriver import derive_deck_template
 
+        empirical = getattr(self, "_empirical", None)
+        composition = (
+            empirical.composition
+            if empirical is not None and empirical.reliable
+            else None
+        )
         return derive_deck_template(
             profile=profile,
             budget=request.budget_usd,
             power_target=request.power_target,
             db_path=self.db_path,
+            empirical_composition=composition,
         )
+
+    def _reserve_empirical_staples(
+        self, candidates, request, template, exclude_names=None,
+    ) -> list:
+        """Stage 4.5: Reserve differentiator slots for strong-consensus cards.
+
+        Runs AFTER the role generators so it can reserve only cards the corpus
+        validates but the generators did not already place. This lands the
+        engine pieces the role scorers reject -- a treasure or sacrifice payoff
+        is not "ramp", so it is reserved as a differentiator, which is what it
+        actually is -- without spending a reserved slot on a genuinely-good ramp
+        card the ramp generator would have taken anyway (Birds of Paradise,
+        Ignoble Hierarch). Excluding those frees the cap for the payoffs.
+
+        Bounded on purpose (ADR-005, the moneyball goal): only cards at or above
+        the inclusion floor, only up to a fraction of the differentiator budget.
+        Most slots stay open for the reasoning engine's undervalued picks.
+
+        Args:
+            candidates: Scored candidate dicts (carry ``_empirical_inclusion``).
+            request: The build request (for the budget ceiling).
+            template: Derived template (for the differentiator budget).
+            exclude_names: Card names already placed (by the generators), never
+                reserved -- they are in the deck already.
+
+        Returns:
+            List of SlotAssignment for the reserved cards (may be empty).
+        """
+        from sabermetrics.config import settings
+        from sabermetrics.pipeline.generators.ramp import _load_auto_includes
+        from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
+        from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+        cfg = settings.scoring
+        cap = min(
+            cfg.empirical_reserve_max_slots,
+            int(template.differentiator_slots * cfg.empirical_reserve_max_fraction),
+        )
+        if cap <= 0:
+            return []
+
+        # Auto-includes are placed by the generators, so they arrive via
+        # exclude_names; keep this as a fallback for the rare unplaced one.
+        auto_names, _ = _load_auto_includes()
+        already = set(exclude_names or set())
+        for entries in auto_names.values():
+            if isinstance(entries, list):
+                already.update(e["name"] for e in entries)
+
+        # Eligible: reliable, above the inclusion floor, not a land, not already
+        # placed by a generator (or an auto-include), within budget.
+        eligible = [
+            c for c in candidates
+            if c.get("_empirical_reliable")
+            and float(c.get("_empirical_inclusion", 0.0) or 0.0)
+            >= cfg.empirical_reserve_min_inclusion
+            and not is_playable_as_land(c.get("type_line") or "")
+            and c.get("name", "") not in already
+        ]
+        eligible.sort(
+            key=lambda c: float(c.get("_empirical_inclusion", 0.0) or 0.0),
+            reverse=True,
+        )
+
+        reserved: list[SlotAssignment] = []
+        spent = 0.0
+        for card in eligible:
+            if len(reserved) >= cap:
+                break
+            price = float(card.get("price_usd", 0) or 0)
+            if spent + price > request.budget_usd:
+                continue
+            spent += price
+            rate = float(card.get("_empirical_inclusion", 0.0) or 0.0)
+            reserved.append(SlotAssignment(
+                card=card, slot_role="utility", score=rate,
+            ))
+            self._tracer.record(
+                card_name=card.get("name", ""),
+                stage="empirical_reserve",
+                action="placed",
+                card_id=card.get("id"),
+                score=rate,
+                reason=f"empirical staple ({rate * 100:.0f}% of variant decks)",
+                # Low-volume, load-bearing stage: trace every reservation
+                # regardless of watchlist (like swap_refine), so the grounding
+                # is auditable.
+                force=True,
+            )
+        if reserved:
+            logger.info(
+                "Stage 4.5: reserved %d empirical staples: %s",
+                len(reserved),
+                ", ".join(a.card.get("name", "") for a in reserved),
+            )
+        return reserved
 
     def _fill_infrastructure(
         self, candidates, commander, request, template,
@@ -755,6 +1036,13 @@ class DeckBuilder:
                     reason=f"infrastructure {stage.removeprefix('infra_')}",
                 )
 
+        # Gate inheritance for candidate-table loads: the tables are queried
+        # straight from the DB and bypassed every pool-level gate (price
+        # ceiling, NULL-price exclusion, game-changer gate, anti-engine flag)
+        # -- how an $87 Mana Vault entered a $50-ceiling deck. Generators
+        # intersect table rows with this index and inherit its flags/scores.
+        pool_index = {c.get("name", ""): c for c in candidates}
+
         # 1. Ramp (first, so land generator knows what spells are in deck)
         ramp_gen = RampPackageGenerator(self.db_path)
         ramp = ramp_gen.generate(
@@ -766,6 +1054,8 @@ class DeckBuilder:
             role_tag_pool=_pool_by_role("ramp"),
             commander_colors=colors,
             avg_cmc=template.avg_cmc_target,
+            commander_cmc=float(commander.cmc or 0),
+            pool_index=pool_index,
         )
         all_assignments.extend(ramp)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in ramp)
@@ -809,6 +1099,7 @@ class DeckBuilder:
             board_wipe_target=template.board_wipe_count,
             commander_colors=colors,
             avg_cmc=template.avg_cmc_target,
+            pool_index=pool_index,
         )
         all_assignments.extend(removal)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in removal)
@@ -829,18 +1120,28 @@ class DeckBuilder:
             role_tag_pool=protection_pool,
             commander_colors=colors,
             avg_cmc=template.avg_cmc_target,
+            pool_index=pool_index,
         )
         all_assignments.extend(protection)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in protection)
         _trace_infra(protection, "infra_protection")
         self._protected_names |= prot_gen.protected_names
 
-        # 5. Lands (last, so it knows what spells need color support)
+        # 5. Lands (last, so it knows what spells need color support).
+        # Budget capped at the corpus's median land spend share (x1.25 slack):
+        # price-neutral scoring otherwise buys premium mana bases -- one build
+        # put ~$110 of a $200 budget into lands, topped by a $45 Gemstone
+        # Caverns. Real decks of the variant define what lands should cost.
+        land_budget = request.budget_usd - budget_used
+        if template.land_budget_share > 0:
+            land_budget = min(
+                land_budget, request.budget_usd * template.land_budget_share * 1.25
+            )
         land_gen = LandPackageGenerator(self.db_path)
         lands = land_gen.generate(
             color_identity=colors,
             target_count=template.land_count,
-            budget_remaining=request.budget_usd - budget_used,
+            budget_remaining=land_budget,
             template=template,
             already_placed=placed_cards(),
             role_tag_pool=_land_pool(),
@@ -852,7 +1153,7 @@ class DeckBuilder:
 
     def _optimize_differentiators(
         self, candidates, infrastructure, profile_result, commander,
-        request, template, budget_used,
+        request, template, budget_used, reserved_count=0,
     ) -> tuple[list, dict]:
         """Stage 5+6: Synergy-aware greedy optimization.
 
@@ -862,6 +1163,10 @@ class DeckBuilder:
         3. Greedy fill differentiator slots
         4. Swap refinement (infrastructure cards eligible)
         5. LLM safety net on weakest picks
+
+        Args:
+            reserved_count: Differentiator slots already taken by empirical
+                staples reserved in Stage 3.5, subtracted from the greedy fill.
 
         Returns:
             Tuple of (all_assignments including infrastructure, optimizer_metrics).
@@ -898,11 +1203,14 @@ class DeckBuilder:
         if hasattr(self, "_signals"):
             self._signals.update(synergy.signals)
 
-        # 3. Greedy fill (subtract protection slots already placed in Stage 4)
+        # 3. Greedy fill (subtract protection slots placed in Stage 4 and the
+        # empirical staples reserved in Stage 3.5 -- both occupy diff slots)
         protection_placed = sum(
             1 for a in infrastructure if a.slot_role == "protection"
         )
-        diff_slots = max(0, template.differentiator_slots - protection_placed)
+        diff_slots = max(
+            0, template.differentiator_slots - protection_placed - reserved_count
+        )
         diff_assignments = greedy_fill(
             shell=infrastructure,
             candidates=candidates,
@@ -912,6 +1220,7 @@ class DeckBuilder:
             slots_remaining=diff_slots,
             tracer=self._tracer,
             profile_signals=prof_signals,
+            type_targets=template.type_targets,
         )
         all_assignments = list(infrastructure) + diff_assignments
 
@@ -929,10 +1238,42 @@ class DeckBuilder:
             profile_signals=prof_signals,
         )
 
-        # Option A criterion 4: no per-card LLM in the selection hot path. The
-        # deterministic synergy optimizer (greedy_fill + swap_refine) is the
-        # selector; the LLM is a narrator/auditor only (profile synthesis and
-        # deck narrative), never a per-card scorer.
+        # Note on Option A criterion 4 (no per-card LLM in the hot path):
+        # the deterministic optimizer remains the selector. The vet below is
+        # ONE batched call auditing the assembled deck, not a per-card scorer
+        # in the selection loop -- SME-directed final gate after build 7-9
+        # showed the numeric objective cannot read oracle text.
+        # 5. Budget rebalancing: spend-down upgrades, sell-one-buy-many audit
+        # of expensive picks, downgrade safety net. Runs BEFORE the LLM vet:
+        # the numeric objective cannot read oracle text, and in one build it
+        # re-admitted Paraselene ("destroy all enchantments") right after the
+        # vet had removed it. The LLM must be the final gate nothing bypasses.
+        from sabermetrics.pipeline.greedy_optimizer import rebalance_budget
+
+        all_assignments, rebalance_stats = rebalance_budget(
+            all_assignments, candidates, synergy, role_targets,
+            budget=request.budget_usd, template=template,
+            profile_signals=prof_signals, protected_names=protected,
+            tracer=self._tracer,
+        )
+
+        # 6. LLM safety net LAST: one batched Sonnet call over the riskiest
+        # ~14 picks, with corpus evidence in the prompt.
+        llm_cost = 0.0
+        try:
+            all_assignments, llm_cost = self._llm_safety_check(
+                all_assignments, candidates, synergy, role_targets,
+                profile_result, request, n_weakest=99,  # full-deck review: every non-staple pick faces the gate
+                protected_names=protected,
+            )
+        except Exception as e:
+            # A silently-skipped vet produced the worst deck of the project
+            # (build7: an AttributeError left 29 unreviewed swaps in). Log the
+            # full traceback and surface the failure in pipeline metrics.
+            logger.exception("LLM safety check FAILED — deck is unvetted: %s", e)
+            llm_cost = -1.0
+
+        # Add fit reasoning for cards that lack it
         for a in all_assignments:
             if "_fit_reasoning" not in a.card:
                 a.card["_fit_reasoning"] = "Synergy-optimizer selected"
@@ -941,7 +1282,11 @@ class DeckBuilder:
             "synergy_matrix_size": len(synergy.card_id_to_index),
             "role_targets": {r: t.target_count for r, t in role_targets.items()},
             "cards_swapped": swaps,
-            "llm_safety_cost": 0.0,
+            "llm_safety_cost": llm_cost,
+            "llm_safety_failed": llm_cost < 0,
+            "budget_utilization": rebalance_stats.get("utilization", 0.0),
+            "rebalance_upgrades": rebalance_stats.get("upgrades", 0),
+            "rebalance_unbundles": rebalance_stats.get("unbundles", 0),
             "objective_score": deck_objective(
                 [a.card for a in all_assignments], synergy, role_targets,
                 template, profile_signals=prof_signals,
@@ -949,189 +1294,256 @@ class DeckBuilder:
         }
         return all_assignments, metrics
 
-    def _redistribute_budget(
-        self,
-        deck: list,
-        budget: float,
-        candidate_pool: list[dict],
-        protected_names: set[str] | None = None,
-    ) -> list:
-        """Stage 7: Two-pass budget optimization.
+    @staticmethod
+    def _safety_review_order(indexed, corpus_active: bool, threshold: float):
+        """Order review candidates: uncorroborated picks first, then weakest.
 
-        Pass 1 — Upgrade: if budget remains, replace weak cards with better ones.
-        Pass 2 — Downgrade: if over budget, replace expensive cards with cheaper ones.
+        The weakest-N ordering missed the real failure mode -- cards the
+        synergy matrix ranked highly on rule/embedding text matches with zero
+        support in the variant's real decks (Tallowisp "fetches Auras" but
+        needs Spirits; Yiazmat matched on nothing but embedding noise). With a
+        reliable corpus, those uncorroborated picks are the highest-risk
+        cohort, so they are reviewed before merely weak corroborated ones.
 
-        Cards in protected_names are never replaced.
+        Args:
+            indexed: (deck_index, assignment) pairs eligible for review.
+            corpus_active: Whether a reliable empirical corpus exists.
+            threshold: Inclusion rate below which a pick is uncorroborated.
+
+        Returns:
+            The pairs sorted for review.
         """
-        protected = protected_names or set()
+        def sort_key(pair):
+            _, a = pair
+            emp = float(a.card.get("_empirical_inclusion", 0.0) or 0.0)
+            corroborated = 1 if (not corpus_active or emp >= threshold) else 0
+            return (corroborated, a.score)
+
+        return sorted(indexed, key=sort_key)
+
+    @staticmethod
+    def _best_replacement(candidates, deck_names: set[str], max_price: float | None = None):
+        """Pick the strongest eligible replacement, not the first in list order.
+
+        Ranked by CVAR plus the empirical bonus, so a corpus-validated card is
+        preferred over an equally-scored unknown when swapping out a bad fit.
+        """
+        from sabermetrics.analytics.empirical_valuation import empirical_bonus
+        from sabermetrics.config import settings
+
+        best, best_value = None, -1.0
+        for c in candidates:
+            if (
+                c.get("name", "") in deck_names
+                or "land" in (c.get("type_line") or "").lower()
+                or c.get("_anti_engine")
+            ):
+                continue
+            if max_price is not None and float(c.get("price_usd", 0) or 0) > max_price:
+                continue
+            value = float(c.get("_cvar_score", 0.0) or 0.0) + empirical_bonus(
+                c,
+                settings.scoring.marginal_empirical_weight,
+                settings.scoring.marginal_empirical_noisy_weight,
+            )
+            if value > best_value:
+                best, best_value = c, value
+        return best
+
+    def _llm_safety_check(
+        self, deck, candidates, synergy, role_targets,
+        profile_result, request, n_weakest=8,
+        protected_names: set[str] | None = None,
+    ) -> tuple[list, float]:
+        """Score the riskiest picks via Haiku and swap out poor fits.
+
+        Args:
+            deck: Current deck assignments.
+            candidates: Full candidate pool.
+            synergy: Synergy matrix.
+            role_targets: Role targets.
+            profile_result: Commander profile result.
+            request: Build request.
+            n_weakest: Number of cards to check.
+            protected_names: Card names that cannot be replaced (staple protection).
+
+        Returns:
+            Tuple of (possibly-modified deck, LLM cost).
+        """
+        from sabermetrics.config import settings
         from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
-        total_price = sum(
-            float(a.card.get("price_usd", 0) or 0) for a in deck
+        protected = protected_names or set()
+
+        # Review candidates: non-land, non-protected
+        indexed = [
+            (i, a) for i, a in enumerate(deck)
+            if a.slot_role != "land"
+            and "land" not in (a.card.get("type_line") or "").lower()
+            and a.card.get("name", "") not in protected
+        ]
+        empirical = getattr(self, "_empirical", None)
+        corpus_active = empirical is not None and bool(empirical.reliable)
+        indexed = self._safety_review_order(
+            indexed, corpus_active,
+            settings.scoring.safety_uncorroborated_max_inclusion,
         )
-        used_names = {a.card.get("name", "") for a in deck}
+        weakest = indexed[:n_weakest]
 
-        # Build upgrade pool indexed by role
-        from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
-        pool_by_role: dict[str, list[dict]] = {}
-        for card in candidate_pool:
-            if card.get("name", "") in used_names:
-                continue
-            if is_playable_as_land(card.get("type_line") or ""):
-                continue
-            role = _heuristic_role(card)
-            if role not in pool_by_role:
-                pool_by_role[role] = []
-            pool_by_role[role].append(card)
+        if not weakest:
+            return deck, 0.0
 
-        for role in pool_by_role:
-            pool_by_role[role].sort(
-                key=lambda c: c.get("_cvar_score", 0), reverse=True
+        profile_summary = self._build_profile_summary(profile_result)
+        total_cost = 0.0
+
+        try:
+            from sabermetrics.reasoning.fit import FitScorer
+
+            scorer = FitScorer(self.db_path)
+            weak_cards = [deck[i].card for i, _ in weakest]
+
+            results = scorer.score_cards_batch(
+                cards=weak_cards,
+                profile_summary=profile_summary,
+                archetype_definition=profile_result.profile.strategic_profile.primary_archetype,
+                partial_deck=[a.card for a in deck],
+                empirical_variant=getattr(self, "_empirical_variant", None),
             )
 
-        # Pass 1: Upgrade (if budget remains)
-        budget_remaining = budget - total_price
-        if budget_remaining > 0:
-            # Sort deck by score ascending (weakest first)
-            indexed = [(i, a) for i, a in enumerate(deck) if a.slot_role != "land"]
-            indexed.sort(key=lambda x: x[1].score)
-
-            for idx, assignment in indexed[:5]:  # Check 5 weakest
-                if assignment.card.get("name", "") in protected:
-                    self._tracer.record(
-                        card_name=assignment.card.get("name", ""),
-                        stage="budget_redist",
-                        action="protected",
-                        card_id=assignment.card.get("id"),
-                        reason="staple protection — exempt from budget swap",
-                        force=True,
+            # Replace cards scored <= 3 with next-best candidate
+            deck_names = {a.card.get("name", "") for a in deck}
+            for (deck_idx, _assignment), (card, fit_response) in zip(weakest, results):
+                card["_fit_reasoning"] = fit_response.reasoning
+                card_name = card.get("name", "")
+                self._tracer.record(
+                    card_name=card_name,
+                    stage="llm_safety",
+                    action="considered",
+                    card_id=card.get("id"),
+                    score=float(fit_response.fit_score),
+                    reason=fit_response.reasoning,
+                    force=True,
+                )
+                if fit_response.fit_score <= 3:
+                    budget_left = request.budget_usd - sum(
+                        float(a.card.get("price_usd", 0) or 0) for a in deck
                     )
-                    continue
-                role = assignment.slot_role
-                if role not in pool_by_role:
-                    continue
+                    old_price = float(card.get("price_usd", 0) or 0)
+                    replacement = self._best_replacement(
+                        candidates, deck_names,
+                        max_price=old_price + max(0.0, budget_left),
+                    )
 
-                current_score = assignment.score
-                current_price = float(assignment.card.get("price_usd", 0) or 0)
-
-                for upgrade_card in pool_by_role[role]:
-                    up_name = upgrade_card.get("name", "")
-                    if up_name in used_names:
-                        continue
-                    up_price = float(upgrade_card.get("price_usd", 0) or 0)
-                    up_score = upgrade_card.get("_cvar_score", 0)
-
-                    price_diff = up_price - current_price
-                    if price_diff <= budget_remaining and up_score > current_score + 0.1:
-                        # Replace
-                        old_name = assignment.card.get("name", "")
-                        deck[idx] = SlotAssignment(
-                            card=upgrade_card,
+                    if replacement:
+                        old_name = card.get("name", "")
+                        new_name = replacement.get("name", "")
+                        role = _heuristic_role(replacement)
+                        replacement["_fit_reasoning"] = (
+                            f"Replaced {old_name} (LLM score {fit_response.fit_score})"
+                        )
+                        deck[deck_idx] = SlotAssignment(
+                            card=replacement,
                             slot_role=role,
-                            score=round(up_score, 4),
+                            score=replacement.get("_cvar_score", 0.0),
                             alternatives=[],
                         )
-                        used_names.discard(old_name)
-                        used_names.add(up_name)
-                        budget_remaining -= price_diff
-                        total_price += price_diff
+                        deck_names.discard(old_name)
+                        deck_names.add(new_name)
                         self._tracer.record(
                             card_name=old_name,
-                            stage="budget_redist",
+                            stage="llm_safety",
                             action="swapped_out",
-                            card_id=assignment.card.get("id"),
-                            score=current_score,
-                            reason=f"upgrade: +${price_diff:.2f}, +{up_score - current_score:.2f} score",
+                            card_id=card.get("id"),
+                            score=float(fit_response.fit_score),
+                            reason=f"LLM fit score {fit_response.fit_score} <= 3",
                             force=True,
                         )
                         self._tracer.record(
-                            card_name=up_name,
-                            stage="budget_redist",
+                            card_name=new_name,
+                            stage="llm_safety",
                             action="swapped_in",
-                            card_id=upgrade_card.get("id"),
-                            score=round(up_score, 4),
-                            reason=f"upgrade: +${price_diff:.2f}, +{up_score - current_score:.2f} score",
+                            card_id=replacement.get("id"),
+                            score=replacement.get("_cvar_score", 0.0),
+                            reason=f"replaced {old_name} (LLM score {fit_response.fit_score})",
                             force=True,
                         )
                         logger.info(
-                            "Budget upgrade: %s → %s (+$%.2f, +%.2f score)",
-                            old_name, up_name, price_diff,
-                            up_score - current_score,
+                            "LLM safety: replaced %s (score %d) with %s",
+                            old_name, fit_response.fit_score, new_name,
                         )
-                        break
 
-        # Pass 2: Downgrade (if over budget)
-        if total_price > budget:
-            # Sort by score descending (strongest first = last to cut)
-            indexed = [(i, a) for i, a in enumerate(deck) if a.slot_role != "land"]
-            indexed.sort(key=lambda x: x[1].score)
+        except Exception as e:
+            logger.warning("LLM safety net scoring failed: %s", e)
 
-            for idx, assignment in indexed:  # Weakest first
-                if total_price <= budget:
-                    break
+        return deck, total_cost
 
-                if assignment.card.get("name", "") in protected:
-                    self._tracer.record(
-                        card_name=assignment.card.get("name", ""),
-                        stage="budget_redist",
-                        action="protected",
-                        card_id=assignment.card.get("id"),
-                        reason="staple protection — exempt from budget downgrade",
-                        force=True,
+    def _build_profile_summary(self, profile_result) -> str:
+        """Build the profile summary string for LLM fit scoring."""
+        # Unwrap: profile_result is ProfileResult, .profile is CommanderProfile
+        profile = profile_result.profile
+        sp = profile.strategic_profile
+        profile_summary = (
+            f"Commander: {profile.commander_name}\n"
+            f"Archetype: {sp.primary_archetype}\n"
+            f"Game Plan: {sp.game_plan_summary}\n"
+            f"Win Conditions: "
+            + ", ".join(
+                wc.description for wc in sp.win_conditions
+            )
+        )
+
+        # Add value inversions
+        if sp.value_inversions:
+            inversions = sp.value_inversions
+            inversion_text = (
+                "\n\nVALUE INVERSIONS "
+                "(cards with these traits are stronger than they appear):\n"
+            )
+            for vi in inversions:
+                inversion_text += (
+                    f"- {vi.normal_heuristic} → {vi.inverted_value}\n"
+                    f"  Look for: {', '.join(vi.desired_characteristics)}\n"
+                    f"  Evaluation: {vi.evaluation_guidance}\n"
+                )
+            profile_summary += inversion_text
+
+        # Add engine dependencies
+        if hasattr(sp, "engine_dependencies"):
+            deps = sp.engine_dependencies
+            if deps:
+                dep_text = (
+                    "\n\nENGINE DEPENDENCIES "
+                    "(cards must feed the engine, not just match outputs):\n"
+                )
+                for dep in deps:
+                    dep_text += (
+                        f"- Engine: {dep.engine}\n"
+                        f"  Engine card traits: "
+                        f"{', '.join(dep.engine_card_traits)}\n"
+                        f"  Dependent outputs: "
+                        f"{', '.join(dep.dependent_outputs)}\n"
+                        f"  FALSE SYNERGY WARNING: "
+                        f"{dep.false_synergy_warning}\n"
                     )
-                    continue
-                role = assignment.slot_role
-                if role not in pool_by_role:
-                    continue
+                profile_summary += dep_text
 
-                current_price = float(assignment.card.get("price_usd", 0) or 0)
-                if current_price < 1.0:
-                    continue  # Not worth downgrading cheap cards
+        # Add mispriced card examples
+        if hasattr(sp, "mispriced_card_examples"):
+            examples = sp.mispriced_card_examples
+            if examples:
+                example_text = (
+                    "\n\nMISPRICED CARDS "
+                    "(these cards are better than they appear for this commander):\n"
+                )
+                for ex in examples:
+                    example_text += f"- {ex.card_name}: {ex.why_undervalued}\n"
+                example_text += (
+                    "\nCards similar to these mispriced examples should score 7-9. "
+                    "Use these as calibration anchors for the full scoring range.\n"
+                )
+                profile_summary += example_text
 
-                for alt_card in reversed(pool_by_role.get(role, [])):
-                    alt_name = alt_card.get("name", "")
-                    if alt_name in used_names:
-                        continue
-                    alt_price = float(alt_card.get("price_usd", 0) or 0)
-
-                    if alt_price < current_price:
-                        savings = current_price - alt_price
-                        old_name = assignment.card.get("name", "")
-                        alt_score = alt_card.get("_cvar_score", 0)
-                        deck[idx] = SlotAssignment(
-                            card=alt_card,
-                            slot_role=role,
-                            score=round(alt_score, 4),
-                            alternatives=[],
-                        )
-                        used_names.discard(old_name)
-                        used_names.add(alt_name)
-                        total_price -= savings
-                        self._tracer.record(
-                            card_name=old_name,
-                            stage="budget_redist",
-                            action="swapped_out",
-                            card_id=assignment.card.get("id"),
-                            score=assignment.score,
-                            reason=f"downgrade: -${savings:.2f}",
-                            force=True,
-                        )
-                        self._tracer.record(
-                            card_name=alt_name,
-                            stage="budget_redist",
-                            action="swapped_in",
-                            card_id=alt_card.get("id"),
-                            score=round(alt_score, 4),
-                            reason=f"downgrade: -${savings:.2f}",
-                            force=True,
-                        )
-                        logger.info(
-                            "Budget downgrade: %s → %s (-$%.2f)",
-                            old_name, alt_name, savings,
-                        )
-                        break
-
-        return deck
+        return profile_summary
 
     def _enforce_legality(
         self,

@@ -247,6 +247,23 @@ def test_ramp_generator_no_duplicates() -> None:
 # --- Ramp Scoring Tests ---
 
 
+def test_score_ramp_adds_empirical_bonus() -> None:
+    """A card common in the target variant scores above an identical card that
+    is absent from the corpus, and absence is never a penalty."""
+    base = {
+        "oracle_text": "{T}: Add {G}.",
+        "cmc": 2, "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    grounded = base | {"_empirical_inclusion": 0.65, "_empirical_reliable": True}
+
+    score_base = _score_ramp(base, ["G"], 3.0)
+    score_grounded = _score_ramp(grounded, ["G"], 3.0)
+
+    # No corpus data -> identical to the pre-grounding score (absence neutral).
+    assert _score_ramp(base | {"_empirical_inclusion": 0.0}, ["G"], 3.0) == score_base
+    assert score_grounded > score_base
+
+
 def test_score_ramp_penalizes_conditional() -> None:
     """Conditional mana (discard/sacrifice) scores much lower than unconditional."""
     unconditional = {
@@ -400,10 +417,17 @@ def test_removal_generator_includes_board_wipes() -> None:
         role_tag_pool=_make_removal_pool(),
         board_wipe_target=2,
     )
-    wipes = [
-        a for a in result
-        if "all" in (a.card.get("oracle_text") or "").lower()
-    ]
+    # Robust to both selection paths: the candidate-table path tags wipes with
+    # removal_type; the role-tag fallback carries a board_wipe role tag. Don't
+    # match an oracle substring -- a real wipe like Blasphemous Act reads "each
+    # creature", never "all".
+    def _is_wipe(card: dict) -> bool:
+        return (
+            card.get("removal_type") == "board_wipe"
+            or "board_wipe" in (card.get("role_tags") or "")
+        )
+
+    wipes = [a for a in result if _is_wipe(a.card)]
     assert len(wipes) >= 1
 
 
@@ -794,3 +818,165 @@ def test_protection_auto_includes_boots() -> None:
     )
     names = [a.card["name"] for a in result]
     assert "Swiftfoot Boots" in names
+
+
+# --- Land-count invariant and type-need (SME review follow-ups) ---
+
+
+def test_ramp_generator_never_places_lands() -> None:
+    """Land-typed 'ramp' (Krosan Verge) belongs to the land package.
+
+    Two such placements caused the deck to build 38 lands against a 36-land
+    template target.
+    """
+    pool = _make_ramp_pool() + [{
+        "id": "kv", "name": "Krosan Verge",
+        "type_line": "Land",
+        "oracle_text": "{2}, {T}, Sacrifice Krosan Verge: Search your library "
+                       "for a Forest card and a Plains card.",
+        "price_usd": 0.25, "cmc": 0, "_cvar_score": 0.99,
+        "role_tags": '["ramp"]',
+    }]
+    gen = RampPackageGenerator(Path("/nonexistent.db"))  # forces role_tag_pool
+    result = gen.generate(
+        color_identity=["G", "W"],
+        target_count=10,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=pool,
+        commander_colors=["G", "W"],
+        avg_cmc=3.0,
+    )
+    assert all(
+        "land" not in (a.card.get("type_line") or "").lower() for a in result
+    )
+
+
+def test_land_generator_subtracts_already_placed_lands() -> None:
+    """Total lands equal the target even if another stage placed lands."""
+    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    placed_lands = [
+        {"name": f"Stray Land {i}", "type_line": "Land", "cmc": 0}
+        for i in range(2)
+    ]
+    result = gen.generate(
+        color_identity=["W", "U"],
+        target_count=36,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=placed_lands
+        + [{"mana_cost": "{1}{W}{U}", "cmc": 3, "type_line": "Creature"}],
+        role_tag_pool=_make_land_pool(),
+    )
+    assert len(result) <= 34   # 36 target - 2 already placed
+
+
+def test_draw_generator_type_need_prefers_on_type() -> None:
+    """With enchantments under target, enchantment draw beats an equal
+    creature draw; without targets, ranking is unchanged."""
+    ench = {
+        "id": "e", "name": "Enchant Draw", "type_line": "Enchantment",
+        "oracle_text": "Whenever you cast an enchantment spell, draw a card.",
+        "price_usd": 1.0, "cmc": 2, "_cvar_score": 0.50, "role_tags": '["draw"]',
+    }
+    creature = {
+        "id": "c", "name": "Creature Draw", "type_line": "Creature",
+        "oracle_text": "Whenever you attack, draw a card.",
+        "price_usd": 1.0, "cmc": 2, "_cvar_score": 0.55, "role_tags": '["draw"]',
+    }
+
+    gen = DrawPackageGenerator(Path("data/sabermetrics.db"))
+    template = _make_template()
+    template = template.model_copy(update={"type_targets": {"enchantment": 30}})
+    result = gen.generate(
+        color_identity=["W"],
+        target_count=1,
+        budget_remaining=200.0,
+        template=template,
+        already_placed=[],
+        role_tag_pool=[ench, creature],
+    )
+    assert result[0].card["name"] == "Enchant Draw"
+
+    # Without targets, the higher-CVAR creature wins as before.
+    plain = gen.generate(
+        color_identity=["W"],
+        target_count=1,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=[ench, creature],
+    )
+    assert plain[0].card["name"] == "Creature Draw"
+
+
+def test_unmet_type_targets_counts_and_empties() -> None:
+    template = _make_template().model_copy(
+        update={"type_targets": {"enchantment": 2, "creature": 1}}
+    )
+    placed = [
+        {"type_line": "Enchantment — Aura"},
+        {"type_line": "Creature — Human"},
+        {"type_line": "Land"},
+    ]
+    assert template.unmet_type_targets(placed) == {"enchantment"}
+    assert _make_template().unmet_type_targets(placed) == set()
+
+
+def test_color_fixing_rock_outranks_colorless_in_two_color_deck() -> None:
+    """Orzhov Signet-class beats Mind Stone-class in WB (SME: near-auto)."""
+    signet = {
+        "id": "sig", "name": "Orzhov Signet", "type_line": "Artifact",
+        "oracle_text": "{1}, {T}: Add {W}{B}.", "price_usd": 0.3, "cmc": 2,
+        "_cvar_score": 0.5, "role_tags": '["ramp"]',
+    }
+    colorless = {
+        "id": "ms", "name": "Mind Stone", "type_line": "Artifact",
+        "oracle_text": "{T}: Add {C}.", "price_usd": 0.3, "cmc": 2,
+        "_cvar_score": 0.5, "role_tags": '["ramp"]',
+    }
+    gen = RampPackageGenerator(Path("/nonexistent.db"))  # role_tag_pool path
+    result = gen.generate(
+        color_identity=["W", "B"], target_count=1, budget_remaining=50.0,
+        template=_make_template(), already_placed=[],
+        role_tag_pool=[colorless, signet],
+        commander_colors=["W", "B"], avg_cmc=3.0,
+    )
+    assert result[0].card["name"] == "Orzhov Signet"
+
+
+def test_suspend_rock_scores_far_below_real_rock() -> None:
+    """Sol Talisman's 'free' cmc-0 no longer reads as the best rock ever."""
+    sol_talisman = {
+        "oracle_text": "Suspend 3—{1}. {T}: Add {C}{C}.",
+        "cmc": 0, "mana_cost": "", "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    sol_ring = {
+        "oracle_text": "{T}: Add {C}{C}.",
+        "cmc": 1, "mana_cost": "{1}", "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    assert _score_ramp(sol_ring, ["W", "B"], 3.0) > _score_ramp(
+        sol_talisman, ["W", "B"], 3.0
+    ) + 0.15
+
+
+def test_curve_check_skips_fat_rocks_for_cheap_commanders() -> None:
+    """A 3-mana auto-include rock is skipped when the commander costs 3."""
+    sphere = {
+        "id": "cs", "name": "Commander's Sphere", "type_line": "Artifact",
+        "oracle_text": "{T}: Add one mana of any color in your commander's "
+                       "color identity.", "price_usd": 0.3, "cmc": 3,
+        "_cvar_score": 0.6, "role_tags": '["ramp"]',
+    }
+    gen = RampPackageGenerator(Path("/nonexistent.db"))
+    result = gen.generate(
+        color_identity=["W", "B"], target_count=5, budget_remaining=50.0,
+        template=_make_template(), already_placed=[],
+        role_tag_pool=[sphere] + _make_ramp_pool(),
+        commander_colors=["W", "B"], avg_cmc=3.0, commander_cmc=3.0,
+    )
+    # Sphere may still be scored in, but never via the 0.95 auto path;
+    # with equal opportunity the cheap rocks fill the slots first.
+    auto_scores = [a for a in result if a.score >= 0.95]
+    assert all(a.card["name"] != "Commander's Sphere" for a in auto_scores)

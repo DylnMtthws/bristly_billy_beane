@@ -51,7 +51,24 @@ class LandPackageGenerator:
         Returns:
             List of SlotAssignment for lands.
         """
+        from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
         from sabermetrics.pipeline.mana_base import build_mana_base
+
+        # Invariant: total lands in the deck equal the template target no
+        # matter which stage placed them. If an earlier stage placed a
+        # land-typed card (a "ramp" Krosan Verge once caused a +2 overshoot),
+        # this package fills that many fewer.
+        lands_already = sum(
+            1 for c in already_placed
+            if is_playable_as_land(c.get("type_line") or "")
+        )
+        if lands_already:
+            logger.info(
+                "Land generator: %d land-typed cards already placed, "
+                "reducing target %d -> %d",
+                lands_already, target_count, target_count - lands_already,
+            )
+            target_count = max(0, target_count - lands_already)
 
         # Prepare auto-includes
         auto_includes = _load_auto_includes()

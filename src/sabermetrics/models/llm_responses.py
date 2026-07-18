@@ -36,3 +36,21 @@ class DeckSynthesisResponse(BaseModel):
     key_synergies: List[str]
     weaknesses: List[str]
     suggested_play_pattern: str
+
+
+class VariantCharacterization(BaseModel):
+    """One cluster's qualitative sub-variant characterization (a hypothesis)."""
+
+    cluster_id: int
+    variant_name: str
+    game_plan: str = ""
+    key_cards: List[str] = Field(default_factory=list)
+    differentiators: str = ""
+    confidence: str = ""
+
+
+class ClusterVariantsResponse(BaseModel):
+    """Output from the Phase 4b LLM variant-characterization pass (Sonnet)."""
+
+    variants: List[VariantCharacterization] = Field(default_factory=list)
+    overall_note: str = ""
