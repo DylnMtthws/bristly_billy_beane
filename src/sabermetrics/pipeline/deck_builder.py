@@ -7,7 +7,7 @@
 4. Infrastructure fill (4 deterministic generators)
 5. Role targets + synergy matrix computation
 6. Greedy optimizer + swap refinement + LLM safety net
-7. Budget redistribution (upgrade/downgrade passes)
+7. Budget rebalancing (spend-down, sell-one-buy-many, downgrade)
 8. Synthesis + classify + persist
 """
 
@@ -232,14 +232,8 @@ class DeckBuilder:
             opt_metrics.get("objective_score", 0),
         )
 
-        # --- Stage 7: Budget Redistribution ---
-        t = time.time()
-        protected = getattr(self, "_protected_names", None) or set()
-        all_assignments = self._redistribute_budget(
-            all_assignments, request.budget_usd, candidates,
-            protected_names=protected,
-        )
-        metrics["9_budget"] = time.time() - t
+        # (Stage 7 budget rebalancing now runs inside _optimize_differentiators,
+        # where the synergy matrix and role targets it evaluates against live.)
 
         # --- Stage 8: Synthesis + Classify + Persist ---
         t = time.time()
@@ -1150,6 +1144,18 @@ class DeckBuilder:
         except Exception as e:
             logger.warning("LLM safety check failed, skipping: %s", e)
 
+        # 6. Budget rebalancing: spend-down upgrades, sell-one-buy-many audit
+        # of expensive picks, downgrade safety net. Runs last so it audits the
+        # final composition (LLM safety swaps don't check price).
+        from sabermetrics.pipeline.greedy_optimizer import rebalance_budget
+
+        all_assignments, rebalance_stats = rebalance_budget(
+            all_assignments, candidates, synergy, role_targets,
+            budget=request.budget_usd, template=template,
+            profile_signals=prof_signals, protected_names=protected,
+            tracer=self._tracer,
+        )
+
         # Add fit reasoning for cards that lack it
         for a in all_assignments:
             if "_fit_reasoning" not in a.card:
@@ -1160,6 +1166,9 @@ class DeckBuilder:
             "role_targets": {r: t.target_count for r, t in role_targets.items()},
             "cards_swapped": swaps,
             "llm_safety_cost": llm_cost,
+            "budget_utilization": rebalance_stats.get("utilization", 0.0),
+            "rebalance_upgrades": rebalance_stats.get("upgrades", 0),
+            "rebalance_unbundles": rebalance_stats.get("unbundles", 0),
             "objective_score": deck_objective(
                 [a.card for a in all_assignments], synergy, role_targets,
                 template, profile_signals=prof_signals,
@@ -1339,190 +1348,6 @@ class DeckBuilder:
             logger.warning("LLM safety net scoring failed: %s", e)
 
         return deck, total_cost
-
-    def _redistribute_budget(
-        self,
-        deck: list,
-        budget: float,
-        candidate_pool: list[dict],
-        protected_names: set[str] | None = None,
-    ) -> list:
-        """Stage 7: Two-pass budget optimization.
-
-        Pass 1 — Upgrade: if budget remains, replace weak cards with better ones.
-        Pass 2 — Downgrade: if over budget, replace expensive cards with cheaper ones.
-
-        Cards in protected_names are never replaced.
-        """
-        protected = protected_names or set()
-        from sabermetrics.pipeline.slot_assigner import SlotAssignment
-
-        total_price = sum(
-            float(a.card.get("price_usd", 0) or 0) for a in deck
-        )
-        used_names = {a.card.get("name", "") for a in deck}
-
-        # Build upgrade pool indexed by role
-        from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
-        pool_by_role: dict[str, list[dict]] = {}
-        for card in candidate_pool:
-            if card.get("name", "") in used_names:
-                continue
-            if is_playable_as_land(card.get("type_line") or ""):
-                continue
-            role = _heuristic_role(card)
-            if role not in pool_by_role:
-                pool_by_role[role] = []
-            pool_by_role[role].append(card)
-
-        for role in pool_by_role:
-            pool_by_role[role].sort(
-                key=lambda c: c.get("_cvar_score", 0), reverse=True
-            )
-
-        # Pass 1: Upgrade (if budget remains)
-        budget_remaining = budget - total_price
-        if budget_remaining > 0:
-            # Sort deck by score ascending (weakest first)
-            indexed = [(i, a) for i, a in enumerate(deck) if a.slot_role != "land"]
-            indexed.sort(key=lambda x: x[1].score)
-
-            for idx, assignment in indexed[:5]:  # Check 5 weakest
-                if assignment.card.get("name", "") in protected:
-                    self._tracer.record(
-                        card_name=assignment.card.get("name", ""),
-                        stage="budget_redist",
-                        action="protected",
-                        card_id=assignment.card.get("id"),
-                        reason="staple protection — exempt from budget swap",
-                        force=True,
-                    )
-                    continue
-                role = assignment.slot_role
-                if role not in pool_by_role:
-                    continue
-
-                current_score = assignment.score
-                current_price = float(assignment.card.get("price_usd", 0) or 0)
-
-                for upgrade_card in pool_by_role[role]:
-                    up_name = upgrade_card.get("name", "")
-                    if up_name in used_names:
-                        continue
-                    up_price = float(upgrade_card.get("price_usd", 0) or 0)
-                    up_score = upgrade_card.get("_cvar_score", 0)
-
-                    price_diff = up_price - current_price
-                    if price_diff <= budget_remaining and up_score > current_score + 0.1:
-                        # Replace
-                        old_name = assignment.card.get("name", "")
-                        deck[idx] = SlotAssignment(
-                            card=upgrade_card,
-                            slot_role=role,
-                            score=round(up_score, 4),
-                            alternatives=[],
-                        )
-                        used_names.discard(old_name)
-                        used_names.add(up_name)
-                        budget_remaining -= price_diff
-                        total_price += price_diff
-                        self._tracer.record(
-                            card_name=old_name,
-                            stage="budget_redist",
-                            action="swapped_out",
-                            card_id=assignment.card.get("id"),
-                            score=current_score,
-                            reason=f"upgrade: +${price_diff:.2f}, +{up_score - current_score:.2f} score",
-                            force=True,
-                        )
-                        self._tracer.record(
-                            card_name=up_name,
-                            stage="budget_redist",
-                            action="swapped_in",
-                            card_id=upgrade_card.get("id"),
-                            score=round(up_score, 4),
-                            reason=f"upgrade: +${price_diff:.2f}, +{up_score - current_score:.2f} score",
-                            force=True,
-                        )
-                        logger.info(
-                            "Budget upgrade: %s → %s (+$%.2f, +%.2f score)",
-                            old_name, up_name, price_diff,
-                            up_score - current_score,
-                        )
-                        break
-
-        # Pass 2: Downgrade (if over budget)
-        if total_price > budget:
-            # Sort by score descending (strongest first = last to cut)
-            indexed = [(i, a) for i, a in enumerate(deck) if a.slot_role != "land"]
-            indexed.sort(key=lambda x: x[1].score)
-
-            for idx, assignment in indexed:  # Weakest first
-                if total_price <= budget:
-                    break
-
-                if assignment.card.get("name", "") in protected:
-                    self._tracer.record(
-                        card_name=assignment.card.get("name", ""),
-                        stage="budget_redist",
-                        action="protected",
-                        card_id=assignment.card.get("id"),
-                        reason="staple protection — exempt from budget downgrade",
-                        force=True,
-                    )
-                    continue
-                role = assignment.slot_role
-                if role not in pool_by_role:
-                    continue
-
-                current_price = float(assignment.card.get("price_usd", 0) or 0)
-                if current_price < 1.0:
-                    continue  # Not worth downgrading cheap cards
-
-                for alt_card in reversed(pool_by_role.get(role, [])):
-                    alt_name = alt_card.get("name", "")
-                    if alt_name in used_names:
-                        continue
-                    alt_price = float(alt_card.get("price_usd", 0) or 0)
-
-                    if alt_price < current_price:
-                        savings = current_price - alt_price
-                        old_name = assignment.card.get("name", "")
-                        alt_score = alt_card.get("_cvar_score", 0)
-                        deck[idx] = SlotAssignment(
-                            card=alt_card,
-                            slot_role=role,
-                            score=round(alt_score, 4),
-                            alternatives=[],
-                        )
-                        used_names.discard(old_name)
-                        used_names.add(alt_name)
-                        total_price -= savings
-                        self._tracer.record(
-                            card_name=old_name,
-                            stage="budget_redist",
-                            action="swapped_out",
-                            card_id=assignment.card.get("id"),
-                            score=assignment.score,
-                            reason=f"downgrade: -${savings:.2f}",
-                            force=True,
-                        )
-                        self._tracer.record(
-                            card_name=alt_name,
-                            stage="budget_redist",
-                            action="swapped_in",
-                            card_id=alt_card.get("id"),
-                            score=round(alt_score, 4),
-                            reason=f"downgrade: -${savings:.2f}",
-                            force=True,
-                        )
-                        logger.info(
-                            "Budget downgrade: %s → %s (-$%.2f)",
-                            old_name, alt_name, savings,
-                        )
-                        break
-
-        return deck
 
     def _build_profile_summary(self, profile_result) -> str:
         """Build the profile summary string for LLM fit scoring."""

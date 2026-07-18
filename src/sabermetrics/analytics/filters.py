@@ -74,9 +74,12 @@ def filter_by_legality(
 def filter_by_budget(rows: list[dict], max_price: float) -> list[dict]:
     """Remove cards that exceed the per-card budget threshold.
 
-    Uses a per-card ceiling of max_price / 10 (no single card should
-    consume more than 10% of total budget). Cards without prices are
-    treated as floor-priced ($0.05).
+    The ceiling is ``per_card_budget_fraction`` of the total budget (default
+    0.25 -- $50 cards at a $200 budget). The old 10% ceiling hard-excluded
+    premium staples from the pool before any scoring saw them; the total
+    budget is enforced downstream, so the pool ceiling is a concentration
+    policy, not the budget mechanism. Cards without prices are treated as
+    floor-priced ($0.05).
 
     Args:
         rows: Card dicts; price looked up from 'price_usd' key.
@@ -86,8 +89,9 @@ def filter_by_budget(rows: list[dict], max_price: float) -> list[dict]:
         Filtered list of card dicts.
     """
     from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
+    from sabermetrics.config import settings
 
-    per_card_ceiling = max_price / 10.0
+    per_card_ceiling = max_price * settings.pipeline.per_card_budget_fraction
     result = []
     for row in rows:
         price = row.get("price_usd")

@@ -9,12 +9,22 @@ from .card import Card
 
 
 class CVARWeights(BaseModel):
-    """Weights for the CVAR composite score."""
+    """Weights for the CVAR composite score.
 
-    synergy: float = 0.35
-    replacement_value: float = 0.25
-    mana_efficiency: float = 0.25
-    price_efficiency: float = 0.15
+    price_efficiency defaults to 0: price is a constraint (budget cap, Pareto
+    price axis, rebalancing), not a quality signal. A constant cheapness bonus
+    in the composite made the optimizer maximize per-card cost-to-impact ratio
+    instead of total deck impact under the budget -- $200 requests produced
+    ~$113 decks with premium staples triple-punished (composite drag, Pareto
+    price axis, cheap-biased upgrades). Moneyball is a portfolio objective:
+    spend the cap on maximum impact, never overpay per quality point. The
+    subscore is still computed and reported for observability.
+    """
+
+    synergy: float = 0.40
+    replacement_value: float = 0.30
+    mana_efficiency: float = 0.30
+    price_efficiency: float = 0.0
 
 
 class CardSubScores(BaseModel):

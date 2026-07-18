@@ -1,11 +1,13 @@
 user:
   default_budget_usd: 200
   default_power_target: 3
+  # price_efficiency carries no composite weight: price is a constraint
+  # (budget cap, Pareto axis, rebalancing), not a quality signal.
   default_weights:
-    synergy: 0.35
-    replacement_value: 0.25
-    mana_efficiency: 0.25
-    price_efficiency: 0.15
+    synergy: 0.40
+    replacement_value: 0.30
+    mana_efficiency: 0.30
+    price_efficiency: 0.0
 
 llm:
   profile_model: "claude-sonnet-4-6"
@@ -26,6 +28,10 @@ pipeline:
   embedding_filter_target: 200
   structural_filter_target: 200
   candidates_per_slot: 5
+  # Per-card ceiling as fraction of budget (0.25 => $50 cards at $200).
+  per_card_budget_fraction: 0.25
+  # Dollars reserved per unfilled slot in greedy affordability checks.
+  budget_reserve_per_slot: 0.25
 
 refresh:
   scryfall_daily: true
@@ -77,6 +83,9 @@ scoring:
   # Infrastructure generators: bonus for cards of a type still below its
   # empirical target (e.g. enchantment removal while enchantments are short).
   generator_type_need_weight: 0.15
+  # Budget rebalancing: minimum deck-objective gain per move (spend-down
+  # stops when gains go below this, whatever budget remains).
+  rebalance_min_gain: 0.003
   # Deck-level objective (components, all 0-1 normalized).
   objective_synergy_density_weight: 0.30
   objective_role_coverage_weight: 0.25

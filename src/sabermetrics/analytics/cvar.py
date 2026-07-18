@@ -50,10 +50,12 @@ class ScoringContext(BaseModel):
     empirical_reliable: set[str] = Field(default_factory=set)  # tight-CI card names
     empirical_variant: Optional[str] = None
     desired_card_traits: list[str] = Field(default_factory=list)
-    weights_synergy: float = 0.35
-    weights_mana_efficiency: float = 0.25
-    weights_replacement_value: float = 0.25
-    weights_price_efficiency: float = 0.15
+    # Defaults mirror CVARWeights: price is a constraint, not a quality
+    # signal, so price_efficiency carries no composite weight by default.
+    weights_synergy: float = 0.40
+    weights_mana_efficiency: float = 0.30
+    weights_replacement_value: float = 0.30
+    weights_price_efficiency: float = 0.0
     average_card_price: float = 2.0
     max_budget: Optional[float] = None
 

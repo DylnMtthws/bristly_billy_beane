@@ -17,10 +17,10 @@ class UserSettings(BaseModel):
     default_power_target: int = 3
     default_weights: dict[str, float] = Field(
         default_factory=lambda: {
-            "synergy": 0.35,
-            "replacement_value": 0.25,
-            "mana_efficiency": 0.25,
-            "price_efficiency": 0.15,
+            "synergy": 0.40,
+            "replacement_value": 0.30,
+            "mana_efficiency": 0.30,
+            "price_efficiency": 0.0,
         }
     )
 
@@ -53,6 +53,16 @@ class PipelineSettings(BaseModel):
     embedding_filter_target: int = 200
     structural_filter_target: int = 200
     candidates_per_slot: int = 5
+    # Per-card price ceiling as a fraction of total budget. At 0.25, a $200
+    # deck admits up to $50 cards. SME-set: cards above a quarter of the
+    # budget are judged not worth the concentration at any power level.
+    # The old value (0.10) hard-excluded premium staples (Smothering Tithe,
+    # Esper Sentinel) from the pool before scoring ever saw them.
+    per_card_budget_fraction: float = 0.25
+    # Greedy affordability floor: every unfilled slot keeps at least this many
+    # dollars reserved, so one expensive pick can never starve the rest of the
+    # deck below a fillable minimum.
+    budget_reserve_per_slot: float = 0.25
 
 
 class RefreshSettings(BaseModel):
@@ -114,6 +124,12 @@ class ScoringSettings(BaseModel):
     # scale; these are on the generators' normalized 0-1 scale.
     generator_empirical_weight: float = 0.20
     generator_empirical_noisy_weight: float = 0.12
+
+    # Budget rebalancing (Stage 7): minimum deck-objective gain for any move.
+    # This is the spend-down stopping rule: keep buying upgrades while real
+    # gains exist, stop when they go asymptotic -- leftover budget then means
+    # the market had nothing left worth buying, not a failure to spend.
+    rebalance_min_gain: float = 0.003
 
     # Infrastructure generators: bonus (0-1 score scale) for a card whose type
     # is still below its empirical target, so e.g. enchantment-based removal
