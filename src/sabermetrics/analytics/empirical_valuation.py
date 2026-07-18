@@ -50,6 +50,10 @@ class EmpiricalComposition(BaseModel):
     artifacts: int
     auras: int
     avg_cmc: float             # median of per-deck avg non-land CMC
+    # Median fraction of deck value spent on lands in the variant's real
+    # decks. Caps the land generator's budget so B2's price-neutral scoring
+    # can't blow half the budget on premium mana (the $45 Gemstone Caverns).
+    land_budget_share: float = 0.0
 
 
 class EmpiricalInclusion(BaseModel):
@@ -82,14 +86,20 @@ def compute_composition(
     import statistics
 
     lands, enchs, creatures, artifacts, auras, cmcs = [], [], [], [], [], []
+    land_shares = []
     for rows in per_deck_rows.values():
         n_land = n_ench = n_crea = n_art = n_aura = 0
         cmc_sum = 0.0
         cmc_n = 0
-        for type_line, cmc, qty in rows:
+        land_spend = total_spend = 0.0
+        for row in rows:
+            type_line, cmc, qty = row[0], row[1], row[2]
+            price = float(row[3]) if len(row) > 3 else 0.0
             tl = (type_line or "").lower()
+            total_spend += price * qty
             if "land" in tl:
                 n_land += qty
+                land_spend += price * qty
                 continue
             if "enchantment" in tl:
                 n_ench += qty
@@ -107,6 +117,8 @@ def compute_composition(
         artifacts.append(n_art)
         auras.append(n_aura)
         cmcs.append(cmc_sum / cmc_n if cmc_n else 0.0)
+        if total_spend > 0:
+            land_shares.append(land_spend / total_spend)
 
     if not lands:
         return None
@@ -117,6 +129,9 @@ def compute_composition(
         artifacts=round(statistics.median(artifacts)),
         auras=round(statistics.median(auras)),
         avg_cmc=round(statistics.median(cmcs), 2),
+        land_budget_share=round(
+            statistics.median(land_shares), 3
+        ) if land_shares else 0.0,
     )
 
 
@@ -134,8 +149,11 @@ def _load_composition(db_path: Path, deck_ids: list[str]) -> EmpiricalCompositio
     try:
         placeholders = ",".join("?" * len(deck_ids))
         rows = conn.execute(
-            "SELECT dc.deck_id, ca.type_line, ca.cmc, dc.quantity "
+            "SELECT dc.deck_id, ca.type_line, ca.cmc, dc.quantity, "
+            "COALESCE(cp.price_usd, 0) "
             f"FROM deck_cards dc JOIN cards ca ON dc.card_id = ca.id "
+            "LEFT JOIN card_prices cp ON cp.card_id = ca.id "
+            "AND cp.snapshot_date = (SELECT MAX(snapshot_date) FROM card_prices) "
             f"WHERE dc.deck_id IN ({placeholders})",
             deck_ids,
         ).fetchall()
@@ -147,10 +165,10 @@ def _load_composition(db_path: Path, deck_ids: list[str]) -> EmpiricalCompositio
     finally:
         conn.close()
 
-    per_deck: dict[str, list[tuple[str, float, int]]] = {}
-    for deck_id, type_line, cmc, qty in rows:
+    per_deck: dict[str, list[tuple[str, float, int, float]]] = {}
+    for deck_id, type_line, cmc, qty, price in rows:
         per_deck.setdefault(deck_id, []).append(
-            (type_line or "", float(cmc or 0), int(qty or 1))
+            (type_line or "", float(cmc or 0), int(qty or 1), float(price or 0))
         )
     return compute_composition(per_deck)
 

@@ -23,6 +23,9 @@ class DeckTemplate(BaseModel):
     # These express what the archetype's engine runs on: an enchantress deck
     # with 21 enchantments can't feed its payoffs regardless of card quality.
     type_targets: dict[str, int] | None = None
+    # Corpus-median fraction of deck value spent on lands (0 = no corpus;
+    # the land generator then gets the full remaining budget as before).
+    land_budget_share: float = 0.0
 
     @property
     def infrastructure_slots(self) -> int:

@@ -780,6 +780,7 @@ def deck_objective(
     role_cov = _compute_role_coverage(deck_cards, role_targets)
     avg_cvar = _compute_avg_cvar(non_lands)
     curve_coh = _compute_curve_coherence(deck_cards, template) if template else 0.5
+    type_coh = _compute_type_coherence(deck_cards, template) if template else 0.5
     alignment = _compute_profile_alignment(non_lands, profile_signals)
 
     return (
@@ -787,6 +788,7 @@ def deck_objective(
         + _SCORING.objective_role_coverage_weight * role_cov
         + _SCORING.objective_alignment_weight * alignment
         + _SCORING.objective_avg_cvar_weight * avg_cvar
+        + _SCORING.objective_type_coherence_weight * type_coh
         + _SCORING.objective_curve_coherence_weight * curve_coh
     )
 
@@ -900,6 +902,32 @@ def _compute_profile_alignment(
     fraction = matching / len(non_land_cards)
     # Scale: 40% match → 1.0, linear below
     return min(1.0, fraction / 0.4)
+
+
+def _compute_type_coherence(
+    deck_cards: list[dict], template: DeckTemplate | None
+) -> float:
+    """How close the deck is to its empirical type targets (0-1).
+
+    This is what stops swap_refine and the rebalancer trading the engine
+    away: a numeric-objective swap that drops an enchantment for an equal
+    off-type card now costs objective points. Neutral (0.5) without corpus
+    targets, so behavior is unchanged for commanders with no corpus.
+    """
+    targets = getattr(template, "type_targets", None) if template else None
+    if not targets:
+        return 0.5
+    counts = dict.fromkeys(targets, 0)
+    for card in deck_cards:
+        tl = (card.get("type_line") or "").lower()
+        for t in counts:
+            if t in tl:
+                counts[t] += 1
+    devs = [
+        min(1.0, abs(counts[t] - target) / target)
+        for t, target in targets.items() if target > 0
+    ]
+    return 1.0 - (sum(devs) / len(devs)) if devs else 0.5
 
 
 def _compute_curve_coherence(

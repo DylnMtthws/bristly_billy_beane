@@ -733,3 +733,21 @@ def test_no_type_targets_changes_nothing() -> None:
         slots_remaining=1, type_targets=None,
     )
     assert a[0].card["name"] == "High"
+
+
+def test_type_coherence_component() -> None:
+    """Objective rewards decks near their type targets, neutral without them."""
+    from sabermetrics.pipeline.greedy_optimizer import _compute_type_coherence
+    from sabermetrics.models.template import DeckTemplate
+
+    t = DeckTemplate(
+        land_count=36, ramp_count=10, draw_count=8, removal_count=6,
+        board_wipe_count=2, differentiator_slots=37, avg_cmc_target=3.0,
+        type_targets={"enchantment": 10},
+    )
+    on_target = [{"type_line": "Enchantment"}] * 10
+    off_target = [{"type_line": "Creature"}] * 10
+    assert _compute_type_coherence(on_target, t) == 1.0
+    assert _compute_type_coherence(off_target, t) == 0.0
+    t_none = t.model_copy(update={"type_targets": None})
+    assert _compute_type_coherence(on_target, t_none) == 0.5

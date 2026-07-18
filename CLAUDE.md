@@ -111,7 +111,7 @@ llm:
   provider: Anthropic
   models:
     profile_synthesis: "claude-sonnet-4-6"
-    card_fit_scoring: "claude-haiku-4-5"
+    card_fit_scoring: "claude-sonnet-4-6"  # batched single call
     deck_synthesis: "claude-sonnet-4-6"
     relevance_screening: "claude-haiku-4-5"
   caching: "prompt caching enabled for all calls"
@@ -352,7 +352,7 @@ These decisions are settled. Do not relitigate in code; refer here for the "why.
 | ADR-008 | Mac mini self-hosted | Free, already owned |
 | ADR-009 | Layered architecture | Microservices solve problems we don't have |
 | ADR-010 | Quarterly refresh cadence | Aligns with Magic set releases |
-| ADR-011 | Haiku for fit, Sonnet for synthesis | 12x cost difference; quality tier-matched |
+| ADR-011 | Sonnet for the batched fit vet, Sonnet for synthesis, Haiku for screening | Old 12x pricing is stale (Haiku→Sonnet is 3x, Sonnet→Opus 1.67x); one batched vet call is cheaper than per-card Haiku was, and Haiku miscalibrated borderline judgment |
 | ADR-012 | Profile cache w/ set-version invalidation | Cheap relevance screening |
 | ADR-013 | mtgapi for rulings only, Scryfall for cards | Scryfall has bulk + prices; mtgapi has inline rulings |
 | ADR-014 | Rulings join by oracle_id | Rulings persist across reprints |

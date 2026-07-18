@@ -125,6 +125,9 @@ def derive_deck_template(
         differentiator_slots=differentiator_slots,
         avg_cmc_target=avg_cmc,
         curve_shape=curve_shape,
+        land_budget_share=(
+            comp.land_budget_share if comp is not None else 0.0
+        ),
         type_targets=(
             {
                 "enchantment": comp.enchantments,
