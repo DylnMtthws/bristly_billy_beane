@@ -115,6 +115,13 @@ class ScoringSettings(BaseModel):
     generator_empirical_weight: float = 0.20
     generator_empirical_noisy_weight: float = 0.12
 
+    # LLM safety net targeting: with a reliable corpus, review uncorroborated
+    # picks (inclusion below this rate) before merely weak ones. Rule/embedding
+    # matching can hallucinate synergy ("aura" in oracle text != good aura
+    # deck card); zero-corpus cards that ranked highly are exactly where that
+    # happens, and the weakest-N ordering never reviewed them.
+    safety_uncorroborated_max_inclusion: float = 0.10
+
     # Empirical staple reservation (Stage 3.5): cards this common in the target
     # variant's real decks get a reserved differentiator slot before the role
     # generators and greedy run. This is what actually lands the engine pieces

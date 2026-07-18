@@ -1167,12 +1167,65 @@ class DeckBuilder:
         }
         return all_assignments, metrics
 
+    @staticmethod
+    def _safety_review_order(indexed, corpus_active: bool, threshold: float):
+        """Order review candidates: uncorroborated picks first, then weakest.
+
+        The weakest-N ordering missed the real failure mode -- cards the
+        synergy matrix ranked highly on rule/embedding text matches with zero
+        support in the variant's real decks (Tallowisp "fetches Auras" but
+        needs Spirits; Yiazmat matched on nothing but embedding noise). With a
+        reliable corpus, those uncorroborated picks are the highest-risk
+        cohort, so they are reviewed before merely weak corroborated ones.
+
+        Args:
+            indexed: (deck_index, assignment) pairs eligible for review.
+            corpus_active: Whether a reliable empirical corpus exists.
+            threshold: Inclusion rate below which a pick is uncorroborated.
+
+        Returns:
+            The pairs sorted for review.
+        """
+        def sort_key(pair):
+            _, a = pair
+            emp = float(a.card.get("_empirical_inclusion", 0.0) or 0.0)
+            corroborated = 1 if (not corpus_active or emp >= threshold) else 0
+            return (corroborated, a.score)
+
+        return sorted(indexed, key=sort_key)
+
+    @staticmethod
+    def _best_replacement(candidates, deck_names: set[str]):
+        """Pick the strongest eligible replacement, not the first in list order.
+
+        Ranked by CVAR plus the empirical bonus, so a corpus-validated card is
+        preferred over an equally-scored unknown when swapping out a bad fit.
+        """
+        from sabermetrics.analytics.empirical_valuation import empirical_bonus
+        from sabermetrics.config import settings
+
+        best, best_value = None, -1.0
+        for c in candidates:
+            if (
+                c.get("name", "") in deck_names
+                or "land" in (c.get("type_line") or "").lower()
+            ):
+                continue
+            value = float(c.get("_cvar_score", 0.0) or 0.0) + empirical_bonus(
+                c,
+                settings.scoring.marginal_empirical_weight,
+                settings.scoring.marginal_empirical_noisy_weight,
+            )
+            if value > best_value:
+                best, best_value = c, value
+        return best
+
     def _llm_safety_check(
         self, deck, candidates, synergy, role_targets,
         profile_result, request, n_weakest=8,
         protected_names: set[str] | None = None,
     ) -> tuple[list, float]:
-        """Score the N weakest picks via Haiku and swap out poor fits.
+        """Score the riskiest picks via Haiku and swap out poor fits.
 
         Args:
             deck: Current deck assignments.
@@ -1181,24 +1234,30 @@ class DeckBuilder:
             role_targets: Role targets.
             profile_result: Commander profile result.
             request: Build request.
-            n_weakest: Number of weakest cards to check.
+            n_weakest: Number of cards to check.
             protected_names: Card names that cannot be replaced (staple protection).
 
         Returns:
             Tuple of (possibly-modified deck, LLM cost).
         """
+        from sabermetrics.config import settings
         from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
         protected = protected_names or set()
 
-        # Find N weakest non-land, non-protected cards by score
+        # Review candidates: non-land, non-protected
         indexed = [
             (i, a) for i, a in enumerate(deck)
             if a.slot_role != "land"
             and "land" not in (a.card.get("type_line") or "").lower()
             and a.card.get("name", "") not in protected
         ]
-        indexed.sort(key=lambda x: x[1].score)
+        empirical = getattr(self, "_empirical", None)
+        corpus_active = empirical is not None and bool(empirical.reliable)
+        indexed = self._safety_review_order(
+            indexed, corpus_active,
+            settings.scoring.safety_uncorroborated_max_inclusion,
+        )
         weakest = indexed[:n_weakest]
 
         if not weakest:
@@ -1236,15 +1295,7 @@ class DeckBuilder:
                     force=True,
                 )
                 if fit_response.fit_score <= 3:
-                    # Find replacement
-                    replacement = None
-                    for c in candidates:
-                        if (
-                            c.get("name", "") not in deck_names
-                            and "land" not in (c.get("type_line") or "").lower()
-                        ):
-                            replacement = c
-                            break
+                    replacement = self._best_replacement(candidates, deck_names)
 
                     if replacement:
                         old_name = card.get("name", "")
