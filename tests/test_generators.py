@@ -922,3 +922,61 @@ def test_unmet_type_targets_counts_and_empties() -> None:
     ]
     assert template.unmet_type_targets(placed) == {"enchantment"}
     assert _make_template().unmet_type_targets(placed) == set()
+
+
+def test_color_fixing_rock_outranks_colorless_in_two_color_deck() -> None:
+    """Orzhov Signet-class beats Mind Stone-class in WB (SME: near-auto)."""
+    signet = {
+        "id": "sig", "name": "Orzhov Signet", "type_line": "Artifact",
+        "oracle_text": "{1}, {T}: Add {W}{B}.", "price_usd": 0.3, "cmc": 2,
+        "_cvar_score": 0.5, "role_tags": '["ramp"]',
+    }
+    colorless = {
+        "id": "ms", "name": "Mind Stone", "type_line": "Artifact",
+        "oracle_text": "{T}: Add {C}.", "price_usd": 0.3, "cmc": 2,
+        "_cvar_score": 0.5, "role_tags": '["ramp"]',
+    }
+    gen = RampPackageGenerator(Path("/nonexistent.db"))  # role_tag_pool path
+    result = gen.generate(
+        color_identity=["W", "B"], target_count=1, budget_remaining=50.0,
+        template=_make_template(), already_placed=[],
+        role_tag_pool=[colorless, signet],
+        commander_colors=["W", "B"], avg_cmc=3.0,
+    )
+    assert result[0].card["name"] == "Orzhov Signet"
+
+
+def test_suspend_rock_scores_far_below_real_rock() -> None:
+    """Sol Talisman's 'free' cmc-0 no longer reads as the best rock ever."""
+    sol_talisman = {
+        "oracle_text": "Suspend 3—{1}. {T}: Add {C}{C}.",
+        "cmc": 0, "mana_cost": "", "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    sol_ring = {
+        "oracle_text": "{T}: Add {C}{C}.",
+        "cmc": 1, "mana_cost": "{1}", "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    assert _score_ramp(sol_ring, ["W", "B"], 3.0) > _score_ramp(
+        sol_talisman, ["W", "B"], 3.0
+    ) + 0.15
+
+
+def test_curve_check_skips_fat_rocks_for_cheap_commanders() -> None:
+    """A 3-mana auto-include rock is skipped when the commander costs 3."""
+    sphere = {
+        "id": "cs", "name": "Commander's Sphere", "type_line": "Artifact",
+        "oracle_text": "{T}: Add one mana of any color in your commander's "
+                       "color identity.", "price_usd": 0.3, "cmc": 3,
+        "_cvar_score": 0.6, "role_tags": '["ramp"]',
+    }
+    gen = RampPackageGenerator(Path("/nonexistent.db"))
+    result = gen.generate(
+        color_identity=["W", "B"], target_count=5, budget_remaining=50.0,
+        template=_make_template(), already_placed=[],
+        role_tag_pool=[sphere] + _make_ramp_pool(),
+        commander_colors=["W", "B"], avg_cmc=3.0, commander_cmc=3.0,
+    )
+    # Sphere may still be scored in, but never via the 0.95 auto path;
+    # with equal opportunity the cheap rocks fill the slots first.
+    auto_scores = [a for a in result if a.score >= 0.95]
+    assert all(a.card["name"] != "Commander's Sphere" for a in auto_scores)
