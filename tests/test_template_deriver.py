@@ -235,6 +235,21 @@ def test_template_uses_corpus_composition() -> None:
     assert t.type_targets == {
         "enchantment": 36, "creature": 18, "artifact": 8, "aura": 30,
     }
+    # The aura target above the corpus median is also a hard floor -- soft
+    # scoring pressure equilibrates at the median, so the builder's repair
+    # pass must enforce it.
+    assert t.type_floors == {"aura": 30}
+
+
+def test_no_aura_dominance_means_no_floor() -> None:
+    """When auras don't dominate the engine, no floor is set."""
+    profile = _make_mock_profile()
+    comp = _make_composition(auras=10)
+
+    t = derive_deck_template(profile, empirical_composition=comp)
+
+    assert "aura" not in (t.type_targets or {})
+    assert t.type_floors is None
 
 
 def test_corpus_land_count_is_clamped_to_karsten_band() -> None:

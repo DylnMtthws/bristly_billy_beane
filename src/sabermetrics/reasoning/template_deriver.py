@@ -133,10 +133,11 @@ def derive_deck_template(
         land_budget_share=(
             comp.land_budget_share if comp is not None else 0.0
         ),
-        type_targets=(
-            _type_targets_with_engine_floor(comp) if comp is not None else None
-        ),
     )
+    if comp is not None:
+        targets, floors = _type_targets_with_engine_floor(comp)
+        template.type_targets = targets
+        template.type_floors = floors or None
 
     logger.info(
         "Template derived: %d lands, %d ramp, %d draw, %d removal, "
@@ -223,20 +224,28 @@ def _estimate_curve(avg_cmc: float, power_target: int) -> dict[int, int]:
     return dist
 
 
-def _type_targets_with_engine_floor(comp) -> dict[str, int]:
-    """Type targets with the ~30-card engine rule (SME ruling).
+def _type_targets_with_engine_floor(
+    comp,
+) -> tuple[dict[str, int], dict[str, int]]:
+    """Type targets and engine floors with the ~30-card engine rule (SME).
 
     A deck's engine should be ~30 cards. When auras dominate the enchantment
     engine (>=60% of enchantments), they get their own subtype target at
     max(corpus median, 30) -- Eriette's corpus median is 27 but good lists
     run 31-33, and engine auras multi-task as removal/draw/protection.
+
+    Returns:
+        (targets, floors): targets are soft medians for scoring pressure;
+        floors are hard minimums enforced by the repair pass in the builder.
     """
     targets = {
         "enchantment": comp.enchantments,
         "creature": comp.creatures,
         "artifact": comp.artifacts,
     }
+    floors: dict[str, int] = {}
     if comp.enchantments > 0 and comp.auras >= 0.6 * comp.enchantments:
         targets["aura"] = max(comp.auras, 30)
         targets["enchantment"] = max(targets["enchantment"], targets["aura"])
-    return targets
+        floors["aura"] = targets["aura"]
+    return targets, floors

@@ -23,6 +23,12 @@ class DeckTemplate(BaseModel):
     # These express what the archetype's engine runs on: an enchantress deck
     # with 21 enchantments can't feed its payoffs regardless of card quality.
     type_targets: dict[str, int] | None = None
+    # Hard minimums for engine subtypes (the ~30-card engine rule). Unlike
+    # type_targets (medians, soft scoring pressure), floors are enforced by a
+    # repair pass: the need multiplier is only 1.15x within 75% of target, so
+    # scoring equilibrates at the corpus median and never climbs to a floor
+    # set above it (Eriette: aura median 27, floor 30).
+    type_floors: dict[str, int] | None = None
     # Corpus-median fraction of deck value spent on lands (0 = no corpus;
     # the land generator then gets the full remaining budget as before).
     land_budget_share: float = 0.0

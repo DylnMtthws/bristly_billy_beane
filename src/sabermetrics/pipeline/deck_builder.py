@@ -1257,6 +1257,17 @@ class DeckBuilder:
             tracer=self._tracer,
         )
 
+        # 5.5 Engine-floor repair: meet hard subtype minimums (engine-30
+        # rule) that soft scoring pressure never reaches -- the type-need
+        # multiplier is 1.15x within 75% of target, so selection equilibrates
+        # at the corpus median even when the floor sits above it. Runs after
+        # rebalance (which is not type-aware and could undo it) and before
+        # the vet, so every swapped-in card still faces the LLM gate.
+        all_assignments, floor_swaps = self._enforce_type_floors(
+            all_assignments, candidates, template,
+            budget=request.budget_usd, protected_names=protected,
+        )
+
         # 6. LLM safety net LAST: one batched Sonnet call over the riskiest
         # ~14 picks, with corpus evidence in the prompt.
         llm_cost = 0.0
@@ -1287,12 +1298,145 @@ class DeckBuilder:
             "budget_utilization": rebalance_stats.get("utilization", 0.0),
             "rebalance_upgrades": rebalance_stats.get("upgrades", 0),
             "rebalance_unbundles": rebalance_stats.get("unbundles", 0),
+            "type_floor_swaps": floor_swaps,
             "objective_score": deck_objective(
                 [a.card for a in all_assignments], synergy, role_targets,
                 template, profile_signals=prof_signals,
             ),
         }
         return all_assignments, metrics
+
+    def _enforce_type_floors(
+        self,
+        assignments: list,
+        candidates: list[dict],
+        template,
+        budget: float,
+        protected_names: set[str] | None = None,
+    ) -> tuple[list, int]:
+        """Repair pass: swap toward hard engine-subtype minimums.
+
+        For each floor (e.g. aura >= 30), replaces the weakest off-type,
+        non-protected, non-land picks with the best unplaced on-type
+        candidates until the floor is met, candidates run out, or the budget
+        can't absorb the price delta. Mirrors _enforce_legality: repair
+        deterministically, then let the LLM vet audit the result.
+
+        Args:
+            assignments: Current SlotAssignment list.
+            candidates: Hard-filtered candidate pool (budget/legality gated).
+            template: Deck template carrying type_floors.
+            budget: Total deck budget in USD.
+            protected_names: Names that must not be swapped out.
+
+        Returns:
+            (assignments, swap_count).
+        """
+        from sabermetrics.pipeline.greedy_optimizer import (
+            _empirical_bonus,
+            is_playable_as_land,
+        )
+        from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+        floors = getattr(template, "type_floors", None)
+        if not floors:
+            return assignments, 0
+
+        protected = protected_names or set()
+        deck_names = {a.card.get("name", "") for a in assignments}
+        budget_left = budget - sum(
+            float(a.card.get("price_usd", 0) or 0) for a in assignments
+        )
+        swaps = 0
+
+        for type_name, floor in floors.items():
+            def _on_type(card: dict) -> bool:
+                return type_name in (card.get("type_line") or "").lower()
+
+            count = sum(1 for a in assignments if _on_type(a.card))
+            if count >= floor:
+                continue
+
+            pool = sorted(
+                (
+                    c for c in candidates
+                    if _on_type(c)
+                    and c.get("name", "") not in deck_names
+                    and not c.get("_anti_engine")
+                    and not is_playable_as_land(c.get("type_line") or "")
+                ),
+                key=lambda c: (
+                    float(c.get("_cvar_score", 0) or 0) + _empirical_bonus(c)
+                ),
+                reverse=True,
+            )
+            removable = sorted(
+                (
+                    a for a in assignments
+                    if a.card.get("name", "") not in protected
+                    and not _on_type(a.card)
+                    and a.slot_role != "land"
+                    and not is_playable_as_land(
+                        a.card.get("type_line") or ""
+                    )
+                ),
+                key=lambda a: a.score,
+            )
+
+            for incoming in pool:
+                if count >= floor or not removable:
+                    break
+                price_in = float(incoming.get("price_usd", 0) or 0)
+                outgoing = removable[0]
+                price_out = float(outgoing.card.get("price_usd", 0) or 0)
+                if price_in - price_out > budget_left:
+                    continue  # try a cheaper on-type candidate
+                removable.pop(0)
+                idx = assignments.index(outgoing)
+                score = round(
+                    min(
+                        1.0,
+                        float(incoming.get("_cvar_score", 0) or 0)
+                        + _empirical_bonus(incoming),
+                    ),
+                    4,
+                )
+                assignments[idx] = SlotAssignment(
+                    card=incoming,
+                    slot_role=outgoing.slot_role,
+                    score=score,
+                    alternatives=[],
+                )
+                deck_names.discard(outgoing.card.get("name", ""))
+                deck_names.add(incoming.get("name", ""))
+                budget_left -= price_in - price_out
+                count += 1
+                swaps += 1
+                if self._tracer is not None:
+                    reason = (
+                        f"type floor: {type_name} {count - 1} < {floor}"
+                    )
+                    self._tracer.record(
+                        card_name=outgoing.card.get("name", ""),
+                        stage="type_floor", action="swapped_out",
+                        card_id=outgoing.card.get("id"),
+                        score=outgoing.score, reason=reason, force=True,
+                    )
+                    self._tracer.record(
+                        card_name=incoming.get("name", ""),
+                        stage="type_floor", action="swapped_in",
+                        card_id=incoming.get("id"), score=score,
+                        reason=f"replaced {outgoing.card.get('name', '')}",
+                        force=True,
+                    )
+
+            if count < floor:
+                logger.warning(
+                    "Type floor unmet after repair: %s %d < %d",
+                    type_name, count, floor,
+                )
+
+        return assignments, swaps
 
     @staticmethod
     def _safety_review_order(indexed, corpus_active: bool, threshold: float):
