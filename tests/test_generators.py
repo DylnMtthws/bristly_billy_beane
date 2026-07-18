@@ -417,10 +417,17 @@ def test_removal_generator_includes_board_wipes() -> None:
         role_tag_pool=_make_removal_pool(),
         board_wipe_target=2,
     )
-    wipes = [
-        a for a in result
-        if "all" in (a.card.get("oracle_text") or "").lower()
-    ]
+    # Robust to both selection paths: the candidate-table path tags wipes with
+    # removal_type; the role-tag fallback carries a board_wipe role tag. Don't
+    # match an oracle substring -- a real wipe like Blasphemous Act reads "each
+    # creature", never "all".
+    def _is_wipe(card: dict) -> bool:
+        return (
+            card.get("removal_type") == "board_wipe"
+            or "board_wipe" in (card.get("role_tags") or "")
+        )
+
+    wipes = [a for a in result if _is_wipe(a.card)]
     assert len(wipes) >= 1
 
 
