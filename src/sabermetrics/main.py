@@ -76,6 +76,7 @@ def profile(commander_name: str, user_intent: str | None, force_refresh: bool) -
     default=None,
     help="Output format.",
 )
+@click.option("--deck-name", default=None, help="Label shown in the UI deck list.")
 def build(
     commander_name: str,
     budget: float | None,
@@ -83,6 +84,7 @@ def build(
     strategy: str | None,
     user_intent: str | None,
     output_format: str | None,
+    deck_name: str | None,
 ) -> None:
     """Generate an optimized deck for a commander."""
     import sqlite3
@@ -117,6 +119,7 @@ def build(
         power_target=power or settings.user.default_power_target,
         strategy=strategy,
         user_intent=user_intent,
+        deck_name=deck_name,
     )
 
     try:
