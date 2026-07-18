@@ -113,6 +113,11 @@ class GenerationMeta(BaseModel):
     generation_time_seconds: float
     llm_cost_usd: float
     source_profile_id: str
+    # Observable degradation: which scoring/data signals were live for this
+    # build, and which were unavailable (e.g. embeddings failed to load, no
+    # EDHREC data for the commander, narrative LLM unavailable).
+    signals_used: list[str] = Field(default_factory=list)
+    signals_unavailable: list[str] = Field(default_factory=list)
 
 
 class GeneratedDeck(BaseModel):

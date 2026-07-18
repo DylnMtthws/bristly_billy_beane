@@ -6,8 +6,10 @@
 3. Template derivation (profile-driven composition)
 4. Infrastructure fill (4 deterministic generators)
 5. Role targets + synergy matrix computation
-6. Greedy optimizer + swap refinement + LLM safety net
+6. Greedy optimizer + swap refinement
 7. Budget rebalancing (spend-down, sell-one-buy-many, downgrade)
+7b. Enforce Commander legality (exactly 99, singleton, in color identity)
+8. LLM safety vet (one batched call, final gate)
 8. Synthesis + classify + persist
 """
 
@@ -128,6 +130,8 @@ class DeckBuilder:
         start_time = time.time()
         metrics: dict[str, float] = {}
         total_cost = 0.0
+        # Observable degradation: which signals were live for this build.
+        self._signals: dict[str, bool] = {}
 
         # --- Build trace watchlist and create tracer ---
         watchlist: set[str] = set()
@@ -234,6 +238,11 @@ class DeckBuilder:
 
         # (Stage 7 budget rebalancing now runs inside _optimize_differentiators,
         # where the synergy matrix and role targets it evaluates against live.)
+
+        # --- Stage 7b: Enforce Commander legality as a hard invariant ---
+        all_assignments = self._enforce_legality(
+            all_assignments, commander, protected_names=self._protected_names,
+        )
 
         # --- Stage 8: Synthesis + Classify + Persist ---
         t = time.time()
@@ -521,6 +530,20 @@ class DeckBuilder:
         except Exception as e:
             logger.warning("Failed to load EDHREC data: %s", e)
 
+        # EDHREC behavioral corroboration is a live signal only if this
+        # commander actually has inclusion data.
+        if hasattr(self, "_signals"):
+            self._signals["edhrec"] = bool(edhrec_top_cards)
+
+        # Card Win Equity from tournament data (present only if TopDeck.gg
+        # tournament data has been ingested for this commander).
+        from sabermetrics.analytics.card_win_equity import load_cwe_for_commander
+        cwe_by_card, cwe_sample_by_card = load_cwe_for_commander(
+            self.db_path, commander.id
+        )
+        if hasattr(self, "_signals"):
+            self._signals["tournament_cwe"] = bool(cwe_by_card)
+
         # Per-variant empirical grounding from the verified decklist corpus
         # (Phase 6). Sharper than pooled EDHREC; None when no corpus exists,
         # in which case scoring falls back cleanly to the pooled EDHREC signal.
@@ -560,6 +583,8 @@ class DeckBuilder:
             empirical_inclusion=empirical.inclusion if empirical else {},
             empirical_reliable=empirical.reliable if empirical else set(),
             empirical_variant=empirical.variant if empirical else None,
+            cwe_by_card=cwe_by_card,
+            cwe_sample_by_card=cwe_sample_by_card,
             desired_card_traits=desired_traits,
             weights_synergy=weights.synergy,
             weights_mana_efficiency=weights.mana_efficiency,
@@ -1174,6 +1199,9 @@ class DeckBuilder:
         synergy = build_synergy_matrix(
             candidates, commander.id, self.db_path,
         )
+        # Record which pairwise signals were live (rules / embeddings).
+        if hasattr(self, "_signals"):
+            self._signals.update(synergy.signals)
 
         # 3. Greedy fill (subtract protection slots placed in Stage 4 and the
         # empirical staples reserved in Stage 3.5 -- both occupy diff slots)
@@ -1210,6 +1238,11 @@ class DeckBuilder:
             profile_signals=prof_signals,
         )
 
+        # Note on Option A criterion 4 (no per-card LLM in the hot path):
+        # the deterministic optimizer remains the selector. The vet below is
+        # ONE batched call auditing the assembled deck, not a per-card scorer
+        # in the selection loop -- SME-directed final gate after build 7-9
+        # showed the numeric objective cannot read oracle text.
         # 5. Budget rebalancing: spend-down upgrades, sell-one-buy-many audit
         # of expensive picks, downgrade safety net. Runs BEFORE the LLM vet:
         # the numeric objective cannot read oracle text, and in one build it
@@ -1512,6 +1545,100 @@ class DeckBuilder:
 
         return profile_summary
 
+    def _enforce_legality(
+        self,
+        deck: list,
+        commander: Card,
+        protected_names: set[str] | None = None,
+    ) -> list:
+        """Stage 7b: enforce Commander legality as a hard invariant.
+
+        Guarantees on return:
+          * exactly 99 non-commander cards;
+          * singleton — no duplicate card names except basic lands;
+          * every card's color identity is a subset of the commander's.
+
+        Repairs rather than warns: out-of-identity cards and the commander
+        itself are dropped, duplicate nonbasics are collapsed to the highest
+        scoring copy, an over-full deck is trimmed weakest-first (basics, then
+        non-protected non-lands, then non-protected lands), and a short deck is
+        filled with basic lands in the commander's colors.
+
+        Args:
+            deck: Current SlotAssignment list (may be ≠99, may have dupes).
+            commander: The commander card (excluded from the 99).
+            protected_names: Names that must not be trimmed (staples).
+
+        Returns:
+            Exactly 99 legal SlotAssignments.
+        """
+        protected = protected_names or set()
+        commander_colors = set(commander.color_identity or [])
+
+        def _is_basic(name: str) -> bool:
+            return name in _BASIC_LAND_NAMES
+
+        def _is_land(a) -> bool:
+            return (
+                a.slot_role == "land"
+                or "land" in (a.card.get("type_line") or "").lower()
+            )
+
+        # Pass 1: drop commander/dupes/out-of-identity, keeping best per name.
+        by_score = sorted(deck, key=lambda a: a.score, reverse=True)
+        seen: set[str] = set()
+        kept: list = []
+        for a in by_score:
+            name = a.card.get("name", "")
+            if not name or name == commander.name:
+                continue
+            if not _is_basic(name):
+                if name in seen:
+                    continue  # singleton violation — drop the weaker copy
+                ci = _parse_color_identity(a.card)
+                if not ci <= commander_colors:
+                    self._tracer.record(
+                        card_name=name, stage="legality", action="rejected",
+                        card_id=a.card.get("id"), reason="out of color identity",
+                        force=True,
+                    )
+                    continue
+                seen.add(name)
+            kept.append(a)
+
+        # Pass 2: trim to 99 if over (basics → weak non-land → weak land).
+        if len(kept) > 99:
+            def _removable_rank(a) -> tuple[int, float]:
+                name = a.card.get("name", "")
+                if _is_basic(name):
+                    return (0, a.score)          # basics first
+                if name in protected:
+                    return (3, a.score)          # protected last
+                return (1 if not _is_land(a) else 2, a.score)
+
+            # Remove highest-rank / lowest-score first until exactly 99.
+            kept.sort(key=_removable_rank)  # ascending: first = most removable
+            excess = len(kept) - 99
+            for a in kept[:excess]:
+                self._tracer.record(
+                    card_name=a.card.get("name", ""), stage="legality",
+                    action="swapped_out", card_id=a.card.get("id"),
+                    score=a.score, reason="trimmed to reach 99", force=True,
+                )
+            kept = kept[excess:]
+
+        # Pass 3: fill to 99 with basic lands in the commander's colors.
+        if len(kept) < 99:
+            kept.extend(
+                _make_basic_lands(99 - len(kept), commander.color_identity or [])
+            )
+
+        if len(kept) != 99:  # invariant must hold
+            logger.error(
+                "Legality repair produced %d cards (expected 99)", len(kept)
+            )
+        return kept
+
     def _synthesize_narrative(self, profile_result, assembly, request):
         """Generate deck narrative via Sonnet."""
         profile = profile_result.profile
@@ -1547,9 +1674,13 @@ class DeckBuilder:
                 weaknesses=synthesis.weaknesses,
                 suggested_play_pattern=synthesis.suggested_play_pattern,
             )
+            if hasattr(self, "_signals"):
+                self._signals["narrative"] = True
             return narrative, cost
         except Exception as e:
             logger.warning("Narrative synthesis failed: %s", e)
+            if hasattr(self, "_signals"):
+                self._signals["narrative"] = False
             narrative = DeckNarrative(
                 game_plan=profile_result.profile.strategic_profile.game_plan_summary,
                 key_synergies=[
@@ -1736,6 +1867,10 @@ class DeckBuilder:
                 generation_time_seconds=round(elapsed, 2),
                 llm_cost_usd=round(total_cost, 4),
                 source_profile_id=profile.commander_id,
+                signals_used=sorted(k for k, v in self._signals.items() if v),
+                signals_unavailable=sorted(
+                    k for k, v in self._signals.items() if not v
+                ),
             ),
         )
 
@@ -1759,6 +1894,8 @@ class DeckBuilder:
             rationale = json.dumps({
                 "narrative": deck.narrative.model_dump(),
                 "composition": deck.composition.model_dump(),
+                "signals_used": deck.meta.signals_used,
+                "signals_unavailable": deck.meta.signals_unavailable,
             })
 
             conn.execute(
@@ -1787,6 +1924,70 @@ class DeckBuilder:
             logger.info("Persisted deck %s", deck.id)
         finally:
             conn.close()
+
+
+# Basic land names that are exempt from the singleton rule.
+_BASIC_LAND_NAMES: set[str] = {
+    "Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes",
+    "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp",
+    "Snow-Covered Mountain", "Snow-Covered Forest",
+}
+
+
+def _parse_color_identity(card: dict) -> set[str]:
+    """Parse a card's color identity into a set, tolerating JSON-string storage."""
+    ci = card.get("color_identity", "[]")
+    if isinstance(ci, str):
+        try:
+            ci = json.loads(ci)
+        except (json.JSONDecodeError, TypeError):
+            ci = []
+    return set(ci or [])
+
+
+def _make_basic_lands(count: int, commander_colors: list[str]) -> list:
+    """Create `count` basic-land SlotAssignments in the commander's colors.
+
+    Distributes evenly round-robin across the commander's colored basics;
+    a colorless commander gets Wastes. Basic lands carry empty color identity,
+    so they are legal in any deck.
+
+    Args:
+        count: Number of basics to create (>= 0).
+        commander_colors: Commander color identity (e.g. ["W", "U"]).
+
+    Returns:
+        List of `count` SlotAssignment objects with slot_role "land".
+    """
+    from sabermetrics.pipeline.mana_base import COLOR_TO_BASIC
+    from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+    names = [COLOR_TO_BASIC[c] for c in commander_colors if c in COLOR_TO_BASIC]
+    if not names:
+        names = ["Wastes"]
+
+    out: list = []
+    for i in range(max(0, count)):
+        name = names[i % len(names)]
+        # uuid suffix avoids id collisions with basics minted elsewhere (e.g.
+        # the mana-base builder), which also use a "basic-<name>-<n>" scheme.
+        out.append(SlotAssignment(
+            card={
+                "id": f"basic-{name.lower().replace(' ', '-')}-{uuid.uuid4().hex[:8]}",
+                "name": name,
+                "type_line": f"Basic Land — {name}",
+                "oracle_text": "",
+                "mana_cost": "",
+                "cmc": 0.0,
+                "color_identity": "[]",
+                "price_usd": 0.0,
+                "rarity": "common",
+            },
+            slot_role="land",
+            score=0.5,
+            alternatives=[],
+        ))
+    return out
 
 
 def _is_ramp(type_line: str, oracle_text: str) -> bool:

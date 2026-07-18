@@ -6,7 +6,6 @@ Pure function: same inputs -> same outputs. <100ms per card.
 
 import json
 import logging
-import sqlite3
 from pathlib import Path
 from typing import Optional
 
@@ -50,8 +49,15 @@ class ScoringContext(BaseModel):
     empirical_reliable: set[str] = Field(default_factory=set)  # tight-CI card names
     empirical_variant: Optional[str] = None
     desired_card_traits: list[str] = Field(default_factory=list)
-    # Defaults mirror CVARWeights: price is a constraint, not a quality
-    # signal, so price_efficiency carries no composite weight by default.
+    # Card Win Equity from tournament data, keyed by card_id (batch-loaded once
+    # per commander, like edhrec_top_cards). cwe_score is win_rate_with minus
+    # win_rate_without; sample sizes gate the boost.
+    cwe_by_card: dict[str, float] = Field(default_factory=dict)
+    cwe_sample_by_card: dict[str, int] = Field(default_factory=dict)
+    # Defaults mirror CVARWeights: price is a constraint (budget cap, Pareto
+    # price axis, rebalancing), not a quality signal -- price_efficiency
+    # carries no composite weight. Supersedes main's 0.05 calibration; both
+    # branches independently concluded price should not rank cards.
     weights_synergy: float = 0.40
     weights_mana_efficiency: float = 0.30
     weights_replacement_value: float = 0.30
@@ -198,9 +204,10 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
 
     # Behavioral corroboration (ADR-005: triangulation, not authority).
     # Prefer sharper per-variant empirical inclusion from our own verified
-    # corpus; fall back to pooled EDHREC. Strictly additive — a card absent
-    # from popular decks is NOT penalized (it may be the undervalued pick the
-    # tool exists to surface).
+    # corpus; fall back to pooled EDHREC at main's decklist-calibrated
+    # strength (Option A criterion 6: cap 0.45, slope 0.9). Strictly
+    # additive — a card absent from popular decks is NOT penalized (it may
+    # be the undervalued pick the tool exists to surface).
     card_name = (card.get("name") or "").lower()
     empirical_rate = context.empirical_inclusion.get(card_name)
     if empirical_rate is not None and empirical_rate > 0:
@@ -211,7 +218,7 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
     else:
         inclusion_pct = context.edhrec_top_cards.get(card_name, 0.0)
         if inclusion_pct > 0:
-            score += min(0.2, inclusion_pct / 100.0 * 0.4)
+            score += min(0.45, inclusion_pct / 100.0 * 0.9)
 
     # Value inversion desired trait matching
     if context.desired_card_traits:
@@ -409,24 +416,6 @@ def compute_cvar(
     replacement = compute_replacement_value(card, db_path, context.commander_id)
     price_eff = compute_price_efficiency(card, context.average_card_price)
 
-    # Look up CWE if available
-    cwe = None
-    if db_path is not None:
-        try:
-            conn = sqlite3.connect(str(db_path))
-            cursor = conn.execute(
-                "SELECT cwe_score FROM card_win_equity "
-                "WHERE card_id = ? AND commander_id = ?",
-                (card.get("id", ""), context.commander_id),
-            )
-            row = cursor.fetchone()
-            if row:
-                cwe = row[0]
-            conn.close()
-        except Exception:
-            pass
-
-    # Composite score
     composite = (
         context.weights_synergy * synergy
         + context.weights_mana_efficiency * mana_eff
@@ -434,9 +423,20 @@ def compute_cvar(
         + context.weights_price_efficiency * price_eff
     )
 
-    # Boost with CWE if available (additive bonus scaled to 0-0.1)
-    if cwe is not None:
-        composite += 0.1 * max(0, cwe)
+    # Card Win Equity boost (revived once TopDeck.gg tournament data was wired).
+    # Additive, sample-gated, and one-sided: a card only gains when it has a
+    # positive win-equity delta backed by enough tournament appearances, so
+    # low-evidence noise cannot move the ranking. Read from the batch-loaded
+    # context (no per-card DB query).
+    from sabermetrics.config import settings
+
+    cwe = context.cwe_by_card.get(card.get("id", ""))
+    if (
+        cwe is not None
+        and context.cwe_sample_by_card.get(card.get("id", ""), 0)
+        >= settings.scoring.cwe_min_sample
+    ):
+        composite += settings.scoring.cwe_weight * max(0.0, min(1.0, cwe))
 
     return CVARResult(
         composite_score=round(composite, 4),

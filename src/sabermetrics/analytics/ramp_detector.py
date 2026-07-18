@@ -217,7 +217,6 @@ def _produced_colors(oracle: str) -> str:
 def _extract_ramp(card: dict, oracle_stripped: str) -> dict:
     """Build the ramp metadata dict for a qualifying card."""
     type_line = card.get("type_line") or ""
-    cmc = float(card.get("cmc", 0) or 0)
 
     ramp_type = _classify_ramp_type(type_line, oracle_stripped)
     mana_output, produces_colored = _estimate_mana_output(oracle_stripped)

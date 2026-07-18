@@ -4,6 +4,9 @@ user:
   # price_efficiency carries no composite weight: price is a constraint
   # (budget cap, Pareto axis, rebalancing), not a quality signal.
   default_weights:
+    # Price is a constraint, not a ranking term (both branches converged on
+    # this; ours removes the weight entirely and enforces budget via the
+    # Pareto price axis + rebalancing).
     synergy: 0.40
     replacement_value: 0.30
     mana_efficiency: 0.30
@@ -56,10 +59,17 @@ knowledge_base:
       url: "https://edhrec.com/articles/superior-numbers-land-counts"
 
 scoring:
-  # Synergy matrix: blend of the three pairwise signals (sum to 1.0).
-  synergy_rule_weight: 0.40
-  synergy_cooccurrence_weight: 0.35
-  synergy_embedding_weight: 0.25
+  # Synergy matrix: blend of two pairwise signals (sum to 1.0). Co-occurrence
+  # was removed in Option A criterion 3 (tracked-deck corpus too sparse for an
+  # honest commander-conditioned rate); its weight went to rules + embeddings.
+  synergy_rule_weight: 0.615
+  synergy_embedding_weight: 0.385
+  # Card Win Equity (TopDeck tournament outcomes): additive, one-sided,
+  # sample-gated boost. Only affects commanders with >= cwe_min_sample
+  # tournament decks (~158 today). Bumped from the 0.10 default to weigh the
+  # competitive signal more heavily; still bounded (max boost = cwe_weight).
+  cwe_weight: 0.20
+  cwe_min_sample: 5
   # Greedy fill: marginal value of adding a card.
   marginal_synergy_weight: 0.45
   marginal_role_cvar_weight: 0.35

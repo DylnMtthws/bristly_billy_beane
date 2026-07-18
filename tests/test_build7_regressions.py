@@ -106,7 +106,6 @@ def test_fill_infrastructure_smoke():
     cands = b._load_role_tags(b._filter_candidates(req, cmdr))[:400]
     for c in cands:
         c.setdefault("_cvar_score", 0.5)
-    tmpl = b._derive_template.__self__ and None  # placeholder, not used
     from sabermetrics.models.template import DeckTemplate
     template = DeckTemplate(
         land_count=36, ramp_count=8, draw_count=6, removal_count=6,

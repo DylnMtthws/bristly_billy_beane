@@ -14,6 +14,44 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def load_cwe_for_commander(
+    db_path: Path, commander_id: str
+) -> tuple[dict[str, float], dict[str, int]]:
+    """Load Card Win Equity for one commander, keyed by card_id.
+
+    Batch-loads the CWE scores and sample sizes for a commander so scoring can
+    read them from context without a per-card query. Returns empty dicts if the
+    table is absent/empty (e.g. no tournament data ingested yet).
+
+    Args:
+        db_path: Path to the SQLite database.
+        commander_id: Commander to load equity for.
+
+    Returns:
+        Tuple of (card_id -> cwe_score, card_id -> sample_size).
+    """
+    cwe_by_card: dict[str, float] = {}
+    sample_by_card: dict[str, int] = {}
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            rows = conn.execute(
+                "SELECT card_id, cwe_score, sample_size FROM card_win_equity "
+                "WHERE commander_id = ?",
+                (commander_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return cwe_by_card, sample_by_card
+
+    for card_id, score, sample in rows:
+        if card_id is not None and score is not None:
+            cwe_by_card[card_id] = float(score)
+            sample_by_card[card_id] = int(sample or 0)
+    return cwe_by_card, sample_by_card
+
+
 def wilson_lower_bound(
     successes: int, total: int, z: float = 1.96
 ) -> float:

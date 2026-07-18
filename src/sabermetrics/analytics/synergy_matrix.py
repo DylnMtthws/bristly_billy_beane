@@ -1,16 +1,19 @@
 """Pairwise synergy matrix for candidate cards.
 
-Combines three signals to score how well any two cards work together:
+Combines two signals to score how well any two cards work together:
 1. Rule matching — hand-curated trigger/payoff pairs (config/synergy_rules.yaml)
-2. Co-occurrence — empirical data from tracked decklists
-3. Embedding similarity — semantic similarity of oracle text (cross-role only)
+2. Embedding similarity — semantic similarity of oracle text (cross-role only)
+
+A commander-conditioned co-occurrence signal was removed in Option A criterion 3:
+the tracked-deck corpus has at most 4 decks per commander, so a conditional
+co-occurrence rate is co-membership noise, not signal. The `card_cooccurrence`
+table is no longer read by scoring.
 
 Matrix is symmetric, computed once per commander, and cacheable.
 """
 
 import json
 import logging
-import sqlite3
 from pathlib import Path
 
 import numpy as np
@@ -22,8 +25,8 @@ from sabermetrics.config import settings
 logger = logging.getLogger(__name__)
 
 # Signal weights for hybrid score (centralized in config/settings.yaml).
+# The two weights are renormalized to sum to 1.0.
 RULE_WEIGHT = settings.scoring.synergy_rule_weight
-COOCCURRENCE_WEIGHT = settings.scoring.synergy_cooccurrence_weight
 EMBEDDING_WEIGHT = settings.scoring.synergy_embedding_weight
 
 
@@ -35,10 +38,13 @@ class SynergyMatrix:
         matrix: np.ndarray,
         card_id_to_index: dict[str, int],
         index_to_card_id: dict[int, str],
+        signals: dict[str, bool] | None = None,
     ) -> None:
         self.matrix = matrix
         self.card_id_to_index = card_id_to_index
         self.index_to_card_id = index_to_card_id
+        # Which pairwise signals were live for this build (for observability).
+        self.signals: dict[str, bool] = signals or {}
 
     def get_synergy(self, card_id_a: str, card_id_b: str) -> float:
         """Get synergy score between two cards."""
@@ -54,13 +60,15 @@ def build_synergy_matrix(
     commander_id: str,
     db_path: Path,
 ) -> SynergyMatrix:
-    """Build hybrid synergy matrix from three signal sources.
+    """Build hybrid synergy matrix from two signal sources (rules + embeddings).
 
     Args:
         candidates: List of candidate card dicts (must have 'id', 'oracle_text',
             'role_tags' or inferred roles).
-        commander_id: Scryfall ID of the commander.
-        db_path: Path to SQLite database for co-occurrence lookup.
+        commander_id: Scryfall ID of the commander. Retained for interface
+            stability; no longer used since co-occurrence was removed.
+        db_path: Path to SQLite database. Retained for interface stability; no
+            longer used since co-occurrence was removed.
 
     Returns:
         SynergyMatrix with N×N float32 scores.
@@ -71,6 +79,7 @@ def build_synergy_matrix(
             matrix=np.zeros((0, 0), dtype=np.float32),
             card_id_to_index={},
             index_to_card_id={},
+            signals={"rules": False, "embeddings": False},
         )
 
     # Build index mappings
@@ -81,8 +90,6 @@ def build_synergy_matrix(
         card_id_to_index[cid] = i
         index_to_card_id[i] = cid
 
-    candidate_ids = [candidates[i].get("id", str(i)) for i in range(n)]
-
     # Signal 1: Rule matching
     rules = _load_synergy_rules()
     rule_matrix = np.zeros((n, n), dtype=np.float32)
@@ -92,22 +99,8 @@ def build_synergy_matrix(
             rule_matrix[i, j] = score
             rule_matrix[j, i] = score
 
-    # Signal 2: Co-occurrence
-    cooccurrence_rates = _batch_cooccurrence(candidate_ids, commander_id, db_path)
-    cooccurrence_matrix = np.zeros((n, n), dtype=np.float32)
-    max_rate = max(cooccurrence_rates.values()) if cooccurrence_rates else 1.0
-    if max_rate == 0:
-        max_rate = 1.0
-    for (id_a, id_b), rate in cooccurrence_rates.items():
-        idx_a = card_id_to_index.get(id_a)
-        idx_b = card_id_to_index.get(id_b)
-        if idx_a is not None and idx_b is not None:
-            normalized = rate / max_rate
-            cooccurrence_matrix[idx_a, idx_b] = normalized
-            cooccurrence_matrix[idx_b, idx_a] = normalized
-
-    # Signal 3: Embedding similarity (cross-role only)
-    embedding_matrix = _compute_embedding_matrix(candidates)
+    # Signal 2: Embedding similarity (cross-role only)
+    embedding_matrix, embeddings_ok = _compute_embedding_matrix(candidates)
 
     # Zero out same-role pairs for embedding signal
     primary_roles = _get_primary_roles(candidates)
@@ -117,25 +110,28 @@ def build_synergy_matrix(
                 embedding_matrix[i, j] = 0.0
                 embedding_matrix[j, i] = 0.0
 
-    # Hybrid combination
+    # Hybrid combination (rules + embeddings; weights sum to 1.0)
     hybrid = (
         RULE_WEIGHT * rule_matrix
-        + COOCCURRENCE_WEIGHT * cooccurrence_matrix
         + EMBEDDING_WEIGHT * embedding_matrix
     )
 
+    # Which signals were live (for observable degradation).
+    signals = {"rules": bool(rules), "embeddings": embeddings_ok}
+
     logger.info(
-        "Synergy matrix built: %dx%d, rule_max=%.3f, cooc_pairs=%d, emb_mean=%.3f",
+        "Synergy matrix built: %dx%d, rule_max=%.3f, emb_mean=%.3f, signals=%s",
         n, n,
         float(rule_matrix.max()) if n > 0 else 0,
-        len(cooccurrence_rates),
         float(embedding_matrix.mean()) if n > 0 else 0,
+        signals,
     )
 
     return SynergyMatrix(
         matrix=hybrid,
         card_id_to_index=card_id_to_index,
         index_to_card_id=index_to_card_id,
+        signals=signals,
     )
 
 
@@ -240,73 +236,20 @@ def _card_matches_clause(card: dict, clause: dict) -> bool:
     return True
 
 
-def _batch_cooccurrence(
-    candidate_ids: list[str],
-    commander_id: str,
-    db_path: Path,
-) -> dict[tuple[str, str], float]:
-    """Load all cooccurrence rates for candidate pairs in one query.
-
-    Args:
-        candidate_ids: List of card IDs to look up.
-        commander_id: Commander context for co-occurrence data.
-        db_path: Path to SQLite database.
-
-    Returns:
-        Dict mapping (card_a_id, card_b_id) to cooccurrence_rate.
-    """
-    if not candidate_ids:
-        return {}
-
-    conn = sqlite3.connect(str(db_path))
-    try:
-        # Check if table exists
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' "
-            "AND name='card_cooccurrence'"
-        )
-        if not cursor.fetchone():
-            return {}
-
-        # Build IN clause with placeholders
-        id_set = set(candidate_ids)
-        placeholders = ",".join("?" * len(id_set))
-        id_list = list(id_set)
-
-        query = (
-            f"SELECT card_a_id, card_b_id, cooccurrence_rate "
-            f"FROM card_cooccurrence "
-            f"WHERE commander_id = ? "
-            f"AND card_a_id IN ({placeholders}) "
-            f"AND card_b_id IN ({placeholders})"
-        )
-        params = [commander_id] + id_list + id_list
-
-        cursor = conn.execute(query, params)
-        results: dict[tuple[str, str], float] = {}
-        for row in cursor:
-            results[(row[0], row[1])] = row[2]
-        return results
-
-    except sqlite3.OperationalError:
-        logger.debug("card_cooccurrence table query failed, skipping")
-        return {}
-    finally:
-        conn.close()
-
-
-def _compute_embedding_matrix(candidates: list[dict]) -> np.ndarray:
+def _compute_embedding_matrix(candidates: list[dict]) -> tuple[np.ndarray, bool]:
     """Compute pairwise cosine similarity from oracle text embeddings.
 
     Args:
         candidates: List of card dicts with 'oracle_text'.
 
     Returns:
-        N×N float32 matrix of cosine similarities (0-1 clamped).
+        Tuple of (N×N float32 cosine-similarity matrix, embeddings_available).
+        On failure (model load / inference error) returns a zero matrix and
+        False so the caller can record the embedding signal as unavailable.
     """
     n = len(candidates)
     if n == 0:
-        return np.zeros((0, 0), dtype=np.float32)
+        return np.zeros((0, 0), dtype=np.float32), True
 
     texts = [
         (c.get("oracle_text") or c.get("name") or "unknown card")
@@ -330,11 +273,11 @@ def _compute_embedding_matrix(candidates: list[dict]) -> np.ndarray:
         sim = np.clip(sim, 0.0, 1.0)
         np.fill_diagonal(sim, 0.0)
 
-        return sim.astype(np.float32)
+        return sim.astype(np.float32), True
 
     except Exception as e:
         logger.warning("Embedding computation failed, using zeros: %s", e)
-        return np.zeros((n, n), dtype=np.float32)
+        return np.zeros((n, n), dtype=np.float32), False
 
 
 def _get_primary_roles(candidates: list[dict]) -> list[str]:
