@@ -209,6 +209,37 @@ def report(period: str) -> None:
     click.echo("Not implemented yet")
 
 
+@cli.command(name="refresh-candidates")
+def refresh_candidates() -> None:
+    """Rebuild the ramp/removal/protection candidate tables.
+
+    These pre-scored tables are what the Stage 4 role generators prefer over
+    the slower role-tag fallback. setup-db and build-kb create the tables but
+    do not fill them -- only the nightly refresh does -- so a freshly built DB
+    runs the generators degraded until this is run. Idempotent: skips a table
+    already populated at the current detection version.
+    """
+    from sabermetrics.analytics.protection_detector import (
+        populate_protection_candidates,
+    )
+    from sabermetrics.analytics.ramp_detector import populate_ramp_candidates
+    from sabermetrics.analytics.removal_detector import populate_removal_candidates
+
+    db_path = _default_db_path()
+    populators = [
+        ("ramp", populate_ramp_candidates),
+        ("removal", populate_removal_candidates),
+        ("protection", populate_protection_candidates),
+    ]
+    for name, fn in populators:
+        stats = fn(db_path)
+        state = "up to date" if stats.get("skipped") else "rebuilt"
+        click.echo(
+            f"{name + '_candidates':<24} {stats.get('rows', 0):>6} rows "
+            f"({state}, v{stats.get('version', '?')})"
+        )
+
+
 @cli.command()
 def health() -> None:
     """Show status of all data sources."""
