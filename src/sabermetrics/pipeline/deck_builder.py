@@ -575,12 +575,17 @@ class DeckBuilder:
         from sabermetrics.config import settings
 
         engine: set[str] = set()
+        aura_engine = False
         if empirical is not None and empirical.composition is not None:
             comp = empirical.composition
             engine = engine_types({
                 "enchantment": comp.enchantments,
                 "artifact": comp.artifacts,
             })
+            aura_engine = (
+                comp.enchantments > 0
+                and comp.auras >= 0.6 * comp.enchantments
+            )
 
         # Game-changer gate: bracket data exists (game_changers.yaml) but was
         # never consulted at selection -- Mana Vault-class fast mana has no
@@ -614,6 +619,17 @@ class DeckBuilder:
             result = compute_cvar(card, context, self.db_path)
             card["_cvar_result"] = result.model_dump()
             card["_cvar_score"] = result.composite_score
+            # SME value-inversion rule: in an aura-engine deck, any 1-2
+            # mana Aura is "one mana to stop an attacker" -- playable
+            # regardless of generic quality. Generic scoring rates Crippling
+            # Blight-class cards near zero and Pareto kills them before any
+            # later stage can save the engine fuel. Floor, don't boost:
+            # multi-taskers still rank higher via synergy/empirical signals.
+            if aura_engine:
+                tl = (card.get("type_line") or "").lower()
+                if "aura" in tl and float(card.get("cmc", 0) or 0) <= 2:
+                    card["_cvar_score"] = max(card["_cvar_score"], 0.55)
+                    card["_engine_fuel"] = True
             if engine and is_anti_engine(card, engine):
                 card["_anti_engine"] = True
                 card["_cvar_score"] = round(
@@ -1007,6 +1023,7 @@ class DeckBuilder:
             commander_colors=colors,
             avg_cmc=template.avg_cmc_target,
             commander_cmc=float(commander.cmc or 0),
+            pool_index=pool_index,
         )
         all_assignments.extend(ramp)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in ramp)
@@ -1050,6 +1067,7 @@ class DeckBuilder:
             board_wipe_target=template.board_wipe_count,
             commander_colors=colors,
             avg_cmc=template.avg_cmc_target,
+            pool_index=pool_index,
         )
         all_assignments.extend(removal)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in removal)
@@ -1070,6 +1088,7 @@ class DeckBuilder:
             role_tag_pool=protection_pool,
             commander_colors=colors,
             avg_cmc=template.avg_cmc_target,
+            pool_index=pool_index,
         )
         all_assignments.extend(protection)
         budget_used += sum(float(a.card.get("price_usd", 0) or 0) for a in protection)
@@ -1208,7 +1227,11 @@ class DeckBuilder:
                 protected_names=protected,
             )
         except Exception as e:
-            logger.warning("LLM safety check failed, skipping: %s", e)
+            # A silently-skipped vet produced the worst deck of the project
+            # (build7: an AttributeError left 29 unreviewed swaps in). Log the
+            # full traceback and surface the failure in pipeline metrics.
+            logger.exception("LLM safety check FAILED — deck is unvetted: %s", e)
+            llm_cost = -1.0
 
         # Add fit reasoning for cards that lack it
         for a in all_assignments:
@@ -1220,6 +1243,7 @@ class DeckBuilder:
             "role_targets": {r: t.target_count for r, t in role_targets.items()},
             "cards_swapped": swaps,
             "llm_safety_cost": llm_cost,
+            "llm_safety_failed": llm_cost < 0,
             "budget_utilization": rebalance_stats.get("utilization", 0.0),
             "rebalance_upgrades": rebalance_stats.get("upgrades", 0),
             "rebalance_unbundles": rebalance_stats.get("unbundles", 0),

@@ -166,66 +166,6 @@ class FitScorer:
         return CardFitResponse(**data)
 
 
-def _build_deck_composition_context(
-    partial_deck: list[dict] | None,
-    slot_intents: list[SlotIntent] | None,
-) -> str:
-    """Build deck composition context for the per-request prompt section.
-
-    Args:
-        partial_deck: Infrastructure cards already placed in the deck.
-        slot_intents: What categories the deck still needs.
-
-    Returns:
-        Formatted string for the {deck_composition_context} placeholder.
-    """
-    if not partial_deck:
-        return ""
-
-    lines: list[str] = []
-
-    # Role counts
-    role_counts: dict[str, int] = {}
-    for card in partial_deck:
-        role_tags_raw = card.get("role_tags", "[]")
-        if isinstance(role_tags_raw, str):
-            try:
-                role_tags = json.loads(role_tags_raw)
-            except (json.JSONDecodeError, TypeError):
-                role_tags = []
-        else:
-            role_tags = role_tags_raw or []
-        for tag in role_tags:
-            role_counts[tag] = role_counts.get(tag, 0) + 1
-
-    lines.append(f"Cards already placed: {len(partial_deck)}")
-    if role_counts:
-        role_str = ", ".join(f"{k}: {v}" for k, v in sorted(role_counts.items()))
-        lines.append(f"Role distribution: {role_str}")
-
-    # Key cards (top 10 by CVAR score)
-    scored = sorted(
-        partial_deck,
-        key=lambda c: c.get("_cvar_score", 0),
-        reverse=True,
-    )[:10]
-    if scored:
-        key_names = [c.get("name", "?") for c in scored]
-        lines.append(f"Key infrastructure cards: {', '.join(key_names)}")
-
-    # Slot intents
-    if slot_intents:
-        needs = []
-        for intent in slot_intents[:5]:
-            needs.append(
-                f"{intent.category} (need {intent.slots_to_fill} more, "
-                f"have {intent.current_count}/{intent.target_count})"
-            )
-        lines.append(f"Categories still needed: {'; '.join(needs)}")
-
-    return "\n".join(lines)
-
-
     def score_cards_batch(
         self,
         cards: list[dict],
@@ -287,6 +227,13 @@ def _build_deck_composition_context(
             "survive (check the deck's creature count); vehicles need "
             "crew bodies and must survive blocks (crew cost vs toughness); "
             "score any card that mass-removes the deck's own engine type 1. "
+            "For aura-engine decks: cheap (1-2 mana) auras that stop an "
+            "attacker are legitimate engine fuel even if generically weak; "
+            "commander-protection effects are top value (the deck does "
+            "nothing without its commander, and debuff auras backfire if "
+            "it leaves); cantrip auras stack with enchantress draw "
+            "engines; board wipes must be one-sided (condition sparing "
+            "a small, cheap board) -- uniform wipes score low. "
             "Output ONLY a JSON array, one object per card, in the same "
             'order: [{"name": str, "fit_score": int, "reasoning": str}]'
         )
@@ -330,3 +277,63 @@ def _build_deck_composition_context(
             len(cards), len(by_name),
         )
         return out
+
+
+def _build_deck_composition_context(
+    partial_deck: list[dict] | None,
+    slot_intents: list[SlotIntent] | None,
+) -> str:
+    """Build deck composition context for the per-request prompt section.
+
+    Args:
+        partial_deck: Infrastructure cards already placed in the deck.
+        slot_intents: What categories the deck still needs.
+
+    Returns:
+        Formatted string for the {deck_composition_context} placeholder.
+    """
+    if not partial_deck:
+        return ""
+
+    lines: list[str] = []
+
+    # Role counts
+    role_counts: dict[str, int] = {}
+    for card in partial_deck:
+        role_tags_raw = card.get("role_tags", "[]")
+        if isinstance(role_tags_raw, str):
+            try:
+                role_tags = json.loads(role_tags_raw)
+            except (json.JSONDecodeError, TypeError):
+                role_tags = []
+        else:
+            role_tags = role_tags_raw or []
+        for tag in role_tags:
+            role_counts[tag] = role_counts.get(tag, 0) + 1
+
+    lines.append(f"Cards already placed: {len(partial_deck)}")
+    if role_counts:
+        role_str = ", ".join(f"{k}: {v}" for k, v in sorted(role_counts.items()))
+        lines.append(f"Role distribution: {role_str}")
+
+    # Key cards (top 10 by CVAR score)
+    scored = sorted(
+        partial_deck,
+        key=lambda c: c.get("_cvar_score", 0),
+        reverse=True,
+    )[:10]
+    if scored:
+        key_names = [c.get("name", "?") for c in scored]
+        lines.append(f"Key infrastructure cards: {', '.join(key_names)}")
+
+    # Slot intents
+    if slot_intents:
+        needs = []
+        for intent in slot_intents[:5]:
+            needs.append(
+                f"{intent.category} (need {intent.slots_to_fill} more, "
+                f"have {intent.current_count}/{intent.target_count})"
+            )
+        lines.append(f"Categories still needed: {'; '.join(needs)}")
+
+    return "\n".join(lines)

@@ -275,6 +275,7 @@ class ProtectionPackageGenerator:
         role_tag_pool: list[dict],
         commander_colors: list[str] | None = None,
         avg_cmc: float | None = None,
+        pool_index: dict[str, dict] | None = None,
     ) -> list[SlotAssignment]:
         """Generate protection package with auto-includes and role-specific scoring.
 
@@ -330,6 +331,24 @@ class ProtectionPackageGenerator:
             if not is_playable_as_land(c.get("type_line") or "")
             and not c.get("_anti_engine")
         ]
+        # Inherit the filtered pool's gates: drop table rows not in the pool
+        # (excluded there for price/legality/ceiling reasons) and copy its
+        # flags and scores onto the survivors.
+        if pool_index is not None:
+            gated = []
+            for c in pool:
+                src = pool_index.get(c.get("name", ""))
+                if src is None:
+                    continue
+                for k in ("_anti_engine", "_cvar_score",
+                          "_empirical_inclusion", "_empirical_reliable"):
+                    if k in src:
+                        c[k] = src[k]
+                if c.get("_anti_engine"):
+                    continue
+                gated.append(c)
+            pool = gated
+
 
         # Place auto-includes from pool (or role_tag_pool as backup)
         search_pools = [pool] if use_candidates_table else [role_tag_pool]

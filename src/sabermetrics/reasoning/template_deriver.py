@@ -83,6 +83,11 @@ def derive_deck_template(
     ramp_count = base_ramp + max(0, cmdr_cmc - 3)
     # A cheap curve needs less acceleration: scale down below avg CMC 3.0.
     ramp_count -= max(0, round((3.0 - avg_cmc) * 2))
+    # SME ruling: for cheap commanders, ramp is a play-sequencing cost, not
+    # just a slot cost -- by turn 4-5 the deck wants engine pushes, not
+    # Fellwar Stones. Each rock displaces a value piece AND a cast window.
+    if cmdr_cmc <= 3:
+        ramp_count -= 2
     ramp_count = max(5, min(18, ramp_count))
 
     # --- Draw count ---
