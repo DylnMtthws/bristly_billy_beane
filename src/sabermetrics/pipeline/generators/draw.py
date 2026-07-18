@@ -9,6 +9,7 @@ from pathlib import Path
 
 from sabermetrics.analytics.empirical_valuation import empirical_bonus
 from sabermetrics.config import settings
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -48,10 +49,15 @@ class DrawPackageGenerator:
         running_price = 0.0
 
         # Score candidates
+        needed_types = template.unmet_type_targets(already_placed)
         candidates: list[tuple[dict, float]] = []
         for card in role_tag_pool:
             name = card.get("name", "")
             if name in used_names:
+                continue
+            # Lands are the land package's domain; placing one here inflates
+            # the deck's land total past the template target.
+            if is_playable_as_land(card.get("type_line") or ""):
                 continue
 
             cvar = card.get("_cvar_score", 0.3)
@@ -79,6 +85,13 @@ class DrawPackageGenerator:
                 settings.scoring.generator_empirical_weight,
                 settings.scoring.generator_empirical_noisy_weight,
             )
+
+            # Type-need: prefer on-type cards while the archetype's engine
+            # type is undersupplied (corpus targets; empty without one).
+            if needed_types:
+                tl = (card.get("type_line") or "").lower()
+                if any(t in tl for t in needed_types):
+                    cvar += settings.scoring.generator_type_need_weight
 
             candidates.append((card, cvar))
 

@@ -29,6 +29,30 @@ class DeckTemplate(BaseModel):
         """Total infrastructure slots (everything except differentiators)."""
         return 99 - self.differentiator_slots
 
+    def unmet_type_targets(self, placed_cards: list[dict]) -> set[str]:
+        """Card types still below their empirical target given placements.
+
+        Lets the infrastructure generators prefer on-type cards (an
+        enchantment-based removal spell over an equal instant) while the
+        archetype's engine type is undersupplied. Empty when the template has
+        no corpus-derived targets, so behavior is unchanged without one.
+
+        Args:
+            placed_cards: Card dicts already placed in the deck.
+
+        Returns:
+            The targeted type names currently under target.
+        """
+        if not self.type_targets:
+            return set()
+        counts = dict.fromkeys(self.type_targets, 0)
+        for card in placed_cards:
+            tl = (card.get("type_line") or "").lower()
+            for t in counts:
+                if t in tl:
+                    counts[t] += 1
+        return {t for t, tgt in self.type_targets.items() if counts[t] < tgt}
+
     def to_composition(self) -> dict[str, int]:
         """Convert to legacy composition dict for backward compatibility."""
         # Protection slots carved from differentiator pool

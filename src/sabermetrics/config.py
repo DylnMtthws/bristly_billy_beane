@@ -115,6 +115,12 @@ class ScoringSettings(BaseModel):
     generator_empirical_weight: float = 0.20
     generator_empirical_noisy_weight: float = 0.12
 
+    # Infrastructure generators: bonus (0-1 score scale) for a card whose type
+    # is still below its empirical target, so e.g. enchantment-based removal
+    # outranks an equal instant while an enchantress deck is short on
+    # enchantments. Only applies when the template carries corpus targets.
+    generator_type_need_weight: float = 0.15
+
     # LLM safety net targeting: with a reliable corpus, review uncorroborated
     # picks (inclusion below this rate) before merely weak ones. Rule/embedding
     # matching can hallucinate synergy ("aura" in oracle text != good aura

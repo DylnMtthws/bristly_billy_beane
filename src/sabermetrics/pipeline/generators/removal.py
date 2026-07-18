@@ -17,6 +17,7 @@ from sabermetrics.analytics.empirical_valuation import (
     empirical_bonus,
 )
 from sabermetrics.config import settings
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -399,6 +400,13 @@ class RemovalPackageGenerator:
             pool = role_tag_pool
             logger.info("Falling back to role_tag_pool (%d cards)", len(pool))
 
+        # Lands are the land package's domain; placing one here inflates the
+        # deck's land total past the template target.
+        pool = [
+            c for c in pool
+            if not is_playable_as_land(c.get("type_line") or "")
+        ]
+
         # Place auto-includes from pool (or role_tag_pool as backup)
         search_pools = [pool] if use_candidates_table else [role_tag_pool]
         if use_candidates_table:
@@ -421,6 +429,7 @@ class RemovalPackageGenerator:
                         auto_removal_set.discard(name)
 
         # --- Score and sort remaining candidates ---
+        needed_types = template.unmet_type_targets(already_placed)
         board_wipe_candidates: list[tuple[dict, float]] = []
         single_removal_candidates: list[tuple[dict, float]] = []
 
@@ -460,6 +469,13 @@ class RemovalPackageGenerator:
                 )
             else:
                 score = _score_removal(card, colors, deck_avg_cmc)
+
+            # Type-need: prefer on-type cards while the archetype's engine
+            # type is undersupplied (corpus targets; empty without one).
+            if needed_types:
+                tl = (card.get("type_line") or "").lower()
+                if any(t in tl for t in needed_types):
+                    score += settings.scoring.generator_type_need_weight
 
             # Budget preference
             price = float(card.get("price_usd", 0) or 0)

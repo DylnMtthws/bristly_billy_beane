@@ -818,3 +818,107 @@ def test_protection_auto_includes_boots() -> None:
     )
     names = [a.card["name"] for a in result]
     assert "Swiftfoot Boots" in names
+
+
+# --- Land-count invariant and type-need (SME review follow-ups) ---
+
+
+def test_ramp_generator_never_places_lands() -> None:
+    """Land-typed 'ramp' (Krosan Verge) belongs to the land package.
+
+    Two such placements caused the deck to build 38 lands against a 36-land
+    template target.
+    """
+    pool = _make_ramp_pool() + [{
+        "id": "kv", "name": "Krosan Verge",
+        "type_line": "Land",
+        "oracle_text": "{2}, {T}, Sacrifice Krosan Verge: Search your library "
+                       "for a Forest card and a Plains card.",
+        "price_usd": 0.25, "cmc": 0, "_cvar_score": 0.99,
+        "role_tags": '["ramp"]',
+    }]
+    gen = RampPackageGenerator(Path("/nonexistent.db"))  # forces role_tag_pool
+    result = gen.generate(
+        color_identity=["G", "W"],
+        target_count=10,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=pool,
+        commander_colors=["G", "W"],
+        avg_cmc=3.0,
+    )
+    assert all(
+        "land" not in (a.card.get("type_line") or "").lower() for a in result
+    )
+
+
+def test_land_generator_subtracts_already_placed_lands() -> None:
+    """Total lands equal the target even if another stage placed lands."""
+    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    placed_lands = [
+        {"name": f"Stray Land {i}", "type_line": "Land", "cmc": 0}
+        for i in range(2)
+    ]
+    result = gen.generate(
+        color_identity=["W", "U"],
+        target_count=36,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=placed_lands
+        + [{"mana_cost": "{1}{W}{U}", "cmc": 3, "type_line": "Creature"}],
+        role_tag_pool=_make_land_pool(),
+    )
+    assert len(result) <= 34   # 36 target - 2 already placed
+
+
+def test_draw_generator_type_need_prefers_on_type() -> None:
+    """With enchantments under target, enchantment draw beats an equal
+    creature draw; without targets, ranking is unchanged."""
+    ench = {
+        "id": "e", "name": "Enchant Draw", "type_line": "Enchantment",
+        "oracle_text": "Whenever you cast an enchantment spell, draw a card.",
+        "price_usd": 1.0, "cmc": 2, "_cvar_score": 0.50, "role_tags": '["draw"]',
+    }
+    creature = {
+        "id": "c", "name": "Creature Draw", "type_line": "Creature",
+        "oracle_text": "Whenever you attack, draw a card.",
+        "price_usd": 1.0, "cmc": 2, "_cvar_score": 0.55, "role_tags": '["draw"]',
+    }
+
+    gen = DrawPackageGenerator(Path("data/sabermetrics.db"))
+    template = _make_template()
+    template = template.model_copy(update={"type_targets": {"enchantment": 30}})
+    result = gen.generate(
+        color_identity=["W"],
+        target_count=1,
+        budget_remaining=200.0,
+        template=template,
+        already_placed=[],
+        role_tag_pool=[ench, creature],
+    )
+    assert result[0].card["name"] == "Enchant Draw"
+
+    # Without targets, the higher-CVAR creature wins as before.
+    plain = gen.generate(
+        color_identity=["W"],
+        target_count=1,
+        budget_remaining=200.0,
+        template=_make_template(),
+        already_placed=[],
+        role_tag_pool=[ench, creature],
+    )
+    assert plain[0].card["name"] == "Creature Draw"
+
+
+def test_unmet_type_targets_counts_and_empties() -> None:
+    template = _make_template().model_copy(
+        update={"type_targets": {"enchantment": 2, "creature": 1}}
+    )
+    placed = [
+        {"type_line": "Enchantment — Aura"},
+        {"type_line": "Creature — Human"},
+        {"type_line": "Land"},
+    ]
+    assert template.unmet_type_targets(placed) == {"enchantment"}
+    assert _make_template().unmet_type_targets(placed) == set()

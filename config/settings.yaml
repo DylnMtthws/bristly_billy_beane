@@ -74,6 +74,9 @@ scoring:
   # LLM safety net: review uncorroborated picks (corpus inclusion below this)
   # before merely weak ones.
   safety_uncorroborated_max_inclusion: 0.10
+  # Infrastructure generators: bonus for cards of a type still below its
+  # empirical target (e.g. enchantment removal while enchantments are short).
+  generator_type_need_weight: 0.15
   # Deck-level objective (components, all 0-1 normalized).
   objective_synergy_density_weight: 0.30
   objective_role_coverage_weight: 0.25

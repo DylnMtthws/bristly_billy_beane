@@ -17,6 +17,7 @@ from sabermetrics.analytics.empirical_valuation import (
     empirical_bonus,
 )
 from sabermetrics.config import settings
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -356,6 +357,15 @@ class RampPackageGenerator:
             pool = role_tag_pool
             logger.info("Falling back to role_tag_pool (%d cards)", len(pool))
 
+        # Lands are the land package's domain. A Krosan Verge placed as "ramp"
+        # inflates the deck's land total past the template target (the source
+        # of a +2 land overshoot), and the land pool already offers such lands
+        # on their own merit.
+        pool = [
+            c for c in pool
+            if not is_playable_as_land(c.get("type_line") or "")
+        ]
+
         # Place auto-includes from pool (or role_tag_pool as backup)
         search_pools = [pool] if use_candidates_table else [role_tag_pool]
         if use_candidates_table:
@@ -378,6 +388,7 @@ class RampPackageGenerator:
                         auto_ramp_set.discard(name)
 
         # Score remaining candidates with role-specific function
+        needed_types = template.unmet_type_targets(already_placed)
         candidates: list[tuple[dict, float]] = []
         for card in pool:
             name = card.get("name", "")
@@ -396,6 +407,13 @@ class RampPackageGenerator:
                 )
             else:
                 score = _score_ramp(card, colors, deck_avg_cmc)
+
+            # Type-need: prefer on-type cards while the archetype's engine
+            # type is undersupplied (corpus targets; empty without one).
+            if needed_types:
+                tl = (card.get("type_line") or "").lower()
+                if any(t in tl for t in needed_types):
+                    score += settings.scoring.generator_type_need_weight
 
             # Budget awareness: prefer $0.25-$2 range
             price = float(card.get("price_usd", 0) or 0)
