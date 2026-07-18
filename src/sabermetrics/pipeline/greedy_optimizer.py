@@ -169,6 +169,7 @@ def greedy_fill(
                 _SCORING.marginal_synergy_weight * synergy_contrib
                 + _SCORING.marginal_role_cvar_weight * (role_mult * cvar_base)
                 + _SCORING.marginal_cvar_weight * cvar_base
+                + _empirical_bonus(card)
             )
 
             if marginal > best_score:
@@ -613,6 +614,32 @@ def _compute_curve_coherence(
     # Normalize: KL can be unbounded, but typical values 0-2
     coherence = max(0.0, 1.0 - kl / 2.0)
     return coherence
+
+
+def _empirical_bonus(card: dict) -> float:
+    """Bonus for how often a card appears in the target variant's real decks.
+
+    Reads ``_empirical_inclusion`` / ``_empirical_reliable``, set by
+    ``deck_builder._structural_score`` when a decklist corpus is available.
+    Cards with no corpus data score 0.0 and are left exactly as they were,
+    so absence never penalizes and the pipeline degrades cleanly when no
+    corpus exists.
+
+    Args:
+        card: Candidate card dict.
+
+    Returns:
+        A non-negative bonus to add to the card's marginal value.
+    """
+    rate = float(card.get("_empirical_inclusion", 0.0) or 0.0)
+    if rate <= 0.0:
+        return 0.0
+    weight = (
+        _SCORING.marginal_empirical_weight
+        if card.get("_empirical_reliable")
+        else _SCORING.marginal_empirical_noisy_weight
+    )
+    return weight * rate
 
 
 def _get_card_roles(card: dict) -> list[str]:

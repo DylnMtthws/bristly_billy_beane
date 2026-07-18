@@ -100,6 +100,14 @@ class ScoringSettings(BaseModel):
     marginal_role_cvar_weight: float = 0.35
     marginal_cvar_weight: float = 0.20
 
+    # Greedy fill: bonus for cards common in the target variant's real decks.
+    # Added on top of the weights above rather than folded into them: rescaling
+    # to keep a sum of 1.0 would shrink the synergy/CVAR weight of every card
+    # with no corpus data, which penalizes absence. Absence must stay neutral --
+    # an unpopular card is the moneyball thesis, not a defect (ADR-005).
+    marginal_empirical_weight: float = 0.25
+    marginal_empirical_noisy_weight: float = 0.15
+
     # Deck-level objective (components, all 0-1 normalized).
     objective_synergy_density_weight: float = 0.30
     objective_role_coverage_weight: float = 0.25

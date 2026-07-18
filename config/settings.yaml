@@ -58,6 +58,10 @@ scoring:
   marginal_synergy_weight: 0.45
   marginal_role_cvar_weight: 0.35
   marginal_cvar_weight: 0.20
+  # Greedy fill: bonus for cards common in the target variant's real decks.
+  # Additive on top of the three weights above -- absence must never penalize.
+  marginal_empirical_weight: 0.25
+  marginal_empirical_noisy_weight: 0.15
   # Deck-level objective (components, all 0-1 normalized).
   objective_synergy_density_weight: 0.30
   objective_role_coverage_weight: 0.25

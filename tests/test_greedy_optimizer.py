@@ -8,6 +8,7 @@ from sabermetrics.analytics.synergy_matrix import SynergyMatrix
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.greedy_optimizer import (
     ProfileSignals,
+    _empirical_bonus,
     deck_objective,
     greedy_fill,
     is_playable_as_land,
@@ -580,3 +581,81 @@ class TestIsPlayableAsLand:
 
     def test_none_type_line(self):
         assert is_playable_as_land(None) is False
+
+
+# --- Empirical grounding at selection ---
+
+
+def test_empirical_bonus_is_zero_without_corpus_data() -> None:
+    """A card with no corpus data must score exactly 0.0, not a penalty.
+
+    Absence has to stay neutral: an unpopular card is the moneyball thesis,
+    not a defect (ADR-005).
+    """
+    assert _empirical_bonus(_make_card()) == 0.0
+    assert _empirical_bonus(_make_card() | {"_empirical_inclusion": 0.0}) == 0.0
+
+
+def test_empirical_bonus_scales_with_inclusion_and_reliability() -> None:
+    """Reliable inclusion is weighted above noisy inclusion at the same rate."""
+    reliable = _make_card() | {
+        "_empirical_inclusion": 0.9, "_empirical_reliable": True,
+    }
+    noisy = _make_card() | {
+        "_empirical_inclusion": 0.9, "_empirical_reliable": False,
+    }
+
+    assert _empirical_bonus(reliable) == pytest.approx(0.25 * 0.9)
+    assert _empirical_bonus(noisy) == pytest.approx(0.15 * 0.9)
+    assert _empirical_bonus(reliable) > _empirical_bonus(noisy)
+
+
+def test_greedy_picks_empirical_staple_over_cheaper_jank() -> None:
+    """The Phase 6 failure: a proven staple loses to on-theme jank.
+
+    Mirrors Pitiless Plunderer (in 90% of real aristocrats decks) losing to a
+    marginally higher-CVAR card with no corpus support. Without the empirical
+    term the jank wins on CVAR alone.
+    """
+    staple = _make_card(
+        card_id="staple", name="Pitiless Plunderer",
+        role_tags='["utility"]', cvar_score=0.50,
+    ) | {"_empirical_inclusion": 0.90, "_empirical_reliable": True}
+    jank = _make_card(
+        card_id="jank", name="On-Theme Jank",
+        role_tags='["utility"]', cvar_score=0.60,
+    )
+
+    all_cards = [staple, jank]
+    assignments = greedy_fill(
+        shell=[],
+        candidates=all_cards,
+        synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
+        slots_remaining=1,
+    )
+
+    # jank marginal   = 0.35*1.0*0.60 + 0.20*0.60 = 0.330
+    # staple marginal = 0.35*1.0*0.50 + 0.20*0.50 + 0.25*0.90 = 0.500
+    assert len(assignments) == 1
+    assert assignments[0].card["name"] == "Pitiless Plunderer"
+
+
+def test_greedy_ranking_unchanged_when_no_card_has_corpus_data() -> None:
+    """With no corpus, selection must be identical to the pre-grounding rule."""
+    low = _make_card(card_id="low", name="Low", cvar_score=0.40)
+    high = _make_card(card_id="high", name="High", cvar_score=0.80)
+
+    all_cards = [low, high]
+    assignments = greedy_fill(
+        shell=[],
+        candidates=all_cards,
+        synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
+        slots_remaining=1,
+    )
+
+    assert len(assignments) == 1
+    assert assignments[0].card["name"] == "High"
