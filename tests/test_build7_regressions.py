@@ -78,3 +78,39 @@ def test_one_sided_wipe_outscores_uniform_in_low_creature_deck():
     wipes = [a.card["name"] for a in result]
     assert "Vault 75 Style" in wipes
     assert "Uniform Wrath" not in wipes
+
+
+def test_fill_infrastructure_smoke():
+    """Drives the REAL _fill_infrastructure path: build8 crashed with a
+    NameError here that no unit test caught (they call generators directly)."""
+    import sqlite3
+    from pathlib import Path
+    import pytest
+    from sabermetrics.pipeline.deck_builder import DeckBuilder, DeckBuildRequest
+    from sabermetrics.pipeline.trace import GenerationTracer
+
+    db = Path("data/sabermetrics.db")
+    if not db.exists():
+        pytest.skip("no local DB")
+    row = sqlite3.connect(db).execute(
+        "SELECT id FROM cards WHERE name='Eriette of the Charmed Apple' "
+        "AND is_legal_commander=1 LIMIT 1").fetchone()
+    if row is None:
+        pytest.skip("Eriette not in DB")
+
+    b = DeckBuilder(db)
+    b._tracer = GenerationTracer(generation_id="smoke")
+    req = DeckBuildRequest(commander_id=row[0])
+    cmdr = b._validate_request(req)
+    # Minimal candidate pool: enough shape to exercise the generator plumbing.
+    cands = b._load_role_tags(b._filter_candidates(req, cmdr))[:400]
+    for c in cands:
+        c.setdefault("_cvar_score", 0.5)
+    tmpl = b._derive_template.__self__ and None  # placeholder, not used
+    from sabermetrics.models.template import DeckTemplate
+    template = DeckTemplate(
+        land_count=36, ramp_count=8, draw_count=6, removal_count=6,
+        board_wipe_count=2, differentiator_slots=37, avg_cmc_target=3.0,
+    )
+    infra, used = b._fill_infrastructure(cands, cmdr, req, template)
+    assert isinstance(infra, list) and used >= 0

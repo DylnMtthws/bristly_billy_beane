@@ -1011,6 +1011,13 @@ class DeckBuilder:
                     reason=f"infrastructure {stage.removeprefix('infra_')}",
                 )
 
+        # Gate inheritance for candidate-table loads: the tables are queried
+        # straight from the DB and bypassed every pool-level gate (price
+        # ceiling, NULL-price exclusion, game-changer gate, anti-engine flag)
+        # -- how an $87 Mana Vault entered a $50-ceiling deck. Generators
+        # intersect table rows with this index and inherit its flags/scores.
+        pool_index = {c.get("name", ""): c for c in candidates}
+
         # 1. Ramp (first, so land generator knows what spells are in deck)
         ramp_gen = RampPackageGenerator(self.db_path)
         ramp = ramp_gen.generate(
