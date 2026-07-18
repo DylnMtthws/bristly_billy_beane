@@ -597,10 +597,12 @@ class DeckBuilder:
         # type the deck is built on ("destroy all enchantments" in an
         # enchantress shell) must never win a slot on text-match points.
         from sabermetrics.analytics.anti_synergy import engine_types, is_anti_engine
+        from sabermetrics.analytics.oracle_patterns import is_combat_gated
         from sabermetrics.config import settings
 
         engine: set[str] = set()
         aura_engine = False
+        few_attackers = False
         if empirical is not None and empirical.composition is not None:
             comp = empirical.composition
             engine = engine_types({
@@ -610,6 +612,9 @@ class DeckBuilder:
             aura_engine = (
                 comp.enchantments > 0
                 and comp.auras >= 0.6 * comp.enchantments
+            )
+            few_attackers = (
+                comp.creatures < settings.scoring.combat_gated_creature_min
             )
 
         # Game-changer gate: bracket data exists (game_changers.yaml) but was
@@ -660,6 +665,19 @@ class DeckBuilder:
                 card["_cvar_score"] = round(
                     card["_cvar_score"]
                     * settings.scoring.anti_synergy_penalty, 4,
+                )
+            # Combat-gated payoff discount: "attack with two or more
+            # creatures" class conditions (prepared/battalion/raid) rarely
+            # fire in a deck whose real lists run few attackers -- the
+            # printed payoff is not the played payoff. Numeric-layer fix
+            # for the Eiganjo class: three rounds of vet prompt tuning
+            # scored it 7 -> 5 -> 5, never below the swap line, because
+            # its inflated CVAR kept re-selecting it as top replacement.
+            if few_attackers and is_combat_gated(card.get("oracle_text")):
+                card["_combat_gated"] = True
+                card["_cvar_score"] = round(
+                    card["_cvar_score"]
+                    * settings.scoring.combat_gated_discount, 4,
                 )
 
         return candidates

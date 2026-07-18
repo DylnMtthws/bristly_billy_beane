@@ -98,6 +98,30 @@ THREAT = _compile([
     r"commander damage",
 ])
 
+# Payoffs locked behind attacking with multiple creatures. Consumed by the
+# structural scorer as a discount gate (not a role): decks whose real lists
+# run few attackers rarely meet these conditions, so the printed payoff
+# overstates the card ("prepared" MDFCs, battalion, raid).
+COMBAT_GATED = _compile([
+    r"attacks? with (?:two|three|four|\d+) or more creatures",
+    r"\bbattalion\b",
+    r"\braid\b\s*[—-]",
+])
+
+
+def is_combat_gated(oracle_text: str | None) -> bool:
+    """Whether the card's payoff requires attacking with multiple creatures.
+
+    Args:
+        oracle_text: The card's oracle text (None-safe).
+
+    Returns:
+        True when any combat-gate pattern matches.
+    """
+    text = oracle_text or ""
+    return any(p.search(text) for p in COMBAT_GATED)
+
+
 # Convenience mapping consumed by role_tagger (ordered to match ROLE_TAGS).
 ROLE_PATTERNS: dict[str, list[re.Pattern]] = {
     "ramp": RAMP,

@@ -144,6 +144,15 @@ class ScoringSettings(BaseModel):
     # auto-include placement excludes such cards outright.
     anti_synergy_penalty: float = 0.15
 
+    # Combat-gated payoff discount: multiplier for cards whose payoff is
+    # locked behind attacking with multiple creatures (battalion, raid,
+    # 'prepared' MDFCs), applied when the target variant's real decks run
+    # too few creatures to meet the condition. Eiganjo Dynastorian's
+    # "return all enchantments" back half kept winning replacement slots on
+    # text-match points in a deck whose 18 creatures don't want to attack.
+    combat_gated_discount: float = 0.5
+    combat_gated_creature_min: int = 25
+
     # Budget rebalancing (Stage 7): minimum deck-objective gain for any move.
     # This is the spend-down stopping rule: keep buying upgrades while real
     # gains exist, stop when they go asymptotic -- leftover budget then means

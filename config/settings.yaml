@@ -100,6 +100,11 @@ scoring:
   ramp_color_fit_weight: 0.20
   # Score multiplier for cards that mass-remove the deck's engine type.
   anti_synergy_penalty: 0.15
+  # Multiplier for payoffs locked behind attacking with multiple creatures
+  # (battalion/raid/'prepared'), applied when the variant's real decks run
+  # fewer than combat_gated_creature_min creatures.
+  combat_gated_discount: 0.5
+  combat_gated_creature_min: 25
   # Deck-level objective (components, all 0-1 normalized).
   objective_synergy_density_weight: 0.28
   objective_role_coverage_weight: 0.22
