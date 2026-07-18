@@ -186,22 +186,30 @@ class DeckBuilder:
             template.removal_count, template.differentiator_slots,
         )
 
+        # --- Stage 3.5: Reserve empirical staples (before generators/greedy) ---
+        reserved = self._reserve_empirical_staples(candidates, request, template)
+
         # --- Stage 4: Infrastructure Fill ---
         t = time.time()
         infrastructure, budget_used = self._fill_infrastructure(
-            candidates, commander, request, template
+            candidates, commander, request, template, preplaced=reserved,
         )
+        # Reserved staples occupy differentiator slots; place them alongside the
+        # generators' output so greedy fills that many fewer slots (deck stays 99).
+        infrastructure = list(reserved) + infrastructure
+        # Don't let swap_refine trade away a card the corpus told us to keep.
+        self._protected_names |= {a.card.get("name", "") for a in reserved}
         metrics["6_infrastructure"] = time.time() - t
         logger.info(
-            "Stage 4: %d infrastructure cards placed ($%.2f)",
-            len(infrastructure), budget_used,
+            "Stage 4: %d infrastructure cards placed ($%.2f), %d reserved",
+            len(infrastructure), budget_used, len(reserved),
         )
 
         # --- Stage 5+6: Synergy optimizer (role targets + matrix + greedy + swap) ---
         t = time.time()
         all_assignments, opt_metrics = self._optimize_differentiators(
             candidates, infrastructure, profile_result, commander,
-            request, template, budget_used,
+            request, template, budget_used, reserved_count=len(reserved),
         )
         total_cost += opt_metrics.get("llm_safety_cost", 0.0)
         metrics["7_optimizer"] = time.time() - t
@@ -741,10 +749,104 @@ class DeckBuilder:
             db_path=self.db_path,
         )
 
+    def _reserve_empirical_staples(self, candidates, request, template) -> list:
+        """Stage 3.5: Reserve differentiator slots for strong-consensus cards.
+
+        Cards common in the target variant's real decks (inclusion set on the
+        card dict by ``_structural_score``) get a reserved slot before the role
+        generators and greedy run. This lands the engine pieces the corpus
+        validates but the role scorers reject -- a treasure or sacrifice payoff
+        is not "ramp", so it is reserved as a differentiator, which is what it
+        actually is.
+
+        Bounded on purpose (ADR-005, the moneyball goal): only cards at or above
+        the inclusion floor, only up to a fraction of the differentiator budget,
+        and never the generic auto-includes the generators already place. Most
+        slots stay open for the reasoning engine's undervalued picks.
+
+        Args:
+            candidates: Scored candidate dicts (carry ``_empirical_inclusion``).
+            request: The build request (for the budget ceiling).
+            template: Derived template (for the differentiator budget).
+
+        Returns:
+            List of SlotAssignment for the reserved cards (may be empty).
+        """
+        from sabermetrics.config import settings
+        from sabermetrics.pipeline.generators.ramp import _load_auto_includes
+        from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
+        from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+        cfg = settings.scoring
+        cap = min(
+            cfg.empirical_reserve_max_slots,
+            int(template.differentiator_slots * cfg.empirical_reserve_max_fraction),
+        )
+        if cap <= 0:
+            return []
+
+        auto_names, _ = _load_auto_includes()
+        auto_include_names = {
+            e["name"]
+            for entries in auto_names.values()
+            if isinstance(entries, list)
+            for e in entries
+        }
+
+        # Eligible: reliable, above the inclusion floor, not a land, not already
+        # an auto-include (the generators place those), within budget.
+        eligible = [
+            c for c in candidates
+            if c.get("_empirical_reliable")
+            and float(c.get("_empirical_inclusion", 0.0) or 0.0)
+            >= cfg.empirical_reserve_min_inclusion
+            and not is_playable_as_land(c.get("type_line") or "")
+            and c.get("name", "") not in auto_include_names
+        ]
+        eligible.sort(
+            key=lambda c: float(c.get("_empirical_inclusion", 0.0) or 0.0),
+            reverse=True,
+        )
+
+        reserved: list[SlotAssignment] = []
+        spent = 0.0
+        for card in eligible:
+            if len(reserved) >= cap:
+                break
+            price = float(card.get("price_usd", 0) or 0)
+            if spent + price > request.budget_usd:
+                continue
+            spent += price
+            rate = float(card.get("_empirical_inclusion", 0.0) or 0.0)
+            reserved.append(SlotAssignment(
+                card=card, slot_role="utility", score=rate,
+            ))
+            self._tracer.record(
+                card_name=card.get("name", ""),
+                stage="empirical_reserve",
+                action="placed",
+                card_id=card.get("id"),
+                score=rate,
+                reason=f"empirical staple ({rate * 100:.0f}% of variant decks)",
+            )
+        if reserved:
+            logger.info(
+                "Stage 3.5: reserved %d empirical staples: %s",
+                len(reserved),
+                ", ".join(a.card.get("name", "") for a in reserved),
+            )
+        return reserved
+
     def _fill_infrastructure(
-        self, candidates, commander, request, template,
+        self, candidates, commander, request, template, preplaced=None,
     ) -> tuple[list, float]:
         """Stage 4: Fill infrastructure slots with deterministic generators.
+
+        Args:
+            preplaced: SlotAssignments reserved before this stage (e.g. empirical
+                staples). Seeded into the placed set so the generators dedupe
+                against them, and their prices count toward the budget. They are
+                NOT included in the returned list -- the caller owns them.
 
         Returns:
             Tuple of (list of SlotAssignment, total budget used).
@@ -759,7 +861,12 @@ class DeckBuilder:
         from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
         all_assignments: list[SlotAssignment] = []
-        budget_used = 0.0
+        # Cards reserved before Stage 4 are visible to the generators for dedupe
+        # (via placed_cards) but kept out of the returned list.
+        reserved: list[SlotAssignment] = list(preplaced or [])
+        budget_used = sum(
+            float(a.card.get("price_usd", 0) or 0) for a in reserved
+        )
         colors = commander.color_identity
 
         # Helper to get cards with a specific role tag
@@ -788,7 +895,7 @@ class DeckBuilder:
             return pool
 
         def placed_cards() -> list:
-            return [a.card for a in all_assignments]
+            return [a.card for a in reserved + all_assignments]
 
         def _trace_infra(assignments: list, stage: str) -> None:
             """Emit trace events for infrastructure placements."""
@@ -899,7 +1006,7 @@ class DeckBuilder:
 
     def _optimize_differentiators(
         self, candidates, infrastructure, profile_result, commander,
-        request, template, budget_used,
+        request, template, budget_used, reserved_count=0,
     ) -> tuple[list, dict]:
         """Stage 5+6: Synergy-aware greedy optimization.
 
@@ -909,6 +1016,10 @@ class DeckBuilder:
         3. Greedy fill differentiator slots
         4. Swap refinement (infrastructure cards eligible)
         5. LLM safety net on weakest picks
+
+        Args:
+            reserved_count: Differentiator slots already taken by empirical
+                staples reserved in Stage 3.5, subtracted from the greedy fill.
 
         Returns:
             Tuple of (all_assignments including infrastructure, optimizer_metrics).
@@ -942,11 +1053,14 @@ class DeckBuilder:
             candidates, commander.id, self.db_path,
         )
 
-        # 3. Greedy fill (subtract protection slots already placed in Stage 4)
+        # 3. Greedy fill (subtract protection slots placed in Stage 4 and the
+        # empirical staples reserved in Stage 3.5 -- both occupy diff slots)
         protection_placed = sum(
             1 for a in infrastructure if a.slot_role == "protection"
         )
-        diff_slots = max(0, template.differentiator_slots - protection_placed)
+        diff_slots = max(
+            0, template.differentiator_slots - protection_placed - reserved_count
+        )
         diff_assignments = greedy_fill(
             shell=infrastructure,
             candidates=candidates,

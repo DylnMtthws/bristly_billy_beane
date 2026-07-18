@@ -115,6 +115,17 @@ class ScoringSettings(BaseModel):
     generator_empirical_weight: float = 0.20
     generator_empirical_noisy_weight: float = 0.12
 
+    # Empirical staple reservation (Stage 3.5): cards this common in the target
+    # variant's real decks get a reserved differentiator slot before the role
+    # generators and greedy run. This is what actually lands the engine pieces
+    # the corpus validates but the role scorers reject (they are payoffs, not
+    # ramp/removal). Bounded on purpose -- reserve only strong-consensus cards
+    # and only a fraction of the differentiator budget, so most slots stay open
+    # for the reasoning engine's undervalued picks (the moneyball goal).
+    empirical_reserve_min_inclusion: float = 0.45
+    empirical_reserve_max_slots: int = 12
+    empirical_reserve_max_fraction: float = 0.5
+
     # Deck-level objective (components, all 0-1 normalized).
     objective_synergy_density_weight: float = 0.30
     objective_role_coverage_weight: float = 0.25
