@@ -41,10 +41,22 @@ from sabermetrics.models.deck import (
 logger = logging.getLogger(__name__)
 
 # Per-variant empirical Pareto protection: a card in >= MIN_INCLUSION of the
-# target variant's real decks is shielded from price-domination by a card that
-# is at least MIN_GAP rarer there. Mirrors the EDHREC-inclusion protection.
+# target variant's real decks is shielded from price-domination outright.
+#
+# Protection deliberately does NOT depend on how the dominator compares. An
+# earlier version also required the dominator to be some margin rarer, on the
+# theory that domination picks between substitutes and the corpus should break
+# the tie. That is the wrong model: real decks run Pitiless Plunderer (65%) AND
+# Deadly Dispute (55%) together. Cards that co-occur in most real decks are
+# complements, so the margin between them is always small -- which meant the
+# protection could never fire for the staples it existed to protect. Measured
+# on Korvold, every one of the 6 eliminated staples was killed by another card
+# from the same corpus, gaps ranging +0.02 to +0.18.
+#
+# The card's own inclusion rate is the whole signal: if it is in 65% of the
+# variant's real decks, the corpus has already said it earns a slot. Only 68 of
+# 1154 scored cards clear 0.30, so the exempt set stays small.
 _EMPIRICAL_PROTECT_MIN_INCLUSION = 0.30
-_EMPIRICAL_PROTECT_MIN_GAP = 0.20
 
 
 class DeckBuildRequest(BaseModel):
@@ -613,13 +625,11 @@ class DeckBuilder:
                     f_price = float(f_card.get("price_usd", 0) or 0)
                     if f_cvar >= cvar and f_price <= price and (f_cvar > cvar or f_price < price):
                         # Empirical protection: a card common in the target
-                        # variant's real decks cannot be dominated by one that is
-                        # much rarer there (per-variant, sharper than EDHREC).
-                        f_emp = f_card.get("_empirical_inclusion", 0.0)
+                        # variant's real decks earns its slot outright, whatever
+                        # dominates it (per-variant, sharper than EDHREC).
                         if (
                             card_emp_reliable
                             and card_emp >= _EMPIRICAL_PROTECT_MIN_INCLUSION
-                            and (card_emp - f_emp) >= _EMPIRICAL_PROTECT_MIN_GAP
                         ):
                             emp_saved = True
                             continue  # This frontier card can't dominate; check others
