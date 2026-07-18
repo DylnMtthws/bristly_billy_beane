@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from sabermetrics.analytics.empirical_valuation import empirical_bonus
+from sabermetrics.config import settings
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -183,6 +185,13 @@ def _score_removal(
     # Max theoretical role_score ~9.5; normalize to 0-1
     normalized_role = min(role_score / 9.5, 1.0)
     final_score = 0.60 * normalized_role + 0.40 * cvar
+
+    # --- Empirical grounding: additive, never penalizes absence (ADR-005) ---
+    final_score += empirical_bonus(
+        card,
+        settings.scoring.generator_empirical_weight,
+        settings.scoring.generator_empirical_noisy_weight,
+    )
 
     return final_score
 

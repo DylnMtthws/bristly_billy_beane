@@ -62,6 +62,9 @@ scoring:
   # Additive on top of the three weights above -- absence must never penalize.
   marginal_empirical_weight: 0.25
   marginal_empirical_noisy_weight: 0.15
+  # Stage 4 role generators: same bonus, on the generators' 0-1 score scale.
+  generator_empirical_weight: 0.20
+  generator_empirical_noisy_weight: 0.12
   # Deck-level objective (components, all 0-1 normalized).
   objective_synergy_density_weight: 0.30
   objective_role_coverage_weight: 0.25

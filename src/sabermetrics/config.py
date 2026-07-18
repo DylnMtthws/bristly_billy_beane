@@ -108,6 +108,13 @@ class ScoringSettings(BaseModel):
     marginal_empirical_weight: float = 0.25
     marginal_empirical_noisy_weight: float = 0.15
 
+    # Stage 4 role generators (ramp/draw/removal/protection): the same empirical
+    # bonus, added to each generator's 0-1 quality score. Separate weights from
+    # the greedy ones above because that stage scores on the marginal-value
+    # scale; these are on the generators' normalized 0-1 scale.
+    generator_empirical_weight: float = 0.20
+    generator_empirical_noisy_weight: float = 0.12
+
     # Deck-level objective (components, all 0-1 normalized).
     objective_synergy_density_weight: float = 0.30
     objective_role_coverage_weight: float = 0.25

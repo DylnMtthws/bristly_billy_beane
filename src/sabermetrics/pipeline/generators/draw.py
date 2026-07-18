@@ -7,6 +7,8 @@ adjusted for commanders that provide inherent card advantage.
 import logging
 from pathlib import Path
 
+from sabermetrics.analytics.empirical_valuation import empirical_bonus
+from sabermetrics.config import settings
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -70,6 +72,13 @@ class DrawPackageGenerator:
             price = float(card.get("price_usd", 0) or 0)
             if price <= 2.0:
                 cvar += 0.03
+
+            # Empirical grounding: additive, never penalizes absence (ADR-005)
+            cvar += empirical_bonus(
+                card,
+                settings.scoring.generator_empirical_weight,
+                settings.scoring.generator_empirical_noisy_weight,
+            )
 
             candidates.append((card, cvar))
 

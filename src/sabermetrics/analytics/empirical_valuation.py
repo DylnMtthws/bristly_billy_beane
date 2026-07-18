@@ -52,6 +52,36 @@ class EmpiricalInclusion(BaseModel):
         return self.inclusion.get(card_name.lower(), 0.0)
 
 
+def empirical_bonus(
+    card: dict, reliable_weight: float, noisy_weight: float
+) -> float:
+    """Additive selection bonus for a card's empirical inclusion.
+
+    Reads ``_empirical_inclusion`` / ``_empirical_reliable`` from the card dict,
+    set by ``deck_builder._structural_score`` when a decklist corpus exists.
+    The single scoring rule shared by every selection stage (greedy fill and the
+    Stage 4 role generators) so grounding is applied identically everywhere.
+
+    The bonus is always non-negative and is 0.0 for a card with no corpus data,
+    so absence never penalizes and every stage degrades cleanly without a corpus
+    (ADR-005). Callers pass weights on their own score scale, since the
+    generators blend on a 0–1 scale and greedy on the marginal-value scale.
+
+    Args:
+        card: Candidate card dict.
+        reliable_weight: Multiplier when the rate has a tight Wilson CI.
+        noisy_weight: Multiplier when the rate is mid-confidence.
+
+    Returns:
+        ``weight * rate``, or 0.0 when the card has no corpus data.
+    """
+    rate = float(card.get("_empirical_inclusion", 0.0) or 0.0)
+    if rate <= 0.0:
+        return 0.0
+    weight = reliable_weight if card.get("_empirical_reliable") else noisy_weight
+    return weight * rate
+
+
 def _select_cluster(
     strategy: str | None,
     cluster_archetype: dict[int, str],

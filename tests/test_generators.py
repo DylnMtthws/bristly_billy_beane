@@ -247,6 +247,23 @@ def test_ramp_generator_no_duplicates() -> None:
 # --- Ramp Scoring Tests ---
 
 
+def test_score_ramp_adds_empirical_bonus() -> None:
+    """A card common in the target variant scores above an identical card that
+    is absent from the corpus, and absence is never a penalty."""
+    base = {
+        "oracle_text": "{T}: Add {G}.",
+        "cmc": 2, "type_line": "Artifact", "_cvar_score": 0.5,
+    }
+    grounded = base | {"_empirical_inclusion": 0.65, "_empirical_reliable": True}
+
+    score_base = _score_ramp(base, ["G"], 3.0)
+    score_grounded = _score_ramp(grounded, ["G"], 3.0)
+
+    # No corpus data -> identical to the pre-grounding score (absence neutral).
+    assert _score_ramp(base | {"_empirical_inclusion": 0.0}, ["G"], 3.0) == score_base
+    assert score_grounded > score_base
+
+
 def test_score_ramp_penalizes_conditional() -> None:
     """Conditional mana (discard/sacrifice) scores much lower than unconditional."""
     unconditional = {

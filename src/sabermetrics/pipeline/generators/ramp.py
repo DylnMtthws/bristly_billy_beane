@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from sabermetrics.analytics.empirical_valuation import empirical_bonus
+from sabermetrics.config import settings
 from sabermetrics.models.template import DeckTemplate
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
@@ -185,6 +187,13 @@ def _score_ramp(
     # Normalize role_score to ~0-1 range for blending (cap at 3.0, /3)
     normalized_role = min(role_score / 3.0, 1.0)
     final_score = 0.65 * normalized_role + 0.35 * cvar
+
+    # --- Empirical grounding: additive, never penalizes absence (ADR-005) ---
+    final_score += empirical_bonus(
+        card,
+        settings.scoring.generator_empirical_weight,
+        settings.scoring.generator_empirical_noisy_weight,
+    )
 
     return final_score
 

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from pydantic import BaseModel, Field
 
+from sabermetrics.analytics.empirical_valuation import empirical_bonus
 from sabermetrics.analytics.role_targets import RoleTarget, role_need_multiplier
 from sabermetrics.analytics.synergy_matrix import SynergyMatrix
 from sabermetrics.config import settings
@@ -617,13 +618,10 @@ def _compute_curve_coherence(
 
 
 def _empirical_bonus(card: dict) -> float:
-    """Bonus for how often a card appears in the target variant's real decks.
+    """Empirical inclusion bonus for the greedy marginal value.
 
-    Reads ``_empirical_inclusion`` / ``_empirical_reliable``, set by
-    ``deck_builder._structural_score`` when a decklist corpus is available.
-    Cards with no corpus data score 0.0 and are left exactly as they were,
-    so absence never penalizes and the pipeline degrades cleanly when no
-    corpus exists.
+    Thin wrapper over the shared scoring rule with the greedy-scale weights;
+    see :func:`empirical_bonus` for the contract.
 
     Args:
         card: Candidate card dict.
@@ -631,15 +629,11 @@ def _empirical_bonus(card: dict) -> float:
     Returns:
         A non-negative bonus to add to the card's marginal value.
     """
-    rate = float(card.get("_empirical_inclusion", 0.0) or 0.0)
-    if rate <= 0.0:
-        return 0.0
-    weight = (
-        _SCORING.marginal_empirical_weight
-        if card.get("_empirical_reliable")
-        else _SCORING.marginal_empirical_noisy_weight
+    return empirical_bonus(
+        card,
+        _SCORING.marginal_empirical_weight,
+        _SCORING.marginal_empirical_noisy_weight,
     )
-    return weight * rate
 
 
 def _get_card_roles(card: dict) -> list[str]:
