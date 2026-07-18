@@ -243,6 +243,7 @@ class DeckBuilder:
 
         # --- Stage 8: Synthesis + Classify + Persist ---
         t = time.time()
+        self._validate_no_commander_in_99(all_assignments, commander)
         total_price = sum(
             float(a.card.get("price_usd", 0) or 0) for a in all_assignments
         )
@@ -312,6 +313,36 @@ class DeckBuilder:
         )
 
     # --- Step implementations ---
+
+    @staticmethod
+    def _validate_no_commander_in_99(assignments: list, commander: Card) -> None:
+        """Hard-fail if the commander leaked into the 99.
+
+        The commander sharing a slot with itself violates the format's core
+        rule, so this is a FatalError, not a warning. Matches by oracle_id
+        (shared across printings -- excluding only the commander's own printing
+        id once let a cheaper printing of the commander into its own deck) with
+        name as the fallback for cards without one.
+
+        Args:
+            assignments: All slot assignments about to be assembled.
+            commander: The commander card.
+
+        Raises:
+            FatalError: If any assignment is a printing of the commander.
+        """
+        for a in assignments:
+            card = a.card
+            same = (
+                commander.oracle_id
+                and card.get("oracle_id") == commander.oracle_id
+            ) or card.get("name", "") == commander.name
+            if same:
+                raise FatalError(
+                    f"Commander '{commander.name}' leaked into the 99 "
+                    f"(printing {card.get('id')}, slot {a.slot_role}). "
+                    "This is a generator bug; the deck is illegal."
+                )
 
     def _validate_request(self, request: DeckBuildRequest) -> Card:
         """Validate the build request and load commander."""
