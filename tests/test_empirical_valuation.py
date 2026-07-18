@@ -67,3 +67,33 @@ def test_get_target_cluster_inclusion_selects_and_degrades(tmp_path, monkeypatch
     # Too few decks -> no signal (clean fallback).
     monkeypatch.setattr(ev, "load_commander_decks", lambda *a, **k: decks[:5])
     assert ev.get_target_cluster_inclusion(tmp_path / "x.db", "Cmdr") is None
+
+
+def test_reliability_is_gated_on_variant_sample_size(tmp_path, monkeypatch) -> None:
+    """Reliability is a property of the variant's size, not per-card CI width.
+
+    A variant whose worst-case (p=0.5) margin exceeds the bar is too small to
+    trust any mid-range rate, so nothing is reliable even though inclusion is
+    still populated. A large-enough variant trusts all its rates.
+    """
+    from sabermetrics.analytics import empirical_valuation as ev
+
+    def _decks(n):
+        return [
+            DeckRecord(deck_id=f"a{i}", card_names=ARISTO, popularity_rank=i)
+            for i in range(n)
+        ]
+
+    # 30 decks: worst-case margin ~0.168 > 0.15 bar -> not reliable.
+    monkeypatch.setattr(ev, "load_commander_decks", lambda *a, **k: _decks(30))
+    small = ev.get_target_cluster_inclusion(tmp_path / "x.db", "Cmdr")
+    assert small is not None
+    assert small.rate("Blood Artist") > 0.9      # inclusion still computed
+    assert small.reliable == set()               # but nothing is reliable
+
+    # 45 decks: worst-case margin < 0.15 bar -> all cards reliable.
+    monkeypatch.setattr(ev, "load_commander_decks", lambda *a, **k: _decks(45))
+    big = ev.get_target_cluster_inclusion(tmp_path / "x.db", "Cmdr")
+    assert big is not None
+    assert "blood artist" in big.reliable
+    assert big.reliable == set(big.inclusion)

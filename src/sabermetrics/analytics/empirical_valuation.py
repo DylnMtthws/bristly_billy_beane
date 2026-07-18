@@ -120,7 +120,8 @@ def get_target_cluster_inclusion(
         commander: Commander id or (partial) name.
         strategy: Optional strategy hint used to pick the variant.
         min_decks: Minimum corpus size to produce a signal at all.
-        moe_threshold: Wilson margin-of-error below which a rate is "reliable".
+        moe_threshold: Wilson margin-of-error bar for reliability. Applied to
+            the variant's worst-case (p=0.5) margin, not per card -- see below.
         seed: RNG/model seed (kept consistent with clustering).
 
     Returns:
@@ -153,18 +154,28 @@ def get_target_cluster_inclusion(
 
     counts = _presence_counts(target_members)
     inclusion: dict[str, float] = {}
-    reliable: set[str] = set()
     for name, count in counts.items():
-        rate = count / size if size else 0.0
-        inclusion[name.lower()] = round(rate, 3)
-        lo, hi = wilson_interval(count, size)
-        if (hi - lo) / 2 <= moe_threshold:
-            reliable.add(name.lower())
+        inclusion[name.lower()] = round(count / size if size else 0.0, 3)
+
+    # Reliability is a property of the VARIANT's sample size, not the per-card
+    # CI width. At the variant sizes we see (~20-74 decks) the Wilson width is
+    # dominated by n, not the rate: every mid-to-high rate has a ~0.13 half-width
+    # at n=49, so a per-card width test cannot separate a 0.55 staple from 0.50
+    # noise -- it only ever flagged the extremes, and was inert once n>=36.
+    # Instead trust the whole variant when even its worst case (a 50/50 rate)
+    # stays within the margin bar; below that the sample is too small to trust
+    # any mid-range rate, so nothing is reliable. Uses the same moe_threshold,
+    # so no separate magic constant.
+    lo, hi = wilson_interval(round(0.5 * size), size)
+    variant_reliable = size > 0 and (hi - lo) / 2 <= moe_threshold
+    reliable: set[str] = set(inclusion) if variant_reliable else set()
 
     variant = cluster_archetype.get(target, "mixed")
     logger.info(
-        "[empirical] '%s': variant='%s' (%d/%d decks), %d cards, %d reliable",
-        commander, variant, size, len(decks), len(inclusion), len(reliable),
+        "[empirical] '%s': variant='%s' (%d/%d decks), %d cards, "
+        "reliable=%s (worst-case margin %.3f vs %.2f bar)",
+        commander, variant, size, len(decks), len(inclusion),
+        variant_reliable, (hi - lo) / 2, moe_threshold,
     )
     return EmpiricalInclusion(
         commander=commander, variant=variant, variant_size=size,
