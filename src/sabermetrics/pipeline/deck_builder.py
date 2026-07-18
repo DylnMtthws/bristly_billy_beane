@@ -1466,16 +1466,28 @@ class DeckBuilder:
         return sorted(indexed, key=sort_key)
 
     @staticmethod
-    def _best_replacement(candidates, deck_names: set[str], max_price: float | None = None):
+    def _best_replacement(
+        candidates,
+        deck_names: set[str],
+        max_price: float | None = None,
+        corpus_active: bool = False,
+        corroboration_threshold: float = 0.0,
+    ):
         """Pick the strongest eligible replacement, not the first in list order.
 
-        Ranked by CVAR plus the empirical bonus, so a corpus-validated card is
-        preferred over an equally-scored unknown when swapping out a bad fit.
+        Ranked by (corroboration tier, CVAR + empirical bonus). With a
+        reliable corpus, any candidate real decks actually play outranks every
+        uncorroborated text-matcher regardless of numeric score -- Eiganjo
+        Dynastorian ("return all enchantments" text, 0% inclusion, an attack
+        condition the scorer can't read) twice entered as a vet replacement
+        this way. Uncorroborated cards remain eligible when nothing
+        corroborated is affordable, so this is a preference, not a penalty
+        (ADR-005 absence-neutrality holds for general scoring).
         """
         from sabermetrics.analytics.empirical_valuation import empirical_bonus
         from sabermetrics.config import settings
 
-        best, best_value = None, -1.0
+        best, best_key = None, (-1, -1.0)
         for c in candidates:
             if (
                 c.get("name", "") in deck_names
@@ -1490,8 +1502,13 @@ class DeckBuilder:
                 settings.scoring.marginal_empirical_weight,
                 settings.scoring.marginal_empirical_noisy_weight,
             )
-            if value > best_value:
-                best, best_value = c, value
+            inclusion = float(c.get("_empirical_inclusion", 0.0) or 0.0)
+            tier = (
+                1 if not corpus_active or inclusion >= corroboration_threshold
+                else 0
+            )
+            if (tier, value) > best_key:
+                best, best_key = c, (tier, value)
         return best
 
     def _llm_safety_check(
@@ -1556,19 +1573,26 @@ class DeckBuilder:
 
             # Replace cards scored <= 3 with next-best candidate
             deck_names = {a.card.get("name", "") for a in deck}
-            for (deck_idx, _assignment), (card, fit_response) in zip(weakest, results):
-                card["_fit_reasoning"] = fit_response.reasoning
-                card_name = card.get("name", "")
-                self._tracer.record(
-                    card_name=card_name,
-                    stage="llm_safety",
-                    action="considered",
-                    card_id=card.get("id"),
-                    score=float(fit_response.fit_score),
-                    reason=fit_response.reasoning,
-                    force=True,
-                )
-                if fit_response.fit_score <= 3:
+            corroboration_threshold = (
+                settings.scoring.safety_uncorroborated_max_inclusion
+            )
+
+            def _replace_bad_fits(scored, stage: str) -> list[int]:
+                """Swap out picks the LLM scored <= 3; return swap-in indices."""
+                swapped_in: list[int] = []
+                for deck_idx, card, fit_response in scored:
+                    card["_fit_reasoning"] = fit_response.reasoning
+                    self._tracer.record(
+                        card_name=card.get("name", ""),
+                        stage=stage,
+                        action="considered",
+                        card_id=card.get("id"),
+                        score=float(fit_response.fit_score),
+                        reason=fit_response.reasoning,
+                        force=True,
+                    )
+                    if fit_response.fit_score > 3:
+                        continue
                     budget_left = request.budget_usd - sum(
                         float(a.card.get("price_usd", 0) or 0) for a in deck
                     )
@@ -1576,45 +1600,81 @@ class DeckBuilder:
                     replacement = self._best_replacement(
                         candidates, deck_names,
                         max_price=old_price + max(0.0, budget_left),
+                        corpus_active=corpus_active,
+                        corroboration_threshold=corroboration_threshold,
                     )
+                    if not replacement:
+                        continue
+                    old_name = card.get("name", "")
+                    new_name = replacement.get("name", "")
+                    role = _heuristic_role(replacement)
+                    replacement["_fit_reasoning"] = (
+                        f"Replaced {old_name} (LLM score {fit_response.fit_score})"
+                    )
+                    deck[deck_idx] = SlotAssignment(
+                        card=replacement,
+                        slot_role=role,
+                        score=replacement.get("_cvar_score", 0.0),
+                        alternatives=[],
+                    )
+                    deck_names.discard(old_name)
+                    deck_names.add(new_name)
+                    self._tracer.record(
+                        card_name=old_name,
+                        stage=stage,
+                        action="swapped_out",
+                        card_id=card.get("id"),
+                        score=float(fit_response.fit_score),
+                        reason=f"LLM fit score {fit_response.fit_score} <= 3",
+                        force=True,
+                    )
+                    self._tracer.record(
+                        card_name=new_name,
+                        stage=stage,
+                        action="swapped_in",
+                        card_id=replacement.get("id"),
+                        score=replacement.get("_cvar_score", 0.0),
+                        reason=f"replaced {old_name} (LLM score {fit_response.fit_score})",
+                        force=True,
+                    )
+                    logger.info(
+                        "LLM safety (%s): replaced %s (score %d) with %s",
+                        stage, old_name, fit_response.fit_score, new_name,
+                    )
+                    swapped_in.append(deck_idx)
+                return swapped_in
 
-                    if replacement:
-                        old_name = card.get("name", "")
-                        new_name = replacement.get("name", "")
-                        role = _heuristic_role(replacement)
-                        replacement["_fit_reasoning"] = (
-                            f"Replaced {old_name} (LLM score {fit_response.fit_score})"
-                        )
-                        deck[deck_idx] = SlotAssignment(
-                            card=replacement,
-                            slot_role=role,
-                            score=replacement.get("_cvar_score", 0.0),
-                            alternatives=[],
-                        )
-                        deck_names.discard(old_name)
-                        deck_names.add(new_name)
-                        self._tracer.record(
-                            card_name=old_name,
-                            stage="llm_safety",
-                            action="swapped_out",
-                            card_id=card.get("id"),
-                            score=float(fit_response.fit_score),
-                            reason=f"LLM fit score {fit_response.fit_score} <= 3",
-                            force=True,
-                        )
-                        self._tracer.record(
-                            card_name=new_name,
-                            stage="llm_safety",
-                            action="swapped_in",
-                            card_id=replacement.get("id"),
-                            score=replacement.get("_cvar_score", 0.0),
-                            reason=f"replaced {old_name} (LLM score {fit_response.fit_score})",
-                            force=True,
-                        )
-                        logger.info(
-                            "LLM safety: replaced %s (score %d) with %s",
-                            old_name, fit_response.fit_score, new_name,
-                        )
+            scored = [
+                (deck_idx, card, fit_response)
+                for (deck_idx, _assignment), (card, fit_response)
+                in zip(weakest, results)
+            ]
+            swap_in_idxs = _replace_bad_fits(scored, "llm_safety")
+
+            # Re-vet round: the replacements above entered unreviewed (the
+            # pipeline's last unvetted door -- Eiganjo Dynastorian came
+            # through it in two consecutive builds). One more small batched
+            # call over just the swap-ins; their own replacements are
+            # corroboration-ranked and accepted without a third round.
+            if swap_in_idxs:
+                revet_results = scorer.score_cards_batch(
+                    cards=[deck[i].card for i in swap_in_idxs],
+                    profile_summary=profile_summary,
+                    archetype_definition=profile_result.profile.strategic_profile.primary_archetype,
+                    partial_deck=[a.card for a in deck],
+                    empirical_variant=getattr(self, "_empirical_variant", None),
+                )
+                revet_scored = [
+                    (deck_idx, card, fit_response)
+                    for deck_idx, (card, fit_response)
+                    in zip(swap_in_idxs, revet_results)
+                ]
+                second_round = _replace_bad_fits(revet_scored, "llm_safety_revet")
+                if second_round:
+                    logger.info(
+                        "LLM safety re-vet: %d second-round replacements "
+                        "(accepted without further review)", len(second_round),
+                    )
 
         except Exception as e:
             logger.warning("LLM safety net scoring failed: %s", e)
