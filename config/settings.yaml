@@ -87,6 +87,9 @@ scoring:
   empirical_reserve_min_inclusion: 0.45
   empirical_reserve_max_slots: 12
   empirical_reserve_max_fraction: 0.5
+  # Fraction of ELIGIBLE staples reservable when a big corpus has more
+  # consensus cards than max_slots (still bounded by max_fraction of slots).
+  empirical_reserve_eligible_fraction: 0.4
   # LLM safety net: review uncorroborated picks (corpus inclusion below this)
   # before merely weak ones.
   safety_uncorroborated_max_inclusion: 0.10

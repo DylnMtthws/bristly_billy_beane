@@ -318,3 +318,38 @@ rules:
       text_contains: ["from the command zone"]
     strength: 0.7
     description: "Commander tax reduction enables repeated casting"
+
+  # --- +1/+1 counters archetype (added after the 6-commander sweep: three of
+  # six commanders clustered as "counters" with zero rules covering them,
+  # leaving selection to embedding noise the vet had to clean up) ---
+  - id: counter_sources_with_counter_payoffs
+    trigger:
+      text_contains: ["+1/+1 counter"]
+    payoff:
+      text_contains_any: ["for each counter", "for each +1/+1 counter", "with a counter on it", "counter on it", "counters on it"]
+    strength: 0.8
+    description: "+1/+1 counter producers pair with counters-matter payoffs"
+
+  - id: counter_sources_with_scaling
+    trigger:
+      text_contains: ["+1/+1 counter"]
+    payoff:
+      text_contains_any: ["double the number of", "twice that many", "that many plus one", "additional +1/+1 counter"]
+    strength: 0.8
+    description: "Counter producers pair with counter doublers (Hardened Scales class)"
+
+  - id: proliferate_with_counter_permanents
+    trigger:
+      text_contains: ["proliferate"]
+    payoff:
+      text_contains_any: ["+1/+1 counter", "loyalty", "charge counter", "oil counter"]
+    strength: 0.8
+    description: "Proliferate multiplies any counter-bearing permanent"
+
+  - id: counters_with_outlast_movement
+    trigger:
+      text_contains: ["+1/+1 counter"]
+    payoff:
+      text_contains_any: ["move a counter", "move any number of counters", "remove a +1/+1 counter from"]
+    strength: 0.6
+    description: "Counter pools pair with counter-movement/spend effects"

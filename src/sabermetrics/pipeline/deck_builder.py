@@ -930,12 +930,6 @@ class DeckBuilder:
         from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
         cfg = settings.scoring
-        cap = min(
-            cfg.empirical_reserve_max_slots,
-            int(template.differentiator_slots * cfg.empirical_reserve_max_fraction),
-        )
-        if cap <= 0:
-            return []
 
         # Auto-includes are placed by the generators, so they arrive via
         # exclude_names; keep this as a fallback for the rare unplaced one.
@@ -955,6 +949,20 @@ class DeckBuilder:
             and not is_playable_as_land(c.get("type_line") or "")
             and c.get("name", "") not in already
         ]
+
+        # The cap scales with corpus size: fixed max_slots for small corpora,
+        # a fraction of the eligible staples for big ones (the sweep found
+        # 29-80 consensus staples vs the fixed 12), always bounded by
+        # max_fraction of the differentiator budget.
+        cap = min(
+            max(
+                cfg.empirical_reserve_max_slots,
+                int(len(eligible) * cfg.empirical_reserve_eligible_fraction),
+            ),
+            int(template.differentiator_slots * cfg.empirical_reserve_max_fraction),
+        )
+        if cap <= 0:
+            return []
         eligible.sort(
             key=lambda c: float(c.get("_empirical_inclusion", 0.0) or 0.0),
             reverse=True,
@@ -1490,6 +1498,7 @@ class DeckBuilder:
         max_price: float | None = None,
         corpus_active: bool = False,
         corroboration_threshold: float = 0.0,
+        corroborated_only: bool = False,
     ):
         """Pick the strongest eligible replacement, not the first in list order.
 
@@ -1525,6 +1534,12 @@ class DeckBuilder:
                 1 if not corpus_active or inclusion >= corroboration_threshold
                 else 0
             )
+            # corroborated_only: hard gate, not a preference. Used by the
+            # re-vet round, whose picks are accepted without further review
+            # -- an unreviewed slot may only be filled by a card real decks
+            # play (Agatha: 33 unreviewed text-matchers entered this way).
+            if corroborated_only and corpus_active and tier == 0:
+                continue
             if (tier, value) > best_key:
                 best, best_key = c, (tier, value)
         return best
@@ -1595,7 +1610,9 @@ class DeckBuilder:
                 settings.scoring.safety_uncorroborated_max_inclusion
             )
 
-            def _replace_bad_fits(scored, stage: str) -> list[int]:
+            def _replace_bad_fits(
+                scored, stage: str, corroborated_only: bool = False,
+            ) -> list[int]:
                 """Swap out picks the LLM scored <= 3; return swap-in indices."""
                 swapped_in: list[int] = []
                 for deck_idx, card, fit_response in scored:
@@ -1620,6 +1637,7 @@ class DeckBuilder:
                         max_price=old_price + max(0.0, budget_left),
                         corpus_active=corpus_active,
                         corroboration_threshold=corroboration_threshold,
+                        corroborated_only=corroborated_only,
                     )
                     if not replacement:
                         continue
@@ -1687,7 +1705,12 @@ class DeckBuilder:
                     for deck_idx, (card, fit_response)
                     in zip(swap_in_idxs, revet_results)
                 ]
-                second_round = _replace_bad_fits(revet_scored, "llm_safety_revet")
+                # Round-2 replacements are accepted without further review,
+                # so they are restricted to corpus-corroborated cards: an
+                # unreviewed slot never gets an unreviewed text-matcher.
+                second_round = _replace_bad_fits(
+                    revet_scored, "llm_safety_revet", corroborated_only=True,
+                )
                 if second_round:
                     logger.info(
                         "LLM safety re-vet: %d second-round replacements "

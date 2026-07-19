@@ -229,3 +229,55 @@ def test_checkland_gets_bonus():
     score_tapped = _score_land(tapped_dual, deficit, commander_colors)
 
     assert score_check > score_tapped
+
+
+# --- Corpus signal + drawback penalties (6-commander sweep fix #1) ---
+
+
+def _land(oracle="", colors=None, **card_extra):
+    card = {"oracle_text": oracle}
+    card.update(card_extra)
+    return LandInfo(card=card, colors_produced=colors or ["W", "B"])
+
+
+def test_corpus_staple_land_outranks_equal_trap_land():
+    """The sweep failure: same color coverage, but the corpus staple wins.
+
+    Battlefield Forge (in most real decks) must beat Tarnished Citadel
+    (0% inclusion, 3 self-damage) -- previously both scored on coverage
+    alone and the trap land tied or won via the any-color multiplier.
+    """
+    colors = ["W", "B"]
+    deficit = {"W": 8.0, "B": 8.0}
+    staple = _land("{T}: Add {W} or {B}. This land deals 1 damage to you.",
+                   _empirical_inclusion=0.75)
+    trap = _land("{T}: Add one mana of any color. This land deals 3 damage to you.",
+                 _empirical_inclusion=0.0)
+    assert _score_land(staple, deficit, colors) > _score_land(trap, deficit, colors)
+
+
+def test_drawback_penalties_rank_below_clean_duals():
+    """Each trap-land drawback class scores below an equivalent clean dual."""
+    colors = ["W", "B"]
+    deficit = {"W": 8.0, "B": 8.0}
+    clean = _score_land(_land("{T}: Add {W} or {B}."), deficit, colors)
+    drawbacks = {
+        "self-sac": "At the beginning of your upkeep, sacrifice it unless you control an artifact.",
+        "untap-tax": "This land doesn't untap during your untap step.",
+        "depletion": "{T}, Remove a charge counter from it: Add one mana of any color.",
+        "multi-pain": "This land deals 3 damage to you.",
+        "bounce": "At the beginning of your upkeep, return it to its owner's hand.",
+        "opponent-choice": "When it enters, an opponent chooses a color.",
+    }
+    for label, oracle in drawbacks.items():
+        trapped = _score_land(_land(f"{{T}}: Add {{W}} or {{B}}. {oracle}"), deficit, colors)
+        assert trapped < clean, f"{label} drawback not penalized"
+
+
+def test_empirical_bonus_neutral_without_corpus():
+    """No corpus data -> exactly the old score (absence-neutrality)."""
+    colors = ["W", "B"]
+    deficit = {"W": 8.0, "B": 8.0}
+    a = _score_land(_land("{T}: Add {W} or {B}."), deficit, colors)
+    b = _score_land(_land("{T}: Add {W} or {B}.", _empirical_inclusion=0.0), deficit, colors)
+    assert a == b

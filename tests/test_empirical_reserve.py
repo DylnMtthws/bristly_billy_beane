@@ -134,3 +134,21 @@ def test_generator_placed_cards_are_excluded(builder):
         exclude_names={"Birds of Paradise"},
     )
     assert [a.card["name"] for a in out] == ["Pitiless Plunderer"]
+
+
+def test_cap_scales_with_large_corpora(builder):
+    """Sweep fix #4: a 60-staple corpus reserves more than the fixed 12.
+
+    60 eligible -> max(12, 24) = 24, bounded by differentiator_slots/2 = 18.
+    Sub-$1 near-universal cards (the Cultivate class) stopped missing once
+    the cap grew with the corpus.
+    """
+    cards = [_card(f"C{i:02d}", 0.95 - i * 0.005) for i in range(60)]
+    names = _reserved_names(builder, cards)
+    assert len(names) == 18  # int(37 * 0.5), the slot-fraction bound
+
+
+def test_small_corpus_keeps_the_old_cap(builder):
+    """20 eligible: int(20*0.4)=8 < 12, so the fixed cap still applies."""
+    cards = [_card(f"C{i:02d}", 0.50 + i * 0.01) for i in range(20)]
+    assert len(_reserved_names(builder, cards)) == 12

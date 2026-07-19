@@ -321,6 +321,49 @@ def get_target_cluster_inclusion(
     # so no separate magic constant.
     lo, hi = wilson_interval(round(0.5 * size), size)
     variant_reliable = size > 0 and (hi - lo) / 2 <= moe_threshold
+
+    # Same-archetype pooled fallback: when the target cluster is too small to
+    # trust, merge every cluster SHARING ITS ARCHETYPE LABEL and re-test.
+    # k-means over-splitting one archetype is the cascade case (Agatha: 72
+    # decks -> counters clusters of 36+8+8+2, each failing the bar alone,
+    # 54 pooled passing) -- without this, every empirical mechanism shuts
+    # off at once: reservation silently skipped, corroboration tiers empty,
+    # half the deck uncorroborated. Pooling never crosses archetype labels:
+    # a landfall cluster must not corroborate cards in an aristocrats build,
+    # so a genuinely mixed small corpus still degrades to unreliable.
+    if not variant_reliable:
+        target_arch = cluster_archetype.get(target, "mixed")
+        same_arch = [
+            cid for cid, arch in cluster_archetype.items()
+            if arch == target_arch
+        ]
+        pooled_members = [m for cid in same_arch for m in members.get(cid, [])]
+        pooled_size = len(pooled_members)
+        if pooled_size > size:
+            plo, phi = wilson_interval(round(0.5 * pooled_size), pooled_size)
+            if (phi - plo) / 2 <= moe_threshold:
+                counts = _presence_counts(pooled_members)
+                inclusion = {
+                    name.lower(): round(c / pooled_size, 3)
+                    for name, c in counts.items()
+                }
+                pooled_ids = [
+                    i for cid in same_arch for i in member_ids.get(cid, [])
+                ]
+                composition = _load_composition(db_path, pooled_ids)
+                logger.info(
+                    "[empirical] '%s': target cluster too small (n=%d); "
+                    "pooled %d same-archetype ('%s') clusters -> n=%d, "
+                    "reliable",
+                    commander, size, len(same_arch), target_arch, pooled_size,
+                )
+                return EmpiricalInclusion(
+                    commander=commander, variant=target_arch,
+                    variant_size=pooled_size, n_decks=len(decks),
+                    inclusion=inclusion, reliable=set(inclusion),
+                    composition=composition,
+                )
+
     reliable: set[str] = set(inclusion) if variant_reliable else set()
 
     composition = _load_composition(db_path, member_ids.get(target, []))

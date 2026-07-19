@@ -181,3 +181,55 @@ def test_vet_swap_ins_are_re_vetted_once(monkeypatch, tmp_path):
     assert "Safe Aura" in names
     assert len(_FakeScorer.calls) == 2      # initial vet + one re-vet, no third
     assert _FakeScorer.calls[1] == ["Trap Replacement"]
+
+
+def test_revet_replacements_must_be_corroborated(monkeypatch, tmp_path):
+    """Sweep fix #5: an unreviewed slot never gets an unreviewed text-matcher.
+
+    Round 2's replacement pool holds only an uncorroborated card, so the
+    failed round-1 replacement is KEPT (no eligible replacement) rather than
+    swapped for another zero-corpus unknown that would enter unreviewed.
+    """
+    from types import SimpleNamespace
+
+    import sabermetrics.reasoning.fit as fit_mod
+    from sabermetrics.pipeline.deck_builder import DeckBuildRequest
+    from sabermetrics.pipeline.trace import GenerationTracer
+
+    _FakeScorer.calls = []
+    _FakeScorer.scores = {"Bad Pick": 2, "Corroborated Trap": 2}
+    monkeypatch.setattr(fit_mod, "FitScorer", _FakeScorer)
+
+    b = DeckBuilder(tmp_path / "unused.db")
+    b._tracer = GenerationTracer(generation_id="test")
+    b._build_profile_summary = lambda pr: "profile"
+    b._empirical = SimpleNamespace(reliable={"anything"})
+
+    deck = [SlotAssignment(
+        card={"id": "bad", "name": "Bad Pick", "type_line": "Creature",
+              "price_usd": 1.0, "_empirical_inclusion": 0.0},
+        slot_role="utility", score=0.2,
+    )]
+    candidates = [
+        # Round 1 picks this (corroborated beats the zero-corpus unknown).
+        {"id": "ct", "name": "Corroborated Trap", "type_line": "Creature",
+         "price_usd": 1.0, "_cvar_score": 0.9, "_empirical_inclusion": 0.5},
+        # Round 2's only remaining option -- uncorroborated, must be refused.
+        {"id": "unk", "name": "Zero Corpus Unknown", "type_line": "Creature",
+         "price_usd": 1.0, "_cvar_score": 0.8, "_empirical_inclusion": 0.0},
+    ]
+    profile_result = SimpleNamespace(profile=SimpleNamespace(
+        strategic_profile=SimpleNamespace(primary_archetype="x"),
+    ))
+
+    out, _ = b._llm_safety_check(
+        deck, candidates, synergy=None, role_targets=None,
+        profile_result=profile_result,
+        request=DeckBuildRequest(commander_id="x", budget_usd=200.0),
+        n_weakest=99,
+    )
+
+    names = {a.card["name"] for a in out}
+    assert "Zero Corpus Unknown" not in names   # refused: would be unreviewed
+    assert "Corroborated Trap" in names         # kept despite failing round 2
+    assert len(_FakeScorer.calls) == 2

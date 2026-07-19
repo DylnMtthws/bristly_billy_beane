@@ -182,6 +182,14 @@ class ScoringSettings(BaseModel):
     empirical_reserve_min_inclusion: float = 0.45
     empirical_reserve_max_slots: int = 12
     empirical_reserve_max_fraction: float = 0.5
+    # Cap growth with corpus size: reserve up to this fraction of the
+    # ELIGIBLE staples when there are more than max_slots of them. The
+    # sweep found corpora with 29-80 consensus staples against the fixed
+    # 12-slot cap -- sub-$1 near-universal cards (Cultivate at 74% on
+    # Bumbleflower) missed while the cap sat sized for Eriette's corpus.
+    # max_fraction of the differentiator budget still bounds the total, so
+    # most slots stay open for the moneyball picks (ADR-005).
+    empirical_reserve_eligible_fraction: float = 0.4
 
     # Deck-level objective (components, all 0-1 normalized). Type coherence
     # keeps swap/rebalance from trading the engine type away -- the objective

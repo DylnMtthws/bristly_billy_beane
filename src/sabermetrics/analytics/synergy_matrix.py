@@ -187,6 +187,7 @@ def _card_matches_clause(card: dict, clause: dict) -> bool:
 
     Clause fields (all must match if present):
     - text_contains: list[str] — all must appear in oracle text
+    - text_contains_any: list[str] — at least one must appear in oracle text
     - keywords: list[str] — any must appear in card keywords
     - type_includes: list[str] — any must appear in type line
     - cmc_range: [min, max] — card CMC must be in range
@@ -213,6 +214,13 @@ def _card_matches_clause(card: dict, clause: dict) -> bool:
         for text in text_contains:
             if text.lower() not in oracle:
                 return False
+
+    # text_contains_any: at least ONE must match (phrase alternatives, e.g.
+    # the many wordings of counters-matter payoffs)
+    text_any = clause.get("text_contains_any", [])
+    if text_any:
+        if not any(t.lower() in oracle for t in text_any):
+            return False
 
     # keywords: ANY must match
     rule_keywords = clause.get("keywords", [])

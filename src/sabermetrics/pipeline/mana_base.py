@@ -142,6 +142,28 @@ _ETB_TAPPED = re.compile(
 _ETB_TAPPED_UPSIDE = re.compile(
     r"(?:scry|you gain|you may pay)", re.IGNORECASE
 )
+
+# Drawback patterns for _score_land, worst-first. Each is a real cost the
+# color-coverage score can't see; penalties are on the same scale as the
+# tapped penalty (2-4 points).
+_LAND_DRAWBACKS: list[tuple[re.Pattern, float]] = [
+    # Self-sacrifice clauses (Thran Quarry, Glimmervoid, City of Traitors)
+    (re.compile(r"sacrifice (?:it|this land|\w[^.]{0,20}:)"), 4.0),
+    # Untap/upkeep taxes (Forsaken City, Rishadan Port targets you...)
+    (re.compile(r"(?:doesn't untap|skip your untap|during your untap step)"), 4.0),
+    # Depletion/mining counters -- a few activations then dead (Gemstone
+    # Mine, Tendo Ice Bridge, Dwarven Ruins)
+    (re.compile(r"remove a (?:charge|mining|depletion) counter"), 3.0),
+    # Multi-damage pain (Tarnished Citadel "deals 3 damage")
+    (re.compile(r"deals [2-9] damage to you"), 3.0),
+    # Single pain (City of Brass, Adarkar Wastes class) -- mild, these are
+    # often correct; penalize just enough to lose ties to clean duals
+    (re.compile(r"deals 1 damage to you"), 1.0),
+    # Bounce lands you must pick up (Undiscovered Paradise)
+    (re.compile(r"return (?:it|this land) to (?:its owner's|your) hand"), 2.0),
+    # Opponent choice/benefit (Paliano, Forbidden Orchard)
+    (re.compile(r"(?:an opponent (?:chooses|gains)|each opponent (?:creates|may))"), 3.0),
+]
 _FETCH_PATTERN = re.compile(
     r"[Ss]earch your library for (?:a|an)\s+(.*?)(?:\s+card)", re.IGNORECASE
 )
@@ -517,6 +539,23 @@ def _score_land(
     # trap lands tie with real color sources in the parser-derived score.
     edhrec_pct = float(land_info.card.get("edhrec_inclusion_pct", 0.0) or 0.0)
     score += (edhrec_pct / 100.0) * 5.0
+
+    # Per-variant corpus inclusion bonus (sharper than pooled EDHREC, which
+    # rarely lists lands in its top cards, leaving the bonus above inert).
+    # A 6-commander sweep found 60-80% of every deck's missed >=50%-inclusion
+    # staples were LANDS: this scorer never saw the corpus, so drawback
+    # rainbow lands beat the archetype's actual duals in every build.
+    empirical = float(land_info.card.get("_empirical_inclusion", 0.0) or 0.0)
+    score += empirical * 8.0
+
+    # Drawback penalties. "Produces any color" earns the full multi-color
+    # multiplier above, so without these, trap lands (Tarnished Citadel,
+    # Thran Quarry, Tendo Ice Bridge, Forsaken City...) recur in nearly
+    # every generated deck regardless of color identity.
+    oracle_lower = (land_info.card.get("oracle_text") or "").lower()
+    for pattern, penalty in _LAND_DRAWBACKS:
+        if pattern.search(oracle_lower):
+            score -= penalty
 
     return score
 

@@ -516,3 +516,35 @@ def test_mana_efficiency_cheap_instant_premium() -> None:
     assert sorcery_score > weak_score, (
         f"Sorcery exile ({sorcery_score:.2f}) should beat weak instant ({weak_score:.2f})"
     )
+
+
+def test_counter_archetype_rules_fire():
+    """Sweep fix #3: counters archetype had zero rule coverage.
+
+    A counter producer must rule-match Hardened Scales ("that many plus
+    one") and Branching Evolution ("twice that many") via the
+    text_contains_any clause; an unrelated card must not.
+    """
+    from sabermetrics.analytics.synergy_matrix import (
+        _card_matches_clause,
+        _load_synergy_rules,
+    )
+
+    rules = {r["id"]: r for r in _load_synergy_rules()}
+    scaling = rules["counter_sources_with_scaling"]
+
+    producer = {"oracle_text": "Put a +1/+1 counter on target creature."}
+    hardened = {"oracle_text": "If one or more +1/+1 counters would be put on a creature you control, that many plus one +1/+1 counters are put on it instead."}
+    branching = {"oracle_text": "If one or more +1/+1 counters would be put on a creature you control, twice that many +1/+1 counters are put on that creature instead."}
+    unrelated = {"oracle_text": "Counter target spell."}
+
+    assert _card_matches_clause(producer, scaling["trigger"])
+    assert _card_matches_clause(hardened, scaling["payoff"])
+    assert _card_matches_clause(branching, scaling["payoff"])
+    assert not _card_matches_clause(unrelated, scaling["payoff"])
+
+    prolif = rules["proliferate_with_counter_permanents"]
+    assert _card_matches_clause(
+        {"oracle_text": "At the beginning of your end step, proliferate."},
+        prolif["trigger"],
+    )

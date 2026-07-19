@@ -158,3 +158,56 @@ def test_compute_composition_empty_returns_none() -> None:
     from sabermetrics.analytics.empirical_valuation import compute_composition
 
     assert compute_composition({}) is None
+
+
+def test_pooled_fallback_merges_same_archetype_clusters(tmp_path, monkeypatch) -> None:
+    """The Agatha cascade: k-means over-splits one archetype into clusters
+    that each fail the reliability bar; pooling the same-archetype clusters
+    passes it. Two near-identical aristocrats populations (36+36, forced
+    k=2) must pool to n=72 and come back fully reliable."""
+    from sabermetrics.analytics import empirical_valuation as ev
+
+    decks = (
+        [DeckRecord(deck_id=f"a{i}", card_names=ARISTO + ["Filler A"],
+                    popularity_rank=i) for i in range(36)]
+        + [DeckRecord(deck_id=f"b{i}", card_names=ARISTO + ["Filler B"],
+                      popularity_rank=i) for i in range(36)]
+    )
+    monkeypatch.setattr(ev, "load_commander_decks", lambda *a, **k: decks)
+    monkeypatch.setattr(ev, "select_k", lambda *a, **k: (2, "forced"))
+
+    inc = ev.get_target_cluster_inclusion(tmp_path / "x.db", "Cmdr")
+
+    assert inc is not None
+    # If k-means split the two populations, each cluster (36) fails the bar
+    # and pooling restores reliability at n=72; if it kept one cluster of 72,
+    # the variant is reliable directly. Either way nothing may come back
+    # unreliable, and Blood Artist is a trusted staple.
+    assert inc.variant_size == 72
+    assert inc.reliable == set(inc.inclusion)
+    assert inc.rate("blood artist") > 0.9
+
+
+def test_pooling_never_crosses_archetype_labels(tmp_path, monkeypatch) -> None:
+    """A genuinely mixed small corpus still degrades to unreliable.
+
+    36 aristocrats + 36 landfall: the aristocrats target (36) fails the bar
+    and there is no second aristocrats cluster to pool with -- landfall decks
+    must NOT corroborate cards in an aristocrats build, so reliable stays
+    empty rather than contaminating rates across archetypes."""
+    from sabermetrics.analytics import empirical_valuation as ev
+
+    decks = (
+        [DeckRecord(deck_id=f"a{i}", card_names=ARISTO, popularity_rank=i)
+         for i in range(36)]
+        + [DeckRecord(deck_id=f"l{i}", card_names=LANDFALL, popularity_rank=i)
+           for i in range(36)]
+    )
+    monkeypatch.setattr(ev, "load_commander_decks", lambda *a, **k: decks)
+
+    inc = ev.get_target_cluster_inclusion(tmp_path / "x.db", "Cmdr")
+
+    assert inc is not None
+    assert inc.variant_size == 36            # stayed variant-level
+    assert inc.reliable == set()             # too small, and no safe pool
+    assert inc.rate("Blood Artist") > 0.9    # sharp in-variant rate kept
