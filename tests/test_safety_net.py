@@ -233,3 +233,59 @@ def test_revet_replacements_must_be_corroborated(monkeypatch, tmp_path):
     assert "Zero Corpus Unknown" not in names   # refused: would be unreviewed
     assert "Corroborated Trap" in names         # kept despite failing round 2
     assert len(_FakeScorer.calls) == 2
+
+
+def test_vetoed_card_cannot_reenter_as_replacement(monkeypatch, tmp_path):
+    """A card the vet rejects is out for the whole pass.
+
+    Agatha build 4: Akroma scored 3 and was swapped out in the re-vet, then
+    immediately re-entered as the top-merit replacement for a DIFFERENT
+    round-2 failure (removal freed her name in deck_names). Rejection must
+    be final within the pass.
+    """
+    from types import SimpleNamespace
+
+    import sabermetrics.reasoning.fit as fit_mod
+    from sabermetrics.pipeline.deck_builder import DeckBuildRequest
+    from sabermetrics.pipeline.trace import GenerationTracer
+
+    _FakeScorer.calls = []
+    # Both round-1 picks fail; their replacements (Akroma + Filler) get
+    # re-vetted, Akroma fails again -> her slot's next replacement must NOT
+    # be Akroma even though she is the highest-merit candidate.
+    _FakeScorer.scores = {"Weak A": 2, "Weak B": 2, "Akroma": 2}
+    monkeypatch.setattr(fit_mod, "FitScorer", _FakeScorer)
+
+    b = DeckBuilder(tmp_path / "unused.db")
+    b._tracer = GenerationTracer(generation_id="test")
+    b._build_profile_summary = lambda pr: "profile"
+    b._empirical = SimpleNamespace(reliable=set())  # corpus inactive
+
+    deck = [
+        SlotAssignment(card={"id": "a", "name": "Weak A", "type_line": "Creature",
+                             "price_usd": 1.0}, slot_role="utility", score=0.2),
+        SlotAssignment(card={"id": "b", "name": "Weak B", "type_line": "Creature",
+                             "price_usd": 1.0}, slot_role="utility", score=0.3),
+    ]
+    candidates = [
+        {"id": "ak", "name": "Akroma", "type_line": "Creature",
+         "price_usd": 1.0, "_cvar_score": 0.9},
+        {"id": "f1", "name": "Filler One", "type_line": "Creature",
+         "price_usd": 1.0, "_cvar_score": 0.5},
+        {"id": "f2", "name": "Filler Two", "type_line": "Creature",
+         "price_usd": 1.0, "_cvar_score": 0.4},
+    ]
+    profile_result = SimpleNamespace(profile=SimpleNamespace(
+        strategic_profile=SimpleNamespace(primary_archetype="x"),
+    ))
+
+    out, _ = b._llm_safety_check(
+        deck, candidates, synergy=None, role_targets=None,
+        profile_result=profile_result,
+        request=DeckBuildRequest(commander_id="x", budget_usd=200.0),
+        n_weakest=99,
+    )
+
+    names = [a.card["name"] for a in out]
+    assert "Akroma" not in names          # rejected in round 2, stays out
+    assert "Weak A" not in names and "Weak B" not in names

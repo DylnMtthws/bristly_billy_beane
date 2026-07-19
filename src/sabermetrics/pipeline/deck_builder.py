@@ -1614,6 +1614,12 @@ class DeckBuilder:
             corroboration_threshold = (
                 settings.scoring.safety_uncorroborated_max_inclusion
             )
+            # Names the vet rejects during THIS check. Removing a card from
+            # deck_names made it eligible again as a replacement for a
+            # different slot in the same pass -- Akroma was scored 3, swapped
+            # out, and immediately re-entered as the replacement for another
+            # round-2 failure. A rejection is final for the whole pass.
+            vetoed_names: set[str] = set()
 
             def _replace_bad_fits(
                 scored, stage: str, corroborated_only: bool = False,
@@ -1638,7 +1644,7 @@ class DeckBuilder:
                     )
                     old_price = float(card.get("price_usd", 0) or 0)
                     replacement = self._best_replacement(
-                        candidates, deck_names,
+                        candidates, deck_names | vetoed_names,
                         max_price=old_price + max(0.0, budget_left),
                         corpus_active=corpus_active,
                         corroboration_threshold=corroboration_threshold,
@@ -1647,6 +1653,7 @@ class DeckBuilder:
                     if not replacement:
                         continue
                     old_name = card.get("name", "")
+                    vetoed_names.add(old_name)
                     new_name = replacement.get("name", "")
                     role = _heuristic_role(replacement)
                     replacement["_fit_reasoning"] = (
