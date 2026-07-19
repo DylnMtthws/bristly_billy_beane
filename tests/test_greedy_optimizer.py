@@ -751,3 +751,42 @@ def test_type_coherence_component() -> None:
     assert _compute_type_coherence(off_target, t) == 0.0
     t_none = t.model_copy(update={"type_targets": None})
     assert _compute_type_coherence(on_target, t_none) == 0.5
+
+
+def test_greedy_fills_all_slots_with_cheap_filler_when_budget_is_tight():
+    """Sauron regression: expensive staples drained the budget, greedy broke
+    with 21 slots unfilled, and legality backfilled 21 basics. When nothing
+    clears the per-slot reserve but real budget remains, greedy must take
+    cheap filler instead of giving up -- spells beat basics."""
+    from sabermetrics.analytics.synergy_matrix import SynergyMatrix
+    import numpy as np
+
+    cards = (
+        [{"id": f"exp{i}", "name": f"Expensive {i}", "type_line": "Creature",
+          "price_usd": 8.0, "_cvar_score": 0.9, "role_tags": '["utility"]',
+          "oracle_text": ""} for i in range(3)]
+        + [{"id": f"chp{i}", "name": f"Cheap {i}", "type_line": "Creature",
+            "price_usd": 0.25, "_cvar_score": 0.3, "role_tags": '["utility"]',
+            "oracle_text": ""} for i in range(10)]
+    )
+    ids = [c["id"] for c in cards]
+    synergy = SynergyMatrix(
+        matrix=np.zeros((len(ids), len(ids))),
+        card_id_to_index={cid: i for i, cid in enumerate(ids)},
+        index_to_card_id={i: cid for i, cid in enumerate(ids)},
+    )
+
+    # $26 budget, 10 slots: three $8 picks eat $24; the reserve then blocks
+    # everything, but $2 remains -- the last-resort path must fill remaining
+    # slots with $0.25 filler until the budget is truly gone.
+    assignments = greedy_fill(
+        candidates=cards, shell=[], synergy=synergy, role_targets={},
+        slots_remaining=10, budget_remaining=26.0,
+    )
+    total = sum(float(a.card.get("price_usd", 0) or 0) for a in assignments)
+    assert total <= 26.0
+    cheap_placed = sum(1 for a in assignments if a.card["name"].startswith("Cheap"))
+    assert cheap_placed >= 5, (
+        f"only {cheap_placed} cheap fillers placed ({len(assignments)} total) "
+        "-- greedy still starves instead of degrading"
+    )

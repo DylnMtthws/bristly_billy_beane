@@ -62,7 +62,11 @@ class PipelineSettings(BaseModel):
     # Greedy affordability floor: every unfilled slot keeps at least this many
     # dollars reserved, so one expensive pick can never starve the rest of the
     # deck below a fillable minimum.
-    budget_reserve_per_slot: float = 0.25
+    # $1/slot: at $0.25 the floor was decorative -- Sauron's expensive
+    # corpus staples (Bowmasters $44, Nazgul $17) drained greedy's budget
+    # to ~$5 with 21 slots left, nothing was affordable under the reserve,
+    # and legality backfilled 21 basics into a 57-land deck.
+    budget_reserve_per_slot: float = 1.0
 
 
 class RefreshSettings(BaseModel):

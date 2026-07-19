@@ -34,7 +34,7 @@ pipeline:
   # Per-card ceiling as fraction of budget (0.25 => $50 cards at $200).
   per_card_budget_fraction: 0.25
   # Dollars reserved per unfilled slot in greedy affordability checks.
-  budget_reserve_per_slot: 0.25
+  budget_reserve_per_slot: 1.0
 
 refresh:
   scryfall_daily: true

@@ -217,6 +217,26 @@ def greedy_fill(
                 best_card = card
                 best_idx = ci
 
+        if best_card is None and budget_left > 0:
+            # Last resort: nothing is affordable under the per-slot reserve,
+            # but real budget remains. Cheap filler is strictly better than
+            # the alternative -- an under-filled deck that legality repairs
+            # with basic lands (Sauron: 21 backfilled basics). Ignore the
+            # reserve (it protects future slots, and this IS the future) and
+            # take the cheapest eligible card that fits the actual budget.
+            cheapest = None
+            for ci, card in enumerate(eligible):
+                price = float(card.get("price_usd", 0) or 0)
+                if price > budget_left:
+                    continue
+                if cheapest is None or price < float(
+                    cheapest[1].get("price_usd", 0) or 0
+                ):
+                    cheapest = (ci, card)
+            if cheapest is not None:
+                best_idx, best_card = cheapest
+                best_score = 0.0
+
         if best_card is None:
             break
 
