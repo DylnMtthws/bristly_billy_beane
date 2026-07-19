@@ -1840,6 +1840,12 @@ class DeckBuilder:
         kept: list = []
         for a in by_score:
             name = a.card.get("name", "")
+            # "X // X" double-sided variants are X for singleton purposes --
+            # a rex-variant Command Tower once joined the regular one.
+            if " // " in name:
+                front, _, back = name.partition(" // ")
+                if front == back:
+                    name = front
             if not name or name == commander.name:
                 continue
             if not _is_basic(name):
@@ -1889,11 +1895,13 @@ class DeckBuilder:
                     "Legality repair backfilling %d basics -- an upstream "
                     "stage under-produced; inspect the build", shortfall,
                 )
-            self._tracer.record(
-                card_name=f"{shortfall}x basic land", stage="legality",
-                action="placed", reason="backfill to 99 (upstream shortfall)",
-                force=True,
-            )
+            if getattr(self, "_tracer", None) is not None:
+                self._tracer.record(
+                    card_name=f"{shortfall}x basic land", stage="legality",
+                    action="placed",
+                    reason="backfill to 99 (upstream shortfall)",
+                    force=True,
+                )
             kept.extend(
                 _make_basic_lands(shortfall, commander.color_identity or [])
             )

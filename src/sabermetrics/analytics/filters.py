@@ -263,6 +263,36 @@ def apply_hard_filters(
 
     logger.info("Starting with %d canonical candidates", len(all_cards))
 
+    # Data hygiene for doubled-name printings, which the canonical view's
+    # per-NAME dedupe treats as distinct cards:
+    # - Art-series rows (type_line "Card // Card") are not playable cards.
+    # - "X // X" double-sided variants ARE X for every purpose (singleton,
+    #   corpus matching, display); normalize the name to the front face so
+    #   one build can't run both "Command Tower" and its rex variant.
+    cleaned = []
+    for c in all_cards:
+        tl = c.get("type_line") or ""
+        if tl in ("Card", "Card // Card"):
+            continue
+        name = c.get("name", "")
+        if " // " in name:
+            front, _, back = name.partition(" // ")
+            if front == back:
+                c["name"] = front
+    # Renormalized names can collide with the real card's row: keep the
+    # cheaper printing per name (mirrors the view's dedupe rule).
+        cleaned.append(c)
+    by_name: dict[str, dict] = {}
+    for c in cleaned:
+        prev = by_name.get(c.get("name", ""))
+        if prev is None or (
+            (c.get("price_usd") is not None)
+            and (prev.get("price_usd") is None
+                 or float(c["price_usd"]) < float(prev["price_usd"]))
+        ):
+            by_name[c.get("name", "")] = c
+    all_cards = list(by_name.values())
+
     # Exclude the commander itself from the 99 -- by oracle_id, not printing id.
     # Printings of the same card have distinct ids, and the later name-dedupe
     # keeps the cheapest printing; excluding only the commander's own printing

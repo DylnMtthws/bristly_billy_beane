@@ -86,3 +86,22 @@ def test_hard_filters_exclude_every_printing_of_the_commander():
         if c.get("oracle_id") == oracle_id or c.get("name") == name
     ]
     assert leaks == [], f"commander printings leaked into pool: {leaks}"
+
+
+def test_doubled_name_variants_cannot_duplicate_the_real_card():
+    """A 'Command Tower // Command Tower' variant is Command Tower.
+
+    Art-series rows and X // X double-sided promos slipped the name-based
+    singleton checks; one Eowyn build ran both Command Towers. The legality
+    repair must collapse them to one.
+    """
+    real = {"id": "ct", "oracle_id": "o1", "name": "Command Tower"}
+    variant = {"id": "ct-rex", "oracle_id": "", "name": "Command Tower // Command Tower"}
+    deck = [_assignment(real), _assignment(variant)]
+
+    kept = DeckBuilder._enforce_legality(
+        DeckBuilder.__new__(DeckBuilder), deck, _commander(),
+    )
+    # 1 Command Tower kept, the deck refilled to 99 with basics.
+    towers = [a for a in kept if "Command Tower" in a.card.get("name", "")]
+    assert len(towers) == 1
