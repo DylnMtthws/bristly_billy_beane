@@ -137,3 +137,33 @@ def test_batch_vet_salvages_truncated_json():
     assert scores["Card A"] == 2      # salvaged verdict, not a default 5
     assert scores["Card B"] == 8
     assert scores["Card C"] == 5      # genuinely lost -> neutral default
+
+
+def test_pool_index_inherits_canonical_printing_and_price():
+    """Table rows adopt the pool's printing id and price.
+
+    The candidate tables store their own printing, often one with no price
+    snapshot -- it then cost $0 in build-time budget sums and rendered at
+    the $0.05 floor in the UI (Vandalblast/Swiftfoot Boots/Beast Within).
+    The pool's cheapest-priced printing is canonical.
+    """
+    stale = {"id": "sld-promo", "name": "Orzhov Signet", "type_line": "Artifact",
+             "oracle_text": "{1}, {T}: Add {W}{B}.", "price_usd": None,
+             "cmc": 2, "_cvar_score": 0.5, "role_tags": '["ramp"]'}
+    canonical = {"id": "c21-cheap", "name": "Orzhov Signet",
+                 "type_line": "Artifact", "set_code": "c21",
+                 "oracle_text": "{1}, {T}: Add {W}{B}.", "price_usd": 0.30,
+                 "cmc": 2, "_cvar_score": 0.5, "role_tags": '["ramp"]'}
+
+    gen = RampPackageGenerator(Path("/nonexistent.db"))
+    result = gen.generate(
+        color_identity=["W", "B"], target_count=3, budget_remaining=100.0,
+        template=_template(), already_placed=[],
+        role_tag_pool=[stale],
+        commander_colors=["W", "B"], avg_cmc=3.0,
+        pool_index={"Orzhov Signet": canonical},
+    )
+    placed = {a.card["name"]: a.card for a in result}
+    assert "Orzhov Signet" in placed
+    assert placed["Orzhov Signet"]["id"] == "c21-cheap"
+    assert placed["Orzhov Signet"]["price_usd"] == 0.30

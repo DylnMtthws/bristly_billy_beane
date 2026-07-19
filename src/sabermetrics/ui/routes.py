@@ -299,8 +299,14 @@ def view_deck(deck_id: str):
             )
             price_lookup: dict[str, float] = {}
             for r in price_cursor:
-                if r["card_id"] not in price_lookup:
-                    price_lookup[r["card_id"]] = r["price_usd"] or PRICE_FLOOR_USD
+                # Latest NON-NULL snapshot per printing. Coercing a NULL
+                # latest snapshot to the floor showed $1-8 staples
+                # (Vandalblast, Swiftfoot Boots, Beast Within) as $0.05 and
+                # blocked the name-based fallback below from ever firing --
+                # a printing with no price anywhere falls through to the
+                # cheapest-priced OTHER printing of the same card instead.
+                if r["card_id"] not in price_lookup and r["price_usd"] is not None:
+                    price_lookup[r["card_id"]] = r["price_usd"]
 
             # Fallback: for cards without prices (promo printings, legacy
             # decks), look up cheapest price by card name
