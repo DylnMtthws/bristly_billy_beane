@@ -1158,11 +1158,16 @@ class DeckBuilder:
         # price-neutral scoring otherwise buys premium mana bases -- one build
         # put ~$110 of a $200 budget into lands, topped by a $45 Gemstone
         # Caverns. Real decks of the variant define what lands should cost.
-        land_budget = request.budget_usd - budget_used
-        if template.land_budget_share > 0:
-            land_budget = min(
-                land_budget, request.budget_usd * template.land_budget_share * 1.25
-            )
+        # A missing corpus share (0.0) must cap at a typical share, not fall
+        # through to the entire remaining budget: one Agatha build with
+        # share=0 put $160 into lands, starved the spell stages, and shipped
+        # a silently-backfilled 74-land deck. Observed corpus shares run
+        # 0.13-0.24, so 0.20 is a representative default.
+        share = template.land_budget_share or 0.20
+        land_budget = min(
+            request.budget_usd - budget_used,
+            request.budget_usd * share * 1.25,
+        )
         land_gen = LandPackageGenerator(self.db_path)
         lands = land_gen.generate(
             color_identity=colors,
@@ -1873,9 +1878,24 @@ class DeckBuilder:
             kept = kept[excess:]
 
         # Pass 3: fill to 99 with basic lands in the commander's colors.
+        # This is a last-resort repair for a card or two -- a large fill
+        # means an upstream stage under-produced (a $160 land overspend once
+        # starved the spell stages into a silently-shipped 74-land deck), so
+        # it must be LOUD: traced and warned, never invisible.
         if len(kept) < 99:
+            shortfall = 99 - len(kept)
+            if shortfall > 2:
+                logger.warning(
+                    "Legality repair backfilling %d basics -- an upstream "
+                    "stage under-produced; inspect the build", shortfall,
+                )
+            self._tracer.record(
+                card_name=f"{shortfall}x basic land", stage="legality",
+                action="placed", reason="backfill to 99 (upstream shortfall)",
+                force=True,
+            )
             kept.extend(
-                _make_basic_lands(99 - len(kept), commander.color_identity or [])
+                _make_basic_lands(shortfall, commander.color_identity or [])
             )
 
         if len(kept) != 99:  # invariant must hold

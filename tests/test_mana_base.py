@@ -281,3 +281,32 @@ def test_empirical_bonus_neutral_without_corpus():
     a = _score_land(_land("{T}: Add {W} or {B}."), deficit, colors)
     b = _score_land(_land("{T}: Add {W} or {B}.", _empirical_inclusion=0.0), deficit, colors)
     assert a == b
+
+
+def test_single_land_cannot_eat_the_allotment():
+    """Regression: one $45 land consumed a $53 allotment, flooding basics.
+
+    With a $50 allotment, a $45 any-color land must be refused (over a third
+    of the allotment) while cheap duals still fill the base.
+    """
+    lands = []
+    for i in range(15):
+        lands.append((
+            {"id": f"d{i}", "name": f"Dual {i}", "type_line": "Land",
+             "oracle_text": "{T}: Add {W} or {B}.", "price_usd": 1.0},
+            {"cvar_score": 0.5},
+        ))
+    lands.append((
+        {"id": "bomb", "name": "Budget Bomb", "type_line": "Land",
+         "oracle_text": "{T}: Add one mana of any color.", "price_usd": 45.0},
+        {"cvar_score": 0.5},
+    ))
+    spells = [{"mana_cost": "{1}{W}{B}", "cmc": 3, "type_line": "Creature"}] * 20
+
+    result = build_mana_base(
+        land_candidates=lands, spells=spells, commander_colors=["W", "B"],
+        total_lands=30, max_budget=50.0, running_price=0.0,
+    )
+    names = [a.card["name"] for a in result]
+    assert "Budget Bomb" not in names
+    assert sum(1 for n in names if n.startswith("Dual")) >= 10

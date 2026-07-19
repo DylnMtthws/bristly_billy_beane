@@ -657,6 +657,21 @@ def build_mana_base(
             ]
             continue
 
+        # Per-land ceiling: no single land may eat more than a third of the
+        # land allotment. Penalizing cheap trap lands promoted expensive
+        # clean any-color lands to the top of the ranking, and one $45
+        # Gemstone Caverns consumed a $53 allotment -- every later nonbasic
+        # then failed the budget check and was removed, flooding the base
+        # with basics. Ranking order must not decide budget allocation.
+        if max_budget:
+            allotment = max_budget - running_price
+            if allotment > 0 and price > allotment / 3.0:
+                parsed_lands = [
+                    (i, b) for i, b in parsed_lands
+                    if i.card.get("name") != name
+                ]
+                continue
+
         # Skip if this land produces no relevant colors and score is 0
         relevant = [c for c in best_info.colors_produced if c in commander_colors]
         if not relevant and not best_info.produces_any_color and best_score <= 0:
