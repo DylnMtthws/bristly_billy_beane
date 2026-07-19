@@ -129,12 +129,19 @@ class LandPackageGenerator:
                 float(a.card.get("price_usd", 0) or 0) for a in auto_assignments
             )
 
+            # build_mana_base's max_budget is a WHOLE-DECK budget it compares
+            # against running_price + land spend; budget_remaining here is the
+            # land-only allotment (capped at the corpus land-share upstream).
+            # Passing it raw made spendable = allotment - infra_spend, which
+            # went negative once infrastructure outspent the land cap -- a
+            # Jund Korvold build got 33 basics and 3 nonbasics that way while
+            # cheap-infra Eriette masked the bug.
             karsten_lands = build_mana_base(
                 land_candidates=remaining_pool,
                 spells=spells,
                 commander_colors=color_identity,
                 total_lands=remaining_land_target,
-                max_budget=budget_remaining,
+                max_budget=running_price + budget_remaining,
                 running_price=running_price,
             )
             auto_assignments.extend(karsten_lands)

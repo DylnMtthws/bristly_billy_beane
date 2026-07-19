@@ -980,3 +980,46 @@ def test_curve_check_skips_fat_rocks_for_cheap_commanders() -> None:
     # with equal opportunity the cheap rocks fill the slots first.
     auto_scores = [a for a in result if a.score >= 0.95]
     assert all(a.card["name"] != "Commander's Sphere" for a in auto_scores)
+
+
+def test_land_budget_is_an_allotment_not_a_whole_deck_cap() -> None:
+    """Regression (Korvold build 6): 33 basics in a Jund deck.
+
+    build_mana_base's max_budget is a whole-deck budget compared against
+    running_price + land spend. The generator's budget_remaining is a
+    land-only allotment, so passing it raw made spendable go NEGATIVE
+    whenever already-placed infrastructure outspent the land cap -- every
+    nonbasic was rejected and the base filled with basics. Expensive-infra
+    decks (Korvold's reserved staples) hit this; cheap-infra Eriette never
+    did. With the fix, a $40 allotment buys nonbasics regardless of how
+    much the spells cost.
+    """
+    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    expensive_infra = [
+        {"name": f"Pricey Staple {i}", "mana_cost": "{2}{B}",
+         "cmc": 3, "type_line": "Creature", "price_usd": 15.0}
+        for i in range(10)  # $150 of spells, far above the land allotment
+    ]
+    result = gen.generate(
+        color_identity=["B", "R", "G"],
+        target_count=36,
+        budget_remaining=40.0,  # land-only allotment
+        template=_make_template(),
+        already_placed=expensive_infra,
+        role_tag_pool=[
+            {"id": f"jund-land-{i}", "name": f"Jund Land {i}",
+             "type_line": "Land",
+             "oracle_text": "{T}: Add {B}, {R}, or {G}.",
+             "price_usd": 2.0, "cmc": 0, "_cvar_score": 0.6,
+             "role_tags": '["land"]'}
+            for i in range(20)
+        ],
+    )
+    nonbasics = [
+        a for a in result
+        if a.card["name"] not in {"Plains", "Island", "Swamp", "Mountain", "Forest"}
+    ]
+    assert len(nonbasics) >= 10, (
+        f"only {len(nonbasics)} nonbasics -- land allotment treated as "
+        "whole-deck cap again"
+    )
