@@ -548,3 +548,62 @@ def test_counter_archetype_rules_fire():
         {"oracle_text": "At the beginning of your end step, proliferate."},
         prolif["trigger"],
     )
+
+
+def test_ability_cost_reduction_is_not_generic_cost_reduction():
+    """Agatha investigation: her 'cost {X} less to activate' text classified
+    as generic cost_reduction, whose card-side match is just cmc>=5 -- every
+    big creature (including colonless morph cards the reduction never
+    touches) got ~0.8 synergy with her.
+    """
+    from sabermetrics.analytics.oracle_keywords import (
+        card_matches_referenced_keywords,
+        extract_referenced_mechanics,
+    )
+
+    agatha = (
+        "Activated abilities of creatures you control cost {X} less to "
+        "activate, where X is Agatha's power.\n"
+        "{4}{R}{G}: Other creatures you control get +1/+1 until end of turn."
+    )
+    mechs = extract_referenced_mechanics(agatha)
+    assert "ability_cost_reduction" in mechs
+    assert "cost_reduction" not in mechs  # superseded, not additive
+
+    invoker = {"oracle_text": "{7}{R}: This creature deals 5 damage to any target.",
+               "keywords": "[]", "type_line": "Creature", "cmc": 3}
+    morph_only = {"oracle_text": "Flying\nMorph {6}{R}{R} (You may cast this "
+                  "card face down as a 2/2 creature for {3}. Turn it face up "
+                  "any time for its morph cost.)\nWhen this creature is "
+                  "turned face up, search your library for a Dragon card.",
+                  "keywords": '["Morph"]', "type_line": "Creature — Dragon",
+                  "cmc": 7}
+    assert card_matches_referenced_keywords(invoker, [], ["ability_cost_reduction"])
+    assert not card_matches_referenced_keywords(
+        morph_only, [], ["ability_cost_reduction"]
+    )
+
+    # Rakdos-class spell-cost reducers keep the generic tag.
+    rakdos = "Creature spells you cast cost {1} less to cast for each damage dealt."
+    assert "cost_reduction" in extract_referenced_mechanics(rakdos)
+
+
+def test_ability_cost_reduction_requires_a_mana_cost():
+    """A {T}-only ability has no mana to reduce (Llanowar Elves is not an
+    Agatha card); hybrid and numeric costs qualify."""
+    from sabermetrics.analytics.oracle_keywords import (
+        card_matches_referenced_keywords,
+    )
+
+    def match(oracle):
+        return card_matches_referenced_keywords(
+            {"oracle_text": oracle, "keywords": "[]", "type_line": "Creature",
+             "cmc": 2},
+            [], ["ability_cost_reduction"],
+        )
+
+    assert not match("{T}: Add {G}.")
+    assert match("{7}{R}: This creature deals 5 damage to any target.")
+    assert match("{2}, {T}: Draw a card.")
+    assert match("{G/U}: This creature gets +1/+1.")
+    assert not match("Sacrifice a creature: Draw a card.")

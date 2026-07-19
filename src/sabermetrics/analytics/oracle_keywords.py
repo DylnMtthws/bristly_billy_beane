@@ -132,6 +132,20 @@ _MECHANIC_REFERENCE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         ),
         "sacrifice_synergy",
     ),
+    # --- Activated-ability cost reduction (Agatha, Zirda, Training Grounds
+    # class). MUST precede generic cost_reduction: "activated abilities ...
+    # cost {X} less to activate" also matches the generic pattern, which
+    # pairs the commander with any 5+ CMC card -- that gave every big
+    # vanilla-ish creature ~0.8 synergy with Agatha, who never reduces a
+    # casting cost. extract_referenced_mechanics discards the generic tag
+    # when this specific one matches.
+    (
+        re.compile(
+            r"(?:activated\s+abilities[^.]*cost[^.]*less|cost[^.]*less\s+to\s+activate)",
+            re.IGNORECASE,
+        ),
+        "ability_cost_reduction",
+    ),
     # --- Cost reduction (Rakdos Lord of Riots, Animar) ---
     (
         re.compile(
@@ -287,6 +301,12 @@ def extract_referenced_mechanics(oracle_text: str | None) -> list[str]:
         if pattern.search(oracle_text):
             found.add(tag)
 
+    # Ability-cost reduction text ("cost {X} less to activate") also matches
+    # the generic cost_reduction pattern; the specific mechanic supersedes it
+    # so Agatha-class commanders don't pair with every 5+ CMC card.
+    if "ability_cost_reduction" in found:
+        found.discard("cost_reduction")
+
     return sorted(found)
 
 
@@ -369,6 +389,17 @@ def card_matches_referenced_keywords(
         elif mech == "sacrifice_synergy":
             if re.search(
                 r"(?:sacrifice\s+(?:a|an|another)|when\s+this\s+creature\s+dies)",
+                card_oracle,
+            ):
+                return True
+        elif mech == "ability_cost_reduction":
+            # Cards with a MANA-cost activated ability ("{7}{R}:" invoker
+            # class). The cost segment before the colon must contain a mana
+            # symbol: "{T}: Add {G}" has nothing to reduce, and morph/
+            # disguise turn-up is a SPECIAL ACTION printed without a colon
+            # ("Morph {6}{R}{R}") -- ability-cost reducers touch neither.
+            if re.search(
+                r"(?mi)^[^:\n]*\{(?:\d+|[WUBRGCXS](?:/[WUBRGCP])?)\}[^:\n]*:",
                 card_oracle,
             ):
                 return True
