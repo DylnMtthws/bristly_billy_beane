@@ -177,13 +177,15 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
     # doesn't possess, e.g. Arcades → defender)
     if context.referenced_keywords or context.referenced_mechanics:
         from sabermetrics.analytics.oracle_keywords import (
-            card_matches_referenced_keywords,
+            referenced_match_strength,
         )
 
-        if card_matches_referenced_keywords(
+        # Graded, not flat: this is the largest single term in the composite,
+        # and a boolean made "mentions the word haste somewhere" worth exactly
+        # what "is a morph creature in a face-down deck" is worth.
+        score += 0.6 * referenced_match_strength(
             card, context.referenced_keywords, context.referenced_mechanics
-        ):
-            score += 0.6
+        )
 
     # Color alignment bonus (more colors shared = better)
     card_ci = card.get("color_identity", "[]")

@@ -607,3 +607,82 @@ def test_ability_cost_reduction_requires_a_mana_cost():
     assert match("{2}, {T}: Draw a card.")
     assert match("{G/U}: This creature gets +1/+1.")
     assert not match("Sacrifice a creature: Draw a card.")
+
+
+# --- Referenced keyword/mechanic grading (Yarus planeswalker investigation) ---
+
+
+def test_granted_keywords_are_not_sought():
+    """Yarus grants haste; he is not looking for haste sources.
+
+    "Other creatures you control have haste" made haste a referenced keyword,
+    and any card whose text merely said the word earned the full bonus --
+    three planeswalkers out-synergized real morph creatures that way.
+    """
+    from sabermetrics.analytics.oracle_keywords import (
+        extract_granted_keywords,
+        extract_referenced_keywords,
+    )
+
+    yarus = ("Other creatures you control have haste.\n"
+             "Whenever one or more face-down creatures you control deal "
+             "combat damage to a player, draw a card.")
+    assert extract_referenced_keywords(yarus) == []
+    assert "haste" in extract_granted_keywords(yarus)
+
+    # Arcades is the canonical SOUGHT case and must be unaffected.
+    arcades = ("Whenever a creature you control with defender enters, draw a card.")
+    assert "defender" in extract_referenced_keywords(arcades)
+
+
+def test_match_strength_is_graded_by_signal_quality():
+    """Core mechanic > possessing the keyword > granting it > mentioning it."""
+    from sabermetrics.analytics.oracle_keywords import referenced_match_strength
+
+    morph_creature = {
+        "oracle_text": "Morph {1}{G} (You may cast this card face down...)",
+        "keywords": '["Morph"]', "type_line": "Creature — Human",
+    }
+    has_kw = {"oracle_text": "", "keywords": '["Defender"]',
+              "type_line": "Creature — Wall"}
+    grants_kw = {"oracle_text": "Creatures you control have defender.",
+                 "keywords": "[]", "type_line": "Enchantment"}
+    mentions_only = {
+        "oracle_text": "-6: Gain control of all creatures until end of turn. "
+                       "Untap them. They gain haste until end of turn.",
+        "keywords": "[]", "type_line": "Legendary Planeswalker — Tibalt",
+    }
+
+    assert referenced_match_strength(morph_creature, [], ["face_down_synergy"]) == 1.0
+    assert referenced_match_strength(has_kw, ["defender"], []) == 0.5
+    assert referenced_match_strength(grants_kw, ["defender"], []) == 0.35
+    # The Tibalt case: haste appears in the text but he neither has nor grants
+    # it to your creatures in any durable way -> no credit.
+    assert referenced_match_strength(mentions_only, ["haste"], []) == 0.0
+
+
+def test_real_payload_outranks_incidental_mention_for_yarus():
+    """End-to-end ordering: morph creatures must beat the planeswalkers."""
+    from sabermetrics.analytics.oracle_keywords import (
+        extract_referenced_keywords,
+        extract_referenced_mechanics,
+        referenced_match_strength,
+    )
+
+    yarus = ("Other creatures you control have haste.\n"
+             "Whenever one or more face-down creatures you control deal "
+             "combat damage to a player, draw a card.\n"
+             "Whenever a face-down creature you control dies, return it to "
+             "the battlefield face down.")
+    kws = extract_referenced_keywords(yarus)
+    mechs = extract_referenced_mechanics(yarus)
+
+    morph = {"oracle_text": "Megamorph {4}{G}", "keywords": '["Megamorph"]',
+             "type_line": "Creature — Human Warrior"}
+    tibalt = {"oracle_text": "-6: Gain control of all creatures until end of "
+                             "turn. They gain haste until end of turn.",
+              "keywords": "[]", "type_line": "Legendary Planeswalker"}
+
+    assert referenced_match_strength(morph, kws, mechs) > referenced_match_strength(
+        tibalt, kws, mechs
+    )

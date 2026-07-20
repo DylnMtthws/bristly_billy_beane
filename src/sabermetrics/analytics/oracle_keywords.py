@@ -65,13 +65,12 @@ MTG_KEYWORD_ABILITIES: set[str] = {
 # Reference patterns — phrases where oracle text references a keyword
 # ---------------------------------------------------------------------------
 
+# SOUGHT patterns: the commander cares about cards that ALREADY have the
+# keyword ("creatures with defender get +1/+1"). These are real "go find me
+# more of these" signals.
 _REFERENCE_PATTERNS: list[re.Pattern[str]] = [
     re.compile(
         r"creatures?\s+(?:you control\s+)?with\s+(\w[\w\s]*?)(?:\s+(?:get|gain|have|deal|assign|can|don't|enters?|you))",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"(?:has|gains?|have)\s+(\w[\w\s]*?)(?:\.|,|\s+and\s|\s+until)",
         re.IGNORECASE,
     ),
     re.compile(
@@ -84,6 +83,19 @@ _REFERENCE_PATTERNS: list[re.Pattern[str]] = [
     ),
     re.compile(
         r"(?:whenever|when)\s+a\s+creature\s+with\s+(\w[\w\s]*?)\s+",
+        re.IGNORECASE,
+    ),
+]
+
+# GRANTED patterns: the commander HANDS OUT the keyword ("Other creatures you
+# control have haste"). Deliberately excluded from the sought list -- Yarus
+# grants haste, so haste is not something his deck needs to go find, yet this
+# pattern made "haste" a referenced keyword and any card whose text merely
+# said the word scored the full referenced-match bonus. Three planeswalkers
+# out-synergized real morph creatures in a Yarus build that way.
+_GRANT_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(
+        r"(?:has|gains?|have)\s+(\w[\w\s]*?)(?:\.|,|\s+and\s|\s+until)",
         re.IGNORECASE,
     ),
 ]
@@ -243,16 +255,50 @@ _MECHANIC_REFERENCE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 
 
 def extract_referenced_keywords(oracle_text: str | None) -> list[str]:
-    """Extract keyword abilities the card's oracle text references.
+    """Extract keyword abilities the card SEEKS in other cards.
 
-    Finds phrases like "creatures with defender" and validates the
-    extracted candidate against MTG_KEYWORD_ABILITIES.
+    Finds phrases like "creatures with defender" and validates the extracted
+    candidate against MTG_KEYWORD_ABILITIES. Keywords the card merely GRANTS
+    ("Other creatures you control have haste") are excluded -- see
+    :func:`extract_granted_keywords` -- because a commander who hands out a
+    keyword is not looking for more sources of it.
 
     Args:
         oracle_text: The card's oracle text (may be None).
 
     Returns:
-        Deduplicated list of referenced keyword ability names (lowercase).
+        Deduplicated list of sought keyword ability names (lowercase).
+    """
+    return _extract_keywords(oracle_text, _REFERENCE_PATTERNS)
+
+
+def extract_granted_keywords(oracle_text: str | None) -> list[str]:
+    """Extract keyword abilities the card GRANTS to other permanents.
+
+    The complement of :func:`extract_referenced_keywords`. Kept separate so
+    scoring can treat "wants creatures with X" and "gives creatures X" as the
+    different signals they are.
+
+    Args:
+        oracle_text: The card's oracle text (may be None).
+
+    Returns:
+        Deduplicated list of granted keyword ability names (lowercase).
+    """
+    return _extract_keywords(oracle_text, _GRANT_PATTERNS)
+
+
+def _extract_keywords(
+    oracle_text: str | None, patterns: list[re.Pattern[str]]
+) -> list[str]:
+    """Run keyword-extraction patterns and validate hits against the keyword list.
+
+    Args:
+        oracle_text: The card's oracle text (may be None).
+        patterns: Compiled patterns whose group(1) is a keyword candidate.
+
+    Returns:
+        Deduplicated, validated keyword names (lowercase).
     """
     if not oracle_text:
         return []
@@ -260,7 +306,7 @@ def extract_referenced_keywords(oracle_text: str | None) -> list[str]:
     found: set[str] = set()
     text = oracle_text.lower()
 
-    for pattern in _REFERENCE_PATTERNS:
+    for pattern in patterns:
         for match in pattern.finditer(text):
             candidate = match.group(1).strip().lower()
             # The candidate may have trailing words; try shrinking
@@ -327,25 +373,96 @@ def card_matches_referenced_keywords(
     Returns:
         True if the card matches at least one referenced keyword or mechanic.
     """
+    return referenced_match_strength(
+        card, referenced_keywords, referenced_mechanics
+    ) > 0.0
+
+
+def _grants_durably(oracle_text: str, keyword: str) -> bool:
+    """Whether the text grants ``keyword`` to your permanents without expiring.
+
+    Durable ("Creatures you control have flying") counts as keyword support;
+    temporary ("they gain haste until end of turn") does not.
+
+    Args:
+        oracle_text: Lowercased card oracle text.
+        keyword: The keyword being sought.
+
+    Returns:
+        True for a durable grant clause naming the keyword.
+    """
+    for sentence in re.split(r"[.\n]", oracle_text):
+        if keyword not in sentence:
+            continue
+        if "until" in sentence:  # expires -- not support
+            continue
+        if re.search(r"\b(?:have|has|gains?)\b", sentence):
+            return True
+    return False
+
+
+def referenced_match_strength(
+    card: dict,
+    referenced_keywords: list[str],
+    referenced_mechanics: list[str],
+) -> float:
+    """How strongly a card answers what the commander references (0.0-1.0).
+
+    Graded rather than boolean because the flat bonus made every match
+    equivalent: in a Yarus (face-down) deck, Tibalt earned the same credit
+    for the word "haste" appearing in an unrelated ultimate as a real morph
+    creature earned for matching ``face_down_synergy``, and out-scored it on
+    the other terms. Tiers, strongest first:
+
+    * 1.0 -- matches a referenced MECHANIC (archetype-defining: these come
+      from specific multi-word patterns, not a single word).
+    * 0.5 -- card POSSESSES a sought keyword (its Scryfall keywords array,
+      or its own rules text grants it to itself).
+    * 0.35 -- card GRANTS a sought keyword to your creatures (an anthem-style
+      enabler is real support, just weaker than being the thing itself).
+    * 0.0 -- the keyword merely appears somewhere in the card's text.
+
+    Args:
+        card: Card dict with keywords, oracle_text, type_line fields.
+        referenced_keywords: Keywords the commander seeks.
+        referenced_mechanics: Mechanic tags the commander references.
+
+    Returns:
+        Match strength in [0.0, 1.0].
+    """
     if not referenced_keywords and not referenced_mechanics:
-        return False
+        return 0.0
 
     # Check card keywords array
     card_kw = card.get("keywords", "[]")
     if isinstance(card_kw, str):
-        card_kw = json.loads(card_kw)
-    card_keywords = {k.lower() for k in card_kw}
+        try:
+            card_kw = json.loads(card_kw)
+        except (json.JSONDecodeError, TypeError):
+            card_kw = []
+    card_keywords = {k.lower() for k in (card_kw or [])}
+    card_oracle = (card.get("oracle_text") or "").lower()
 
+    best = 0.0
     for ref_kw in referenced_keywords:
         if ref_kw in card_keywords:
-            return True
+            best = max(best, 0.5)
+            continue
+        # Self-possession in rules text ("this creature has flying").
+        if re.search(
+            rf"(?:this (?:creature|permanent)|it)\s+(?:has|gains?)\s+[^.]*\b{re.escape(ref_kw)}\b",
+            card_oracle,
+        ):
+            best = max(best, 0.5)
+        # Granting it to your team DURABLY is support, not the thing itself.
+        # A temporary grant ("they gain haste until end of turn" on a -6
+        # ultimate) is not keyword support at all -- that clause is what
+        # made Tibalt read as a haste payoff in a Yarus deck.
+        elif _grants_durably(card_oracle, ref_kw):
+            best = max(best, 0.35)
 
-    # Check card oracle text for keyword references
-    card_oracle = (card.get("oracle_text") or "").lower()
-    for ref_kw in referenced_keywords:
-        # Card has/gains this keyword (e.g. "this creature has defender")
-        if ref_kw in card_oracle:
-            return True
+    if best >= 1.0:
+        return best
 
     # Check mechanic tags
     type_line = (card.get("type_line") or "").lower()
@@ -353,7 +470,7 @@ def card_matches_referenced_keywords(
         if mech == "toughness_matters":
             # Walls and high-toughness creatures
             if "wall" in type_line or "defender" in card_keywords:
-                return True
+                return 1.0
             # Cards that mechanically USE toughness as a resource —
             # not cards that merely set or mention toughness values
             # (e.g. "base power and toughness 0/1" is NOT relevant).
@@ -367,31 +484,31 @@ def card_matches_referenced_keywords(
                 r")",
                 card_oracle,
             ):
-                return True
+                return 1.0
         elif mech == "artifact_creature":
             if "artifact" in type_line and "creature" in type_line:
-                return True
+                return 1.0
         elif mech == "enchantment_creature":
             if "enchantment" in type_line and "creature" in type_line:
-                return True
+                return 1.0
         elif mech == "tap_synergy":
             if re.search(
                 r"(?:tap\s+target|tap\s+an?\s+untapped|doesn'?t\s+untap|becomes?\s+tapped)",
                 card_oracle,
             ):
-                return True
+                return 1.0
         elif mech == "face_down_synergy":
             face_kw = {"morph", "megamorph", "disguise"}
             if card_keywords & face_kw:
-                return True
+                return 1.0
             if re.search(r"(?:face\s+down|face\s+up|manifest|cloak)", card_oracle):
-                return True
+                return 1.0
         elif mech == "sacrifice_synergy":
             if re.search(
                 r"(?:sacrifice\s+(?:a|an|another)|when\s+this\s+creature\s+dies)",
                 card_oracle,
             ):
-                return True
+                return 1.0
         elif mech == "ability_cost_reduction":
             # Cards with a MANA-cost activated ability ("{7}{R}:" invoker
             # class). The cost segment before the colon must contain a mana
@@ -402,67 +519,67 @@ def card_matches_referenced_keywords(
                 r"(?mi)^[^:\n]*\{(?:\d+|[WUBRGCXS](?:/[WUBRGCP])?)\}[^:\n]*:",
                 card_oracle,
             ):
-                return True
+                return 1.0
         elif mech == "cost_reduction":
             # High-CMC cards benefit most from cost reduction
             cmc = float(card.get("cmc", 0))
             if cmc >= 5:
-                return True
+                return 1.0
         elif mech == "counters_matter":
             if "+1/+1 counter" in card_oracle:
-                return True
+                return 1.0
         elif mech == "death_trigger":
             if re.search(r"(?:when\b.*\bdies\b|whenever\b.*\bdies\b)", card_oracle):
-                return True
+                return 1.0
         elif mech == "graveyard_synergy":
             grave_kw = {"flashback", "unearth", "embalm", "eternalize", "escape", "disturb"}
             if card_keywords & grave_kw:
-                return True
+                return 1.0
             if "from your graveyard" in card_oracle:
-                return True
+                return 1.0
         elif mech == "token_synergy":
             if "create" in card_oracle and "token" in card_oracle:
-                return True
+                return 1.0
         elif mech == "spellslinger":
             if "instant" in type_line or "sorcery" in type_line:
-                return True
+                return 1.0
             if re.search(r"(?:instant\s+or\s+sorcery|noncreature\s+spell)", card_oracle):
-                return True
+                return 1.0
         elif mech == "aura_synergy":
             # Card IS an Aura (type_line: "Enchantment — Aura")
             if "aura" in type_line:
-                return True
+                return 1.0
             # Card mechanically references Auras
             if re.search(r"\bauras?\b", card_oracle):
-                return True
+                return 1.0
             # Enchantress/constellation effects (enablers for Aura decks)
             if re.search(
                 r"(?:whenever\b.*\b(?:cast\b.*\benchantment|enchantment\b.*\b(?:enters|put))"
                 r"|for each\s+enchantment)",
                 card_oracle,
             ):
-                return True
+                return 1.0
         elif mech == "enchantment_synergy":
             if "enchantment" in type_line:
-                return True
+                return 1.0
             if re.search(
                 r"(?:enchantments?\s+you\s+control"
                 r"|whenever\b.*\benchantment"
                 r"|enchantment\s+card)",
                 card_oracle,
             ):
-                return True
+                return 1.0
         elif mech == "equipment_synergy":
             if "equipment" in type_line:
-                return True
+                return 1.0
             if re.search(r"(?:equipped?\b|equip\b|equipment)", card_oracle):
-                return True
+                return 1.0
         elif mech == "vehicle_synergy":
             if "vehicle" in type_line:
-                return True
+                return 1.0
             if "crew" in card_keywords:
-                return True
+                return 1.0
             if re.search(r"\bvehicles?\b", card_oracle):
-                return True
+                return 1.0
 
-    return False
+    return best
