@@ -790,3 +790,48 @@ def test_greedy_fills_all_slots_with_cheap_filler_when_budget_is_tight():
         f"only {cheap_placed} cheap fillers placed ({len(assignments)} total) "
         "-- greedy still starves instead of degrading"
     )
+
+
+def test_greedy_fills_to_99_when_infrastructure_underproduces():
+    """Sauron 57-land root cause: greedy must absorb generator shortfall.
+
+    The pipeline sizes greedy at 99 - len(infrastructure) so that when the
+    role generators under-produce (Sauron's ramp placed 2 of 10, draw 0),
+    greedy fills every remaining slot instead of a static differentiator
+    count -- otherwise the deck reaches ~78 cards and legality backfills the
+    rest with basic lands.
+    """
+    from sabermetrics.analytics.synergy_matrix import SynergyMatrix
+    import numpy as np
+
+    # A 58-card shell (36 lands + 22 spells) stands in for under-produced
+    # infrastructure; 41 slots remain to reach 99.
+    shell = [
+        SlotAssignment(
+            card={"id": f"shell{i}", "name": f"Shell {i}",
+                  "type_line": "Land" if i < 36 else "Creature",
+                  "price_usd": 0.0, "role_tags": '["land"]' if i < 36 else '["utility"]'},
+            slot_role="land" if i < 36 else "utility", score=0.5,
+        )
+        for i in range(58)
+    ]
+    cands = [
+        {"id": f"c{i}", "name": f"Cand {i}", "type_line": "Creature",
+         "price_usd": 0.5, "_cvar_score": 0.5, "role_tags": '["utility"]',
+         "oracle_text": ""}
+        for i in range(200)
+    ]
+    ids = [c["id"] for c in cands]
+    synergy = SynergyMatrix(
+        matrix=np.zeros((len(ids), len(ids))),
+        card_id_to_index={cid: i for i, cid in enumerate(ids)},
+        index_to_card_id={i: cid for i, cid in enumerate(ids)},
+    )
+
+    slots_remaining = 99 - len(shell)  # the pipeline's new formula
+    out = greedy_fill(
+        candidates=cands, shell=shell, synergy=synergy, role_targets={},
+        slots_remaining=slots_remaining, budget_remaining=200.0,
+    )
+    assert len(out) == 41
+    assert len(shell) + len(out) == 99

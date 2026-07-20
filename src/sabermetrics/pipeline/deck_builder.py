@@ -1234,14 +1234,18 @@ class DeckBuilder:
         if hasattr(self, "_signals"):
             self._signals.update(synergy.signals)
 
-        # 3. Greedy fill (subtract protection slots placed in Stage 4 and the
-        # empirical staples reserved in Stage 3.5 -- both occupy diff slots)
-        protection_placed = sum(
-            1 for a in infrastructure if a.slot_role == "protection"
-        )
-        diff_slots = max(
-            0, template.differentiator_slots - protection_placed - reserved_count
-        )
+        # 3. Greedy fill: fill EVERY slot not yet placed, to reach exactly 99.
+        # Deriving this from template.differentiator_slots (minus protection
+        # and reservations) assumed every prior stage hit its target exactly.
+        # When the role generators under-produce -- Sauron's ramp placed 2 of
+        # 10, draw 0 -- that arithmetic left greedy far short (and reserved +
+        # protection could drive it to 0 outright), so the deck reached only
+        # ~78 cards and legality backfilled 21 basics into a 57-land deck.
+        # infrastructure already holds lands + all generator output + reserved
+        # staples, so 99 - len(infrastructure) is exactly the empty-slot count;
+        # role_targets steer greedy to the under-served roles first.
+        # (reserved_count is now implicit in len(infrastructure).)
+        diff_slots = max(0, 99 - len(infrastructure))
         diff_assignments = greedy_fill(
             shell=infrastructure,
             candidates=candidates,
