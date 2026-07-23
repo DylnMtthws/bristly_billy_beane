@@ -161,6 +161,12 @@ def greedy_fill(
         best_card = None
         best_score = -1.0
         best_idx = -1
+        # Components of the SELECTED card (not the last one evaluated), so the
+        # trace is accurate and always defined even when the scoring loop
+        # skips every card and the last-resort path fills the slot.
+        best_components = {
+            "synergy": 0.0, "role_mult": 1.0, "cvar": 0.0, "marginal": 0.0,
+        }
 
         for ci, card in enumerate(eligible):
             price = float(card.get("price_usd", 0) or 0)
@@ -216,6 +222,12 @@ def greedy_fill(
                 best_score = marginal
                 best_card = card
                 best_idx = ci
+                best_components = {
+                    "synergy": round(synergy_contrib, 4),
+                    "role_mult": round(role_mult, 4),
+                    "cvar": round(float(cvar_base), 4),
+                    "marginal": round(marginal, 4),
+                }
 
         if best_card is None and budget_left > 0:
             # Last resort: nothing is affordable under the per-slot reserve,
@@ -236,6 +248,11 @@ def greedy_fill(
             if cheapest is not None:
                 best_idx, best_card = cheapest
                 best_score = 0.0
+                best_components = {
+                    "synergy": 0.0, "role_mult": 1.0,
+                    "cvar": round(float(best_card.get("_cvar_score", 0.0) or 0.0), 4),
+                    "marginal": 0.0, "last_resort": True,
+                }
 
         if best_card is None:
             break
@@ -278,12 +295,7 @@ def greedy_fill(
                 action="placed",
                 card_id=best_card.get("id"),
                 score=round(best_score, 4),
-                score_components={
-                    "synergy": round(synergy_contrib, 4),
-                    "role_mult": round(role_mult, 4),
-                    "cvar": round(cvar_base, 4),
-                    "marginal": round(best_score, 4),
-                },
+                score_components=best_components,
                 reason=f"role={primary_role}, price=${float(best_card.get('price_usd', 0) or 0):.2f}",
             )
 

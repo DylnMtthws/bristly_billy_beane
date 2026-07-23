@@ -835,3 +835,44 @@ def test_greedy_fills_to_99_when_infrastructure_underproduces():
     )
     assert len(out) == 41
     assert len(shell) + len(out) == 99
+
+
+def test_last_resort_fill_with_tracer_does_not_crash():
+    """Regression: the last-resort filler path must not read unset locals.
+
+    When every candidate is skipped by the per-slot reserve but budget
+    remains, greedy falls back to cheap filler. The trace record for that
+    pick previously read synergy_contrib/role_mult/cvar_base, which are only
+    assigned inside the scoring loop -- so with a tracer attached the build
+    crashed with UnboundLocalError. Drives that exact path.
+    """
+    from sabermetrics.analytics.synergy_matrix import SynergyMatrix
+    from sabermetrics.pipeline.trace import GenerationTracer
+    import numpy as np
+
+    # One eligible card, priced so it clears the actual budget but NOT the
+    # per-slot reserve (reserve = $1/slot * many slots), forcing last-resort.
+    cards = [{
+        "id": "filler", "name": "Cheap Filler", "type_line": "Creature",
+        "price_usd": 0.50, "_cvar_score": 0.3, "role_tags": '["utility"]',
+        "oracle_text": "",
+    }]
+    synergy = SynergyMatrix(
+        matrix=np.zeros((1, 1)),
+        card_id_to_index={"filler": 0},
+        index_to_card_id={0: "filler"},
+    )
+    # Watchlist the card so its greedy_fill event actually persists.
+    tracer = GenerationTracer(generation_id="test", watchlist={"Cheap Filler"})
+
+    # 10 slots, $0.50 budget: reserve blocks the card in the scoring loop
+    # (spendable = 0.5 - 9*1.0 < 0), but budget_left (0.5) fits it.
+    out = greedy_fill(
+        candidates=cards, shell=[], synergy=synergy, role_targets={},
+        slots_remaining=10, budget_remaining=0.50, tracer=tracer,
+    )
+    assert len(out) == 1
+    assert out[0].card["name"] == "Cheap Filler"
+    # The trace event recorded with well-formed, last-resort components.
+    events = [e for e in tracer._events if e.stage == "greedy_fill"]
+    assert events and events[0].score_components.get("last_resort") is True
