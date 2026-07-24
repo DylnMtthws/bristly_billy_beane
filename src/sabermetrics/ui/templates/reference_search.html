@@ -2,28 +2,35 @@
 {% block title %}Rules Search{% endblock %}
 
 {% block content %}
-<h1>Reference Search</h1>
+<div class="mb-8">
+    <h1 class="text-2xl font-bold tracking-tight">Reference Search</h1>
+    <p class="mt-1 text-sm text-muted">Search the comprehensive rules and strategy reference layer.</p>
+</div>
 
-<form method="get" action="{{ url_for('main.reference_search') }}" class="search-form">
-    <input type="text" name="q" value="{{ query }}" placeholder="Search rules, e.g. 'color identity' or 'ward ability'..." autofocus>
-    <button type="submit">Search</button>
+<form method="get" action="{{ url_for('main.reference_search') }}" class="mb-8 flex gap-2">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search rules, e.g. 'color identity' or 'ward ability'…" autofocus
+           class="flex-1 rounded-xl border border-line bg-field px-4 py-2.5 text-sm placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30">
+    <button type="submit"
+            class="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
+        Search
+    </button>
 </form>
 
 {% if results %}
-<section class="results">
-    <p>{{ results|length }} results for "{{ query }}"</p>
+<p class="mb-4 text-sm text-muted">{{ results|length }} results for "{{ query }}"</p>
 
+<div class="space-y-3">
     {% for r in results %}
-    <div class="result-card">
-        <div class="result-header">
-            <span class="result-source">{{ r.document }} / {{ r.section }}</span>
-            <span class="result-score">{{ r.score }}</span>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="mb-2 flex items-center justify-between gap-3">
+            <span class="text-sm font-semibold text-brand">{{ r.document }} / {{ r.section }}</span>
+            <span class="rounded-full bg-field px-2 py-0.5 text-xs font-medium text-muted">{{ r.score }}</span>
         </div>
-        <div class="result-content">{{ r.content }}</div>
+        <div class="whitespace-pre-wrap text-sm leading-relaxed text-body/90">{{ r.content }}</div>
     </div>
     {% endfor %}
-</section>
+</div>
 {% elif query %}
-<p>No results found for "{{ query }}".</p>
+<p class="text-sm text-muted">No results found for "{{ query }}".</p>
 {% endif %}
 {% endblock %}

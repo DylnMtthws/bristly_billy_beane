@@ -3,38 +3,52 @@
 
 {% block content %}
 {% if error is defined and error %}
-<h1>Profile Error</h1>
-<p>{{ error }}</p>
+<h1 class="text-2xl font-bold tracking-tight">Profile Error</h1>
+<p class="mt-2 text-sm text-muted">{{ error }}</p>
 {% else %}
 
-<h1>{{ commander_name }}</h1>
+<h1 class="text-2xl font-bold tracking-tight">{{ commander_name }}</h1>
 
-<div class="profile-header">
-    <div class="card-info">
-        <p><strong>Type:</strong> {{ card.type_line }}</p>
-        <p><strong>Mana Cost:</strong> {{ card.mana_cost or 'N/A' }}</p>
-        <p><strong>Colors:</strong>
-            {% for c in card.color_identity %}
-            <span class="mana mana-{{ c }}">{{ c }}</span>
-            {% endfor %}
-        </p>
+<div class="mt-6 grid gap-6 md:grid-cols-[auto,1fr] md:items-start">
+    {% if card.image_uri %}
+    <img src="{{ card.image_uri }}" alt="{{ commander_name }}"
+         class="w-full max-w-[260px] rounded-xl border border-line shadow-panel">
+    {% endif %}
+    <div class="rounded-2xl border border-line bg-panel p-5 shadow-panel">
+        <dl class="space-y-2 text-sm">
+            <div class="flex gap-2">
+                <dt class="w-24 shrink-0 font-medium text-muted">Type</dt>
+                <dd>{{ card.type_line }}</dd>
+            </div>
+            <div class="flex gap-2">
+                <dt class="w-24 shrink-0 font-medium text-muted">Mana Cost</dt>
+                <dd>{{ card.mana_cost or 'N/A' }}</dd>
+            </div>
+            <div class="flex items-center gap-2">
+                <dt class="w-24 shrink-0 font-medium text-muted">Colors</dt>
+                <dd class="flex items-center gap-1">
+                    {% for c in card.color_identity %}
+                    <span class="mana mana-{{ c }}">{{ c }}</span>
+                    {% endfor %}
+                </dd>
+            </div>
+        </dl>
         {% if card.oracle_text %}
-        <p class="oracle-text">{{ card.oracle_text }}</p>
-        {% endif %}
-        {% if card.image_uri %}
-        <img src="{{ card.image_uri }}" alt="{{ commander_name }}" class="card-image">
+        <p class="mt-4 whitespace-pre-wrap rounded-lg border border-line bg-field/60 p-3 text-sm italic leading-relaxed text-body/90">{{ card.oracle_text }}</p>
         {% endif %}
     </div>
 </div>
 
 {% if profile %}
-<section class="profile-section">
-    <h2>Strategic Profile</h2>
-    <p class="generated-note">Generated: {{ profile._generated_at }}</p>
+<section class="prose-content mt-10">
+    <div class="flex items-center justify-between">
+        <h2 class="!mt-0 text-xl font-semibold">Strategic Profile</h2>
+        <span class="text-xs text-muted">Generated: {{ profile._generated_at }}</span>
+    </div>
 
     {% if profile.strategic_profile %}
-    <div class="strategy">
-        <h3>{{ profile.strategic_profile.primary_archetype }}</h3>
+    <div class="mt-4 rounded-2xl border border-line bg-panel p-5 shadow-panel">
+        <h3 class="!mt-0 text-lg font-semibold text-brand">{{ profile.strategic_profile.primary_archetype }}</h3>
         <p>{{ profile.strategic_profile.game_plan_summary }}</p>
 
         {% if profile.strategic_profile.win_conditions %}
@@ -42,9 +56,10 @@
         <ul>
             {% for wc in profile.strategic_profile.win_conditions %}
             <li>
-                <strong>[{{ wc.reliability }}]</strong> {{ wc.description }}
+                <span class="mr-1 inline-block rounded bg-field px-1.5 py-0.5 text-xs font-semibold text-brand">{{ wc.reliability }}</span>
+                {{ wc.description }}
                 {% if wc.key_cards %}
-                <span class="key-cards">({{ wc.key_cards|join(', ') }})</span>
+                <span class="text-muted">({{ wc.key_cards|join(', ') }})</span>
                 {% endif %}
             </li>
             {% endfor %}
@@ -55,9 +70,8 @@
         <h4>Build Paths</h4>
         <ul>
             {% for bp in profile.strategic_profile.build_paths %}
-            <li>
-                <strong>{{ bp.name }}</strong> [{{ bp.consensus_status }}]: {{ bp.description }}
-            </li>
+            <li><strong>{{ bp.name }}</strong>
+                <span class="text-muted">[{{ bp.consensus_status }}]</span>: {{ bp.description }}</li>
             {% endfor %}
         </ul>
         {% endif %}
@@ -66,18 +80,15 @@
         <h4>Anti-Synergies</h4>
         <ul>
             {% for anti in profile.strategic_profile.anti_synergies %}
-            <li>{{ anti.description }} &mdash; <em>{{ anti.reasoning }}</em></li>
+            <li>{{ anti.description }} &mdash; <em class="text-muted">{{ anti.reasoning }}</em></li>
             {% endfor %}
         </ul>
         {% endif %}
 
         {% if profile.strategic_profile.power_indicators %}
         <h4>Power Level</h4>
-        <p>
-            Bracket {{ profile.strategic_profile.power_indicators.estimated_floor_bracket }}
-            &ndash;
-            {{ profile.strategic_profile.power_indicators.estimated_ceiling_bracket }}
-        </p>
+        <p>Bracket {{ profile.strategic_profile.power_indicators.estimated_floor_bracket }}
+           &ndash; {{ profile.strategic_profile.power_indicators.estimated_ceiling_bracket }}</p>
         <p>{{ profile.strategic_profile.power_indicators.notes }}</p>
         {% endif %}
     </div>
@@ -85,23 +96,23 @@
 
     {% if profile.behavioral_signals %}
     <h3>Behavioral Signals</h3>
-    <div class="stats-grid">
-        <div class="stat">
-            <span class="stat-value">{{ profile.behavioral_signals.total_decks_tracked }}</span>
-            <span class="stat-label">Decks Tracked</span>
+    <div class="mt-2 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div class="rounded-xl border border-line bg-panel p-4 text-center shadow-panel">
+            <div class="text-xl font-bold text-brand">{{ profile.behavioral_signals.total_decks_tracked }}</div>
+            <div class="mt-1 text-xs uppercase tracking-wider text-muted">Decks Tracked</div>
         </div>
-        <div class="stat">
-            <span class="stat-value">${{ "%.0f"|format(profile.behavioral_signals.average_deck_price_usd) }}</span>
-            <span class="stat-label">Avg Price</span>
+        <div class="rounded-xl border border-line bg-panel p-4 text-center shadow-panel">
+            <div class="text-xl font-bold text-brand">${{ "%.0f"|format(profile.behavioral_signals.average_deck_price_usd) }}</div>
+            <div class="mt-1 text-xs uppercase tracking-wider text-muted">Avg Price</div>
         </div>
-        <div class="stat">
-            <span class="stat-value">{{ "%.2f"|format(profile.behavioral_signals.average_cmc) }}</span>
-            <span class="stat-label">Avg CMC</span>
+        <div class="rounded-xl border border-line bg-panel p-4 text-center shadow-panel">
+            <div class="text-xl font-bold text-brand">{{ "%.2f"|format(profile.behavioral_signals.average_cmc) }}</div>
+            <div class="mt-1 text-xs uppercase tracking-wider text-muted">Avg CMC</div>
         </div>
         {% if profile.behavioral_signals.tournament_win_rate %}
-        <div class="stat">
-            <span class="stat-value">{{ "%.1f"|format(profile.behavioral_signals.tournament_win_rate * 100) }}%</span>
-            <span class="stat-label">Tournament WR</span>
+        <div class="rounded-xl border border-line bg-panel p-4 text-center shadow-panel">
+            <div class="text-xl font-bold text-brand">{{ "%.1f"|format(profile.behavioral_signals.tournament_win_rate * 100) }}%</div>
+            <div class="mt-1 text-xs uppercase tracking-wider text-muted">Tournament WR</div>
         </div>
         {% endif %}
     </div>
@@ -123,20 +134,23 @@
     {% endif %}
 </section>
 {% else %}
-<section class="profile-section">
-    <p>No profile generated yet. Use the CLI or generate a deck to create one.</p>
-    <form method="post" action="{{ url_for('main.generate_deck') }}">
+<section class="mt-10 rounded-2xl border border-line bg-panel p-6 text-center shadow-panel">
+    <p class="text-sm text-muted">No profile generated yet. Use the CLI or generate a deck to create one.</p>
+    <form method="post" action="{{ url_for('main.generate_deck') }}" class="mt-4">
         <input type="hidden" name="commander_id" value="{{ commander_id }}">
         <input type="hidden" name="budget" value="200">
         <input type="hidden" name="power" value="3">
-        <button type="submit">Generate Deck (creates profile)</button>
+        <button type="submit"
+                class="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
+            Generate Deck (creates profile)
+        </button>
     </form>
 </section>
 {% endif %}
 
 {% if edhrec %}
-<section class="edhrec-section">
-    <h2>EDHREC Data</h2>
+<section class="prose-content mt-10">
+    <h2 class="text-xl font-semibold">EDHREC Data</h2>
     {% if edhrec.themes %}
     <p><strong>Themes:</strong> {{ edhrec.themes|join(', ') }}</p>
     {% endif %}
@@ -145,19 +159,24 @@
     {% endif %}
     {% if edhrec.top_cards %}
     <h3>Top Cards</h3>
-    <table>
-        <thead>
-            <tr><th>Card</th><th>Inclusion %</th></tr>
-        </thead>
-        <tbody>
-            {% for tc in edhrec.top_cards[:20] %}
-            <tr>
-                <td>{{ tc.card_name if tc.card_name is defined else tc.name }}</td>
-                <td>{{ tc.inclusion_pct if tc.inclusion_pct is defined else '?' }}%</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="mt-2 overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                    <th class="px-4 py-3 font-medium">Card</th>
+                    <th class="px-4 py-3 font-medium">Inclusion %</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-line/60">
+                {% for tc in edhrec.top_cards[:20] %}
+                <tr class="transition-colors hover:bg-white/5">
+                    <td class="px-4 py-3">{{ tc.card_name if tc.card_name is defined else tc.name }}</td>
+                    <td class="px-4 py-3 text-muted">{{ tc.inclusion_pct if tc.inclusion_pct is defined else '?' }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     {% endif %}
 </section>
 {% endif %}

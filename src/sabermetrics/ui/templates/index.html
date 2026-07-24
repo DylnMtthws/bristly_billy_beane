@@ -2,55 +2,79 @@
 {% block title %}Sabermetrics - Home{% endblock %}
 
 {% block content %}
-<h1>Commander Search</h1>
+<div class="mb-8">
+    <h1 class="text-2xl font-bold tracking-tight">Commander Search</h1>
+    <p class="mt-1 text-sm text-muted">Find a commander, then build a budget-optimized 99.</p>
+</div>
 
-<form method="get" action="{{ url_for('main.index') }}" class="search-form">
-    <input type="text" name="q" value="{{ query }}" placeholder="Search for a commander..." autofocus>
-    <button type="submit">Search</button>
+<form method="get" action="{{ url_for('main.index') }}" class="mb-10 flex gap-2">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search for a commander…" autofocus
+           class="flex-1 rounded-xl border border-line bg-field px-4 py-2.5 text-sm placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30">
+    <button type="submit"
+            class="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
+        Search
+    </button>
 </form>
 
 {% if commanders %}
-<section class="results">
-    <h2>Commanders ({{ commanders|length }})</h2>
-    <div class="card-grid">
+<section class="mb-12">
+    <h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-muted">Commanders ({{ commanders|length }})</h2>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {% for cmdr in commanders %}
-        <div class="card-item">
-            <h3>{{ cmdr.name }}</h3>
-            <p class="type-line">{{ cmdr.type_line }}</p>
-            <p class="color-id">
+        <div class="card-item flex flex-col rounded-2xl border border-line bg-panel p-4 shadow-panel transition-colors hover:border-line/40 hover:bg-panel2">
+            <h3 class="text-base font-semibold text-body">{{ cmdr.name }}</h3>
+            <p class="mt-0.5 text-xs text-muted">{{ cmdr.type_line }}</p>
+            <div class="mt-2 flex items-center gap-1">
                 {% for c in cmdr.color_identity %}
                 <span class="mana mana-{{ c }}">{{ c }}</span>
                 {% endfor %}
-            </p>
-            <div class="card-actions">
-                <a href="{{ url_for('main.commander_profile', name=cmdr.name) }}">View Profile</a>
             </div>
 
-            <form method="post" action="{{ url_for('main.generate_deck') }}" class="inline-form">
+            <div class="mt-3 flex items-center justify-between border-t border-line/70 pt-3">
+                <a href="{{ url_for('main.commander_profile', name=cmdr.name) }}"
+                   class="text-sm font-medium text-brand hover:text-brand-hover">View Profile →</a>
+            </div>
+
+            <form method="post" action="{{ url_for('main.generate_deck') }}" class="inline-form mt-2">
                 <input type="hidden" name="commander_id" value="{{ cmdr.id }}">
-                <details>
-                    <summary>Build Deck</summary>
-                    <div class="form-group">
-                        <label>Deck Name</label>
-                        <input type="text" name="deck_name" placeholder="e.g., Combo Build, Budget Aggro">
+                <details class="group">
+                    <summary class="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-muted hover:text-body">
+                        <svg class="h-4 w-4 transition-transform group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor"><path d="M7 5l6 5-6 5V5z"/></svg>
+                        Build Deck
+                    </summary>
+                    <div class="mt-3 space-y-3">
+                        <label class="block">
+                            <span class="mb-1 block text-xs font-medium text-muted">Deck Name</span>
+                            <input type="text" name="deck_name" placeholder="e.g., Combo Build"
+                                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none">
+                        </label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-medium text-muted">Budget ($)</span>
+                                <input type="number" name="budget" value="200" step="10" min="10"
+                                       class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm focus:border-brand focus:outline-none">
+                            </label>
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-medium text-muted">Power (1-5)</span>
+                                <input type="number" name="power" value="3" min="1" max="5"
+                                       class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm focus:border-brand focus:outline-none">
+                            </label>
+                        </div>
+                        <label class="block">
+                            <span class="mb-1 block text-xs font-medium text-muted">Strategy</span>
+                            <input type="text" name="strategy" placeholder="e.g., aggro, combo"
+                                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none">
+                        </label>
+                        <label class="block">
+                            <span class="mb-1 block text-xs font-medium text-muted">Build Direction</span>
+                            <input type="text" name="user_intent" placeholder="Optional intent"
+                                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none">
+                        </label>
+                        <button type="submit"
+                                class="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
+                            Generate
+                        </button>
                     </div>
-                    <div class="form-group">
-                        <label>Budget ($)</label>
-                        <input type="number" name="budget" value="200" step="10" min="10">
-                    </div>
-                    <div class="form-group">
-                        <label>Power (1-5)</label>
-                        <input type="number" name="power" value="3" min="1" max="5">
-                    </div>
-                    <div class="form-group">
-                        <label>Strategy</label>
-                        <input type="text" name="strategy" placeholder="e.g., aggro, combo">
-                    </div>
-                    <div class="form-group">
-                        <label>Build Direction</label>
-                        <input type="text" name="user_intent" placeholder="Optional intent">
-                    </div>
-                    <button type="submit">Generate</button>
                 </details>
             </form>
         </div>
@@ -58,7 +82,7 @@
     </div>
 </section>
 {% elif query %}
-<p>No commanders found matching "{{ query }}".</p>
+<p class="text-sm text-muted">No commanders found matching "{{ query }}".</p>
 {% endif %}
 
 <!-- Loading overlay for deck generation -->
@@ -68,44 +92,53 @@
         <div class="loading-bar-track">
             <div class="loading-bar-fill" id="loading-bar"></div>
         </div>
-        <p class="loading-text" id="loading-text">Preparing...</p>
+        <p class="loading-text" id="loading-text">Preparing…</p>
     </div>
 </div>
 
 {% if recent_decks %}
-<section class="recent">
-    <h2>Recent Decks</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Commander</th>
-                <th>Deck Name</th>
-                <th>Budget</th>
-                <th>Power</th>
-                <th>Bracket</th>
-                <th>Generated</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for deck in recent_decks %}
-            <tr>
-                <td>{{ deck.commander_name }}</td>
-                <td>{{ deck.deck_name or '—' }}</td>
-                <td>${{ "%.0f"|format(deck.budget_usd or 0) }}</td>
-                <td>{{ deck.power_target }}</td>
-                <td>{{ deck.estimated_bracket }}</td>
-                <td>{{ deck.generated_at[:16] }}</td>
-                <td>
-                    <a href="{{ url_for('main.view_deck', deck_id=deck.id) }}">View</a>
-                    <form method="post" action="{{ url_for('main.delete_deck', deck_id=deck.id) }}" style="display:inline" onsubmit="return confirm('Delete this deck?')">
-                        <button type="submit" class="btn-delete">Delete</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<section>
+    <h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-muted">Recent Decks</h2>
+    <div class="overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                    <th class="px-4 py-3 font-medium">Commander</th>
+                    <th class="px-4 py-3 font-medium">Deck Name</th>
+                    <th class="px-4 py-3 font-medium">Budget</th>
+                    <th class="px-4 py-3 font-medium">Power</th>
+                    <th class="px-4 py-3 font-medium">Bracket</th>
+                    <th class="px-4 py-3 font-medium">Generated</th>
+                    <th class="px-4 py-3"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-line/60">
+                {% for deck in recent_decks %}
+                <tr class="transition-colors hover:bg-white/5">
+                    <td class="px-4 py-3 font-medium text-body">{{ deck.commander_name }}</td>
+                    <td class="px-4 py-3 text-muted">{{ deck.deck_name or '—' }}</td>
+                    <td class="px-4 py-3">${{ "%.0f"|format(deck.budget_usd or 0) }}</td>
+                    <td class="px-4 py-3">{{ deck.power_target }}</td>
+                    <td class="px-4 py-3">{{ deck.estimated_bracket }}</td>
+                    <td class="px-4 py-3 text-muted">{{ deck.generated_at[:16] }}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center justify-end gap-2">
+                            <a href="{{ url_for('main.view_deck', deck_id=deck.id) }}"
+                               class="font-medium text-brand hover:text-brand-hover">View</a>
+                            <form method="post" action="{{ url_for('main.delete_deck', deck_id=deck.id) }}"
+                                  onsubmit="return confirm('Delete this deck?')">
+                                <button type="submit"
+                                        class="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:border-brand hover:bg-brand hover:text-white">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </section>
 {% endif %}
 {% endblock %}
