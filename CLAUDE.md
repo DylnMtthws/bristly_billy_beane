@@ -11,9 +11,10 @@ This file is auto-loaded by Claude Code at the start of every session in this re
 ## Project Identity
 
 - **Name:** Sabermetrics for Magic
-- **Type:** Personal research tool, single-user, self-hosted
-- **Owner:** Dylan Matthews
-- **Purpose:** Generate Commander/EDH decklists optimized for budget, synergy, and strategic coherence using LLM-driven reasoning over multiple data sources.
+- **Type:** Multi-user, self-hosted web app — currently a **closed beta** (owner-invited testers). Was a single-user personal tool through the P8 build; pivoted 2026-07 (see ADR-015..018).
+- **Owner / Admin:** Dylan Matthews (sole admin; provisions all accounts)
+- **Purpose:** Generate Commander/EDH decklists using LLM-driven reasoning over multiple data sources, and — in the current phase — collect structured, per-card feedback from deck-literate players to measure and improve generator quality. Budget is one optimization input among several, no longer the defining goal.
+- **Phase 1 goal:** Invite trusted Magic players, let them generate decks and leave thumbs-up/down + comments per card (and a verdict per deck); the owner + Claude mine that feedback to improve the generator.
 - **Inspiration:** Sabermetric "moneyball" methodology in professional sports analytics — find cards with the best cost-to-impact ratio.
 
 </context>
@@ -28,11 +29,14 @@ These constraints are non-negotiable. Every code generation must respect them.
 
 ```yaml
 constraints:
-  user_count: 1
-  hosting: "self-hosted on Mac mini, no cloud infrastructure"
-  manual_data_entry: forbidden
-  human_in_the_loop: forbidden
-  data_acquisition: "fully automated via APIs and structured scrapes only"
+  users: "multi-user, admin-provisioned only — NO self-registration; the admin creates every account (ADR-015)"
+  hosting: "self-hosted on the Mac mini; the Flask app stays bound to 127.0.0.1 and is fronted by a Cloudflare Tunnel for public HTTPS — never bind 0.0.0.0 / expose the port directly (ADR-016)"
+  auth: "required on all non-public routes; passwords hashed (argon2); CSRF on every POST; hardened session cookies; login throttling; per-user authorization (a user must never see another user's decks/feedback)"
+  per_user_quota: "20 generated decks per calendar month (admin-overridable per user); resets on the 1st (ADR-017)"
+  cost_ceiling: "global monthly $ ceiling remains the ultimate hard stop across ALL users (settings.llm.monthly_cost_ceiling_usd)"
+  # Feedback-collection input (thumbs + comments from testers) is the point of Phase 1 and is NOT the forbidden 'manual data entry' below — that rule bars manual entry of the CARD/PRICE/METRIC corpus, which stays fully automated.
+  manual_data_entry: "forbidden for the card/price/metric corpus (still fully automated via APIs + structured scrapes)"
+  human_in_the_loop: "forbidden in the data-acquisition pipeline (does NOT apply to user feedback)"
   excluded_data_sources:
     - youtube_event_scraping  # Validation gap unacceptable
     - personal_pod_logging    # Breaks "no manual input" principle
@@ -42,8 +46,10 @@ constraints:
   per_deck_cost_target_usd: 0.15
   per_deck_cost_ceiling_usd: 0.50
   format_scope: "Commander (EDH) only"
-  ui_scope: "Desktop web UI on localhost only; no mobile"
+  ui_scope: "Desktop web UI; two portals — user-facing + admin (/admin, token-gated). No mobile."
 ```
+
+> **Charter note:** This project began as a strictly single-user, localhost-only, budget-focused tool (constraints `user_count: 1`, localhost-only, "no multi-user / no public hosting"). The owner deliberately pivoted it in 2026-07 to a multi-user feedback platform. The constraints above reflect the new charter; ADR-015..018 record the decision and rationale.
 
 </context>
 
@@ -242,8 +248,8 @@ Do not implement these. They have been considered and rejected:
 
 - YouTube event scraping (validation gap)
 - Personal pod game logging (manual input)
-- Multi-user support (out of scope)
-- Public hosting (out of scope)
+- ~~Multi-user support~~ — **now in scope** as of the 2026-07 pivot (ADR-015); admin-provisioned accounts only, no self-registration
+- ~~Public hosting~~ — **now in scope**, but only via Cloudflare Tunnel with the app bound to 127.0.0.1 (ADR-016); still no direct port exposure and no cloud-hosted compute/DB
 - Real-time gameplay assistance (architectural mismatch)
 - Mobile UI (out of scope)
 - Card image rendering (cosmetic, deferred)
@@ -356,6 +362,12 @@ These decisions are settled. Do not relitigate in code; refer here for the "why.
 | ADR-012 | Profile cache w/ set-version invalidation | Cheap relevance screening |
 | ADR-013 | mtgapi for rulings only, Scryfall for cards | Scryfall has bulk + prices; mtgapi has inline rulings |
 | ADR-014 | Rulings join by oracle_id | Rulings persist across reprints |
+| ADR-015 | Multi-user, admin-provisioned accounts (no self-register); one-time invite links | Owner controls exactly who can spend tokens; invite links avoid ever sharing/handling passwords |
+| ADR-016 | Internet exposure via Cloudflare Tunnel; app stays bound to 127.0.0.1 behind it | Keeps "self-hosted on the Mac mini", free, no port-forwarding; the app is never directly exposed — a real security win over binding 0.0.0.0 |
+| ADR-017 | Per-user quota: 20 decks/calendar month (admin-overridable) + retained global $ ceiling | Caps token spend per tester while a global hard stop bounds total cost across everyone |
+| ADR-018 | Structured per-card (thumbs+comment) and per-deck (verdict+comment) feedback loop | Phase-1 product goal: harvest deck-literate players' judgments to measure and improve generator quality; this feedback is user input, distinct from the still-automated data corpus |
+
+> **Charter pivot (2026-07):** ADR-015..018 supersede the original single-user / localhost-only / no-public-hosting posture. Where older ADRs or docs assume one user, the multi-user charter above wins.
 
 Full ADR text in `design.md` Section 11.
 
@@ -412,11 +424,13 @@ Track progress here. Update as phases complete.
 
 ```yaml
 status:
-  current_phase: "Complete"
-  completed_phases: ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"]
+  original_build: "Complete — P1..P8 (single-user generator). Refresh automation, launchd plists, JSON logging, Karsten mana analysis, deep statistical profiles."
+  current_initiative: "Multi-user + feedback beta (see ~/.claude/plans/imperative-giggling-pond.md; portal phases P0..P7)"
+  current_phase: "Portal-P0 — charter/ADR rewrite + multi-user schema migrations (DONE); deps added; live DB migrated"
+  portal_completed: ["P0"]
   in_progress: []
   blocked: []
-  notes: "All 8 phases complete. Refresh automation: nightly/weekly/monthly/quarterly scripts, launchd plists with install script, JSON structured logging with rotation. CLI refresh-set command wired. KB enriched with Karsten hypergeometric mana base analysis: source requirements table, per-archetype color targets, observed quality scores from Game Knights decks. Deep statistical analysis: card type distributions, 15 mechanic theme densities, 12 archetype-conditioned composition profiles, cross-feature Pearson correlations. 154 tests passing."
+  notes: "P0: added users/invite_tokens/favorite_commanders/favorite_decks/card_feedback/deck_feedback tables + commander_candidates view + generated_decks.owner_id/deck_name + cost_log.user_id/deck_id (idempotent ensure_portal_schema in scripts/setup_db.py). Deps: flask-login, flask-wtf, flask-limiter, argon2-cffi, waitress. NEXT: P1 auth core (Flask-Login, login/invite flow, create-admin CLI, session/CSRF hardening). NB: deck_name was a real schema gap (app used it; DDL lacked it) — now fixed. Existing generated_decks rows have owner_id=NULL until backfilled at admin creation."
 ```
 
 </context>

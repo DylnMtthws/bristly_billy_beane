@@ -9,8 +9,12 @@ description = "Sabermetrics for Magic — Commander/EDH deck optimization using 
 requires-python = ">=3.11"
 dependencies = [
     "anthropic",
+    "argon2-cffi",
     "click",
     "flask",
+    "flask-limiter",
+    "flask-login",
+    "flask-wtf",
     "httpx",
     "mtg-parser",
     "mtgsdk",
@@ -19,6 +23,7 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml",
     "sentence-transformers",
+    "waitress",
 ]
 
 [project.optional-dependencies]
