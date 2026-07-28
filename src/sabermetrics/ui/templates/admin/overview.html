@@ -2,27 +2,26 @@
 {% block title %}Overview{% endblock %}
 
 {% block content %}
-<h1>Admin Overview</h1>
+<h1 class="text-2xl font-bold tracking-tight">Admin Overview</h1>
+<p class="mt-1 text-sm text-muted">Provision and manage beta testers.</p>
 
-<div class="stats-grid">
-    <div class="stat">
-        <span class="stat-value">{{ total_users }}</span>
-        <span class="stat-label">Users</span>
+<div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+    {% set tiles = [
+        (total_users, 'Users'),
+        (counts.get('active', 0), 'Active'),
+        (counts.get('invited', 0), 'Invited'),
+        (counts.get('disabled', 0), 'Disabled'),
+    ] %}
+    {% for value, label in tiles %}
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">{{ value }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">{{ label }}</div>
     </div>
-    <div class="stat">
-        <span class="stat-value">{{ counts.get('active', 0) }}</span>
-        <span class="stat-label">Active</span>
-    </div>
-    <div class="stat">
-        <span class="stat-value">{{ counts.get('invited', 0) }}</span>
-        <span class="stat-label">Invited</span>
-    </div>
-    <div class="stat">
-        <span class="stat-value">{{ counts.get('disabled', 0) }}</span>
-        <span class="stat-label">Disabled</span>
-    </div>
+    {% endfor %}
 </div>
 
-<p><a href="{{ url_for('admin.users') }}">Manage users &rarr;</a></p>
-<p class="generated-note">Cost, feedback, and popularity analytics arrive in a later phase (P6).</p>
+<p class="mt-6">
+    <a href="{{ url_for('admin.users') }}" class="text-sm font-medium text-brand hover:text-brand-hover">Manage users &rarr;</a>
+</p>
+<p class="mt-2 text-xs text-muted">Cost, feedback, and popularity analytics arrive in a later phase (P6).</p>
 {% endblock %}

@@ -33,6 +33,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="min-h-screen bg-ink text-body font-sans antialiased flex flex-col">
+    {% block nav %}
     <nav class="sticky top-0 z-30 border-b border-line/70 bg-panel/80 backdrop-blur supports-[backdrop-filter]:bg-panel/60">
         <div class="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 h-14">
             <a href="{{ url_for('main.index') }}" class="flex items-center gap-2 font-bold tracking-tight text-body hover:text-white transition-colors">
@@ -67,6 +68,7 @@
             </div>
         </div>
     </nav>
+    {% endblock %}
 
     <main id="app-main" class="mx-auto w-full max-w-6xl flex-1 px-4 sm:px-6 py-8 transition-[max-width]">
         {% if error is defined and error %}
