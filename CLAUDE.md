@@ -426,11 +426,11 @@ Track progress here. Update as phases complete.
 status:
   original_build: "Complete — P1..P8 (single-user generator). Refresh automation, launchd plists, JSON logging, Karsten mana analysis, deep statistical profiles."
   current_initiative: "Multi-user + feedback beta (see ~/.claude/plans/imperative-giggling-pond.md; portal phases P0..P7)"
-  current_phase: "Portal-P1 — auth core (DONE)"
-  portal_completed: ["P0", "P1"]
+  current_phase: "Portal-P2 — admin portal: user management (DONE)"
+  portal_completed: ["P0", "P1", "P2"]
   in_progress: []
   blocked: []
-  notes: "P0: users/invite_tokens/favorite_commanders/favorite_decks/card_feedback/deck_feedback tables + commander_candidates view + generated_decks.owner_id/deck_name + cost_log.user_id/deck_id (idempotent ensure_portal_schema in scripts/setup_db.py). P1: Flask-Login auth — UsersRepo/InviteRepo + argon2 hashing in db.py; auth blueprint (ui/auth.py) with /login /logout /invite/<token>; CSRF (Flask-WTF), login rate-limit (Flask-Limiter), hardened session cookies, ProxyFix, waitress serving (ui/app.py + ui/extensions.py); main routes gated by login (before_request); create-admin + invite-user CLI. Admin role + admin_required decorator exist but NO admin routes yet (P2). Run `sabermetrics create-admin --email you@x` to bootstrap (also backfills owner-less decks). Local http preview: set SABER_COOKIE_SECURE=0. NEXT: P2 admin portal (user mgmt: Add User→invite link, enable/disable, quota override)."
+  notes: "P0: portal tables + commander_candidates view + column adds (ensure_portal_schema in scripts/setup_db.py). P1: Flask-Login auth (ui/auth.py, ui/extensions.py) — UsersRepo/InviteRepo + argon2 in db.py; /login /logout /invite/<token>; CSRF, login rate-limit, hardened cookies, ProxyFix, waitress; main routes login-gated; create-admin + invite-user CLI. P2: admin portal (ui/admin_routes.py) blueprint at /admin gated by before_request (must be logged-in admin — role-based, NOT a separate env token); routes: overview, users list, users/create (→ one-time invite link), users/<id>/status (enable/disable, can't self-disable), users/<id>/quota (override, blank=default), users/<id>/reinvite; admin_base.html + admin/overview.html + admin/users.html; base nav shows Admin+Logout for admins. Bootstrap: `sabermetrics create-admin --email you@x`. Local http preview: SABER_COOKIE_SECURE=0. NEXT: P3 user portal restructure (home dashboard, Explore+filters over commander_candidates, favorites, owner-scoped decks, profile) — this is where the Tailwind restyle from PR #11 should be reconciled/merged."
 ```
 
 </context>

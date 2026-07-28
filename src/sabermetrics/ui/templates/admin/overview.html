@@ -1,0 +1,28 @@
+{% extends "admin_base.html" %}
+{% block title %}Overview{% endblock %}
+
+{% block content %}
+<h1>Admin Overview</h1>
+
+<div class="stats-grid">
+    <div class="stat">
+        <span class="stat-value">{{ total_users }}</span>
+        <span class="stat-label">Users</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{{ counts.get('active', 0) }}</span>
+        <span class="stat-label">Active</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{{ counts.get('invited', 0) }}</span>
+        <span class="stat-label">Invited</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{{ counts.get('disabled', 0) }}</span>
+        <span class="stat-label">Disabled</span>
+    </div>
+</div>
+
+<p><a href="{{ url_for('admin.users') }}">Manage users &rarr;</a></p>
+<p class="generated-note">Cost, feedback, and popularity analytics arrive in a later phase (P6).</p>
+{% endblock %}

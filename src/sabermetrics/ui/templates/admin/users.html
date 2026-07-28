@@ -1,0 +1,100 @@
+{% extends "admin_base.html" %}
+{% block title %}Users{% endblock %}
+
+{% block content %}
+<h1>Users</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+    {% if category == 'invite' %}
+    <div class="alert" style="background:var(--bg-input);border:1px solid var(--border);word-break:break-all;">
+        <strong>Invite link:</strong> <code>{{ message }}</code>
+    </div>
+    {% else %}
+    <div class="alert {% if category == 'error' %}alert-error{% endif %}">{{ message }}</div>
+    {% endif %}
+  {% endfor %}
+{% endwith %}
+
+<details open>
+    <summary>Add User</summary>
+    <form method="post" action="{{ url_for('admin.create_user') }}" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label>Email (login identifier)</label>
+            <input type="email" name="email" required placeholder="friend@example.com">
+        </div>
+        <div class="form-group">
+            <label>Display name (optional)</label>
+            <input type="text" name="display_name" placeholder="They can set this themselves">
+        </div>
+        <div class="form-group">
+            <label>Role</label>
+            <select name="role" class="group-select">
+                <option value="user" selected>User</option>
+                <option value="admin">Admin</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Monthly deck quota (blank = default)</label>
+            <input type="number" name="monthly_deck_quota" min="0" placeholder="20">
+        </div>
+        <button type="submit">Create &amp; generate invite</button>
+    </form>
+</details>
+
+<table>
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Quota</th>
+            <th>Last login</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td>{{ u.email }}</td>
+            <td>{{ u.display_name or '—' }}</td>
+            <td>{{ u.role }}</td>
+            <td>{{ u.status }}</td>
+            <td>
+                <form method="post" action="{{ url_for('admin.set_quota', user_id=u.id) }}" style="display:flex;gap:0.25rem;align-items:center">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="number" name="monthly_deck_quota" min="0"
+                           value="{{ u.monthly_deck_quota if u.monthly_deck_quota is not none else '' }}"
+                           placeholder="default" style="width:5rem">
+                    <button type="submit" class="btn-delete">Set</button>
+                </form>
+            </td>
+            <td>{{ (u.last_login_at or '')[:16] or '—' }}</td>
+            <td>
+                {% if u.status == 'active' %}
+                <form method="post" action="{{ url_for('admin.set_status', user_id=u.id) }}" style="display:inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="disabled">
+                    <button type="submit" class="btn-delete">Disable</button>
+                </form>
+                {% else %}
+                <form method="post" action="{{ url_for('admin.set_status', user_id=u.id) }}" style="display:inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="status" value="active">
+                    <button type="submit" class="btn-delete">Enable</button>
+                </form>
+                {% endif %}
+                {% if u.status != 'active' %}
+                <form method="post" action="{{ url_for('admin.reinvite', user_id=u.id) }}" style="display:inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn-delete">Re-invite</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
