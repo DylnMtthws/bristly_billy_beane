@@ -15,11 +15,27 @@ import sqlite3
 from pathlib import Path
 
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user
 
 from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
 
 bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
+
+
+@bp.before_request
+def _require_login():
+    """Gate every user-portal route behind an authenticated, active session.
+
+    Public auth routes (login/logout/invite) live in the ``auth`` blueprint and
+    are unaffected. Static assets are served by the app's own static endpoint,
+    also outside this blueprint.
+    """
+    if not current_user.is_authenticated:
+        from sabermetrics.ui.auth import login_manager
+
+        return login_manager.unauthorized()
+    return None
 
 
 def _db_path() -> Path:

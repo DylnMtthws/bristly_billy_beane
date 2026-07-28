@@ -200,6 +200,90 @@ def serve(port: int, host: str) -> None:
     run_server(host=host, port=port, db_path=db_path)
 
 
+@cli.command("create-admin")
+@click.option("--email", required=True, help="Admin email (login identifier).")
+@click.option("--display-name", default=None, help="Display name (defaults to email).")
+@click.password_option(help="Admin password (min 8 chars; prompted if omitted).")
+def create_admin(email: str, display_name: str | None, password: str) -> None:
+    """Create (or upgrade) the admin account — the sole way to bootstrap access.
+
+    There is no self-registration; this seeds the first account. Also backfills
+    any owner-less generated decks to this admin.
+    """
+    from sabermetrics import db
+
+    if len(password) < 8:
+        raise click.ClickException("Password must be at least 8 characters.")
+
+    db_path = _default_db_path()
+    users = db.UsersRepo(db_path)
+    pw_hash = db.hash_password(password)
+
+    existing = users.get_by_email(email)
+    if existing:
+        users.set_password(existing["id"], pw_hash)
+        users.set_status(existing["id"], "active")
+        with db.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE users SET role = 'admin' WHERE id = ?", (existing["id"],)
+            )
+            conn.commit()
+        user_id = existing["id"]
+        click.echo(f"Updated existing account {email} → admin (active).")
+    else:
+        user_id = users.create(
+            email=email,
+            display_name=display_name or email,
+            role="admin",
+            status="active",
+            password_hash=pw_hash,
+        )
+        click.echo(f"Created admin {email}.")
+
+    backfilled = users.backfill_deck_owner(user_id)
+    if backfilled:
+        click.echo(f"Backfilled {backfilled} owner-less deck(s) to this admin.")
+
+
+@cli.command("invite-user")
+@click.option("--email", required=True, help="Invitee email.")
+@click.option("--display-name", default=None, help="Optional display name.")
+@click.option("--admin", "as_admin", is_flag=True, help="Grant the admin role.")
+@click.option("--ttl-days", type=int, default=7, help="Invite link lifetime in days.")
+@click.option(
+    "--base-url",
+    default="http://127.0.0.1:5000",
+    help="Base URL used to build the invite link.",
+)
+def invite_user(
+    email: str,
+    display_name: str | None,
+    as_admin: bool,
+    ttl_days: int,
+    base_url: str,
+) -> None:
+    """Create an invited (inactive) account and print a one-time invite link."""
+    from sabermetrics import db
+
+    db_path = _default_db_path()
+    users = db.UsersRepo(db_path)
+    invites = db.InviteRepo(db_path)
+
+    if users.get_by_email(email):
+        raise click.ClickException(f"A user with email {email} already exists.")
+
+    user_id = users.create(
+        email=email,
+        display_name=display_name,
+        role="admin" if as_admin else "user",
+        status="invited",
+    )
+    token = invites.create(user_id, ttl_days=ttl_days)
+    link = f"{base_url.rstrip('/')}/invite/{token}"
+    click.echo(f"Invited {email}. Send them this one-time link (expires in {ttl_days}d):")
+    click.echo(f"  {link}")
+
+
 @cli.command()
 @click.option(
     "--period",

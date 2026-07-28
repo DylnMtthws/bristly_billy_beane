@@ -426,11 +426,11 @@ Track progress here. Update as phases complete.
 status:
   original_build: "Complete — P1..P8 (single-user generator). Refresh automation, launchd plists, JSON logging, Karsten mana analysis, deep statistical profiles."
   current_initiative: "Multi-user + feedback beta (see ~/.claude/plans/imperative-giggling-pond.md; portal phases P0..P7)"
-  current_phase: "Portal-P0 — charter/ADR rewrite + multi-user schema migrations (DONE); deps added; live DB migrated"
-  portal_completed: ["P0"]
+  current_phase: "Portal-P1 — auth core (DONE)"
+  portal_completed: ["P0", "P1"]
   in_progress: []
   blocked: []
-  notes: "P0: added users/invite_tokens/favorite_commanders/favorite_decks/card_feedback/deck_feedback tables + commander_candidates view + generated_decks.owner_id/deck_name + cost_log.user_id/deck_id (idempotent ensure_portal_schema in scripts/setup_db.py). Deps: flask-login, flask-wtf, flask-limiter, argon2-cffi, waitress. NEXT: P1 auth core (Flask-Login, login/invite flow, create-admin CLI, session/CSRF hardening). NB: deck_name was a real schema gap (app used it; DDL lacked it) — now fixed. Existing generated_decks rows have owner_id=NULL until backfilled at admin creation."
+  notes: "P0: users/invite_tokens/favorite_commanders/favorite_decks/card_feedback/deck_feedback tables + commander_candidates view + generated_decks.owner_id/deck_name + cost_log.user_id/deck_id (idempotent ensure_portal_schema in scripts/setup_db.py). P1: Flask-Login auth — UsersRepo/InviteRepo + argon2 hashing in db.py; auth blueprint (ui/auth.py) with /login /logout /invite/<token>; CSRF (Flask-WTF), login rate-limit (Flask-Limiter), hardened session cookies, ProxyFix, waitress serving (ui/app.py + ui/extensions.py); main routes gated by login (before_request); create-admin + invite-user CLI. Admin role + admin_required decorator exist but NO admin routes yet (P2). Run `sabermetrics create-admin --email you@x` to bootstrap (also backfills owner-less decks). Local http preview: set SABER_COOKIE_SECURE=0. NEXT: P2 admin portal (user mgmt: Add User→invite link, enable/disable, quota override)."
 ```
 
 </context>

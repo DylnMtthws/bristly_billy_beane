@@ -36,6 +36,7 @@
             </div>
 
             <form method="post" action="{{ url_for('main.generate_deck') }}" class="inline-form mt-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="commander_id" value="{{ cmdr.id }}">
                 <details class="group">
                     <summary class="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-muted hover:text-body">
@@ -127,6 +128,7 @@
                                class="font-medium text-brand hover:text-brand-hover">View</a>
                             <form method="post" action="{{ url_for('main.delete_deck', deck_id=deck.id) }}"
                                   onsubmit="return confirm('Delete this deck?')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit"
                                         class="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:border-brand hover:bg-brand hover:text-white">
                                     Delete

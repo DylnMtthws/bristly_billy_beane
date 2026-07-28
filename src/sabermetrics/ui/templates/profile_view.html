@@ -137,6 +137,7 @@
 <section class="mt-10 rounded-2xl border border-line bg-panel p-6 text-center shadow-panel">
     <p class="text-sm text-muted">No profile generated yet. Use the CLI or generate a deck to create one.</p>
     <form method="post" action="{{ url_for('main.generate_deck') }}" class="mt-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="commander_id" value="{{ commander_id }}">
         <input type="hidden" name="budget" value="200">
         <input type="hidden" name="power" value="3">

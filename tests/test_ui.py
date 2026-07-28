@@ -13,17 +13,55 @@ DB_PATH = Path("data/sabermetrics.db")
 HAS_DB = DB_PATH.exists()
 
 
+TEST_USER_EMAIL = "pytest-admin@local"
+
+
 @pytest.fixture
 def app():
-    """Create Flask test app."""
+    """Create Flask test app with CSRF + rate limiting disabled for testing."""
     app = create_app(DB_PATH)
-    app.config["TESTING"] = True
+    app.config.update(
+        TESTING=True,
+        WTF_CSRF_ENABLED=False,
+        RATELIMIT_ENABLED=False,
+        SESSION_COOKIE_SECURE=False,
+    )
     return app
 
 
 @pytest.fixture
-def client(app):
-    """Create Flask test client."""
+def test_user():
+    """Seed an active admin test user in the DB; remove it afterwards."""
+    from sabermetrics import db
+
+    repo = db.UsersRepo(DB_PATH)
+    existing = repo.get_by_email(TEST_USER_EMAIL)
+    uid = existing["id"] if existing else repo.create(
+        email=TEST_USER_EMAIL,
+        display_name="Pytest Admin",
+        role="admin",
+        status="active",
+        password_hash=db.hash_password("test-password-123"),
+    )
+    yield uid
+    with db.connect(DB_PATH) as conn:
+        conn.execute("DELETE FROM users WHERE email = ?", (TEST_USER_EMAIL,))
+        conn.commit()
+
+
+@pytest.fixture
+def client(app, test_user):
+    """Create an authenticated Flask test client (logged in as the test user)."""
+    c = app.test_client()
+    with c.session_transaction() as sess:
+        sess["_user_id"] = test_user
+        sess["_fresh"] = True
+    return c
+
+
+@pytest.fixture
+def anon_client(app):
+    """Create an unauthenticated test client."""
     return app.test_client()
 
 
@@ -46,6 +84,13 @@ def test_app_binds_localhost_only() -> None:
 
 
 # --- Route tests ---
+
+
+def test_index_requires_login(anon_client) -> None:
+    """Unauthenticated home request redirects to the login page."""
+    response = anon_client.get("/")
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
 
 
 @pytest.mark.skipif(not HAS_DB, reason="No database available")

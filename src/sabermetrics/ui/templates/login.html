@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Sign In{% endblock %}
+
+{% block content %}
+<h1>Sign In</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ 'error' if category == 'error' else category }}">{{ message }}</div>
+  {% endfor %}
+{% endwith %}
+
+<form method="post" action="{{ url_for('auth.login', next=request.args.get('next')) }}" class="auth-form">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+        <label>Email</label>
+        {{ form.email(type="email", placeholder="you@example.com", autofocus=true) }}
+    </div>
+    <div class="form-group">
+        <label>Password</label>
+        {{ form.password(placeholder="••••••••") }}
+    </div>
+    <button type="submit">Sign In</button>
+</form>
+
+<p class="auth-note">Accounts are invite-only. Ask the admin for an invite link.</p>
+{% endblock %}
