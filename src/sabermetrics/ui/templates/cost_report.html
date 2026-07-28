@@ -2,91 +2,100 @@
 {% block title %}Cost Report{% endblock %}
 
 {% block content %}
-<h1>Cost &amp; Usage Report</h1>
+<div class="mb-8">
+    <h1 class="text-2xl font-bold tracking-tight">Cost &amp; Usage Report</h1>
+    <p class="mt-1 text-sm text-muted">LLM spend over the trailing 30 days.</p>
+</div>
 
-<div class="stats-grid">
-    <div class="stat">
-        <span class="stat-value">${{ "%.4f"|format(total_30d) }}</span>
-        <span class="stat-label">Last 30 Days</span>
+<div class="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">${{ "%.4f"|format(total_30d) }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Last 30 Days</div>
     </div>
-    <div class="stat">
-        <span class="stat-value">${{ "%.2f"|format(annual_projection) }}</span>
-        <span class="stat-label">Annual Projection</span>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">${{ "%.2f"|format(annual_projection) }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Annual Projection</div>
     </div>
-    <div class="stat">
-        <span class="stat-value">${{ "%.2f"|format(ceiling) }}</span>
-        <span class="stat-label">Monthly Ceiling</span>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">${{ "%.2f"|format(ceiling) }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Monthly Ceiling</div>
     </div>
-    <div class="stat {% if total_30d > ceiling %}stat-warning{% endif %}">
-        <span class="stat-value">{{ "%.0f"|format(total_30d / ceiling * 100 if ceiling > 0 else 0) }}%</span>
-        <span class="stat-label">Ceiling Used</span>
+    <div class="rounded-2xl border p-4 shadow-panel {% if total_30d > ceiling %}border-amber-500/40 bg-amber-500/10{% else %}border-line bg-panel{% endif %}">
+        <div class="text-2xl font-bold {% if total_30d > ceiling %}text-amber-400{% else %}text-brand{% endif %}">
+            {{ "%.0f"|format(total_30d / ceiling * 100 if ceiling > 0 else 0) }}%
+        </div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Ceiling Used</div>
     </div>
 </div>
 
-<div class="stats-grid">
-    <div class="stat">
-        <span class="stat-value">{{ deck_count }}</span>
-        <span class="stat-label">Decks Generated</span>
+<div class="mb-10 grid grid-cols-2 gap-4 sm:max-w-md">
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">{{ deck_count }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Decks Generated</div>
     </div>
-    <div class="stat">
-        <span class="stat-value">{{ profile_count }}</span>
-        <span class="stat-label">Profiles Cached</span>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">{{ profile_count }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Profiles Cached</div>
     </div>
 </div>
 
 {% if by_type %}
-<section>
-    <h2>Spend by Call Type</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Call Type</th>
-                <th>Calls</th>
-                <th>Cost</th>
-                <th>Input Tokens</th>
-                <th>Output Tokens</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in by_type %}
-            <tr>
-                <td>{{ row.call_type }}</td>
-                <td>{{ row.call_count }}</td>
-                <td>${{ "%.4f"|format(row.total_cost) }}</td>
-                <td>{{ "{:,}".format(row.total_input|int) }}</td>
-                <td>{{ "{:,}".format(row.total_output|int) }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<section class="mb-10">
+    <h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-muted">Spend by Call Type</h2>
+    <div class="overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                    <th class="px-4 py-3 font-medium">Call Type</th>
+                    <th class="px-4 py-3 font-medium">Calls</th>
+                    <th class="px-4 py-3 font-medium">Cost</th>
+                    <th class="px-4 py-3 font-medium">Input Tokens</th>
+                    <th class="px-4 py-3 font-medium">Output Tokens</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-line/60">
+                {% for row in by_type %}
+                <tr class="transition-colors hover:bg-white/5">
+                    <td class="px-4 py-3 font-medium text-body">{{ row.call_type }}</td>
+                    <td class="px-4 py-3">{{ row.call_count }}</td>
+                    <td class="px-4 py-3">${{ "%.4f"|format(row.total_cost) }}</td>
+                    <td class="px-4 py-3 text-muted">{{ "{:,}".format(row.total_input|int) }}</td>
+                    <td class="px-4 py-3 text-muted">{{ "{:,}".format(row.total_output|int) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </section>
 {% endif %}
 
 {% if recent_calls %}
 <section>
-    <h2>Recent API Calls</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Type</th>
-                <th>Model</th>
-                <th>Cost</th>
-                <th>Tokens (in/out)</th>
-                <th>Time</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for call in recent_calls %}
-            <tr>
-                <td>{{ call.call_type }}</td>
-                <td>{{ call.model }}</td>
-                <td>${{ "%.4f"|format(call.cost_usd) }}</td>
-                <td>{{ call.input_tokens }} / {{ call.output_tokens }}</td>
-                <td>{{ call.timestamp[:16] }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-muted">Recent API Calls</h2>
+    <div class="overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                    <th class="px-4 py-3 font-medium">Type</th>
+                    <th class="px-4 py-3 font-medium">Model</th>
+                    <th class="px-4 py-3 font-medium">Cost</th>
+                    <th class="px-4 py-3 font-medium">Tokens (in/out)</th>
+                    <th class="px-4 py-3 font-medium">Time</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-line/60">
+                {% for call in recent_calls %}
+                <tr class="transition-colors hover:bg-white/5">
+                    <td class="px-4 py-3 font-medium text-body">{{ call.call_type }}</td>
+                    <td class="px-4 py-3 text-muted">{{ call.model }}</td>
+                    <td class="px-4 py-3">${{ "%.4f"|format(call.cost_usd) }}</td>
+                    <td class="px-4 py-3 text-muted">{{ call.input_tokens }} / {{ call.output_tokens }}</td>
+                    <td class="px-4 py-3 text-muted">{{ call.timestamp[:16] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </section>
 {% endif %}
 {% endblock %}

@@ -1,695 +1,200 @@
-/* Sabermetrics - Minimal CSS */
-/* Clean and comprehensible, per project guidelines */
+/* Sabermetrics — supplemental styles.
+ *
+ * Layout, spacing, and structural styling live in Tailwind utility classes
+ * directly in the templates. This file carries only:
+ *   1. Base typography for prose that Tailwind's Preflight resets away
+ *      (raw <h*>, <p>, <ul> inside content bodies).
+ *   2. Mana pips.
+ *   3. The JS-generated deck views (stack / spoiler / hover overlay) whose
+ *      class names are hard-coded in deck_view.html.
+ *   4. The deck-generation loading overlay.
+ * Palette mirrors tailwind.config in base.html so JS-built DOM stays on-theme.
+ */
 
 :root {
-    --bg: #1a1a2e;
-    --bg-card: #16213e;
-    --bg-input: #0f3460;
-    --text: #e0e0e0;
-    --text-muted: #a0a0b0;
-    --accent: #e94560;
-    --accent-hover: #ff6b81;
-    --border: #2a2a4a;
-    --success: #4caf50;
-    --warning: #ff9800;
+    --ink: #0b1020;
+    --panel: #151b30;
+    --panel2: #1b233d;
+    --field: #1e2740;
+    --line: #2a3350;
+    --body: #e6e8f0;
+    --muted: #9aa3c0;
+    --brand: #e94560;
+    --brand-hover: #ff6b81;
 }
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
-    min-height: 100vh;
-}
-
-/* Navigation */
-.nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 2rem;
-    background: var(--bg-card);
-    border-bottom: 1px solid var(--border);
-}
-
-.nav-brand {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: var(--accent);
-    text-decoration: none;
-}
-
-.nav-links a {
-    color: var(--text-muted);
-    text-decoration: none;
-    margin-left: 1.5rem;
-    font-size: 0.9rem;
-}
-
-.nav-links a:hover {
-    color: var(--accent-hover);
-}
-
-/* Container */
-.container {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 2rem;
-}
-
-/* Typography */
-h1 { font-size: 1.8rem; margin-bottom: 1rem; color: var(--text); }
-h2 { font-size: 1.4rem; margin: 1.5rem 0 0.75rem; color: var(--text); }
-h3 { font-size: 1.1rem; margin: 1rem 0 0.5rem; color: var(--text-muted); }
-h4 { font-size: 1rem; margin: 0.75rem 0 0.5rem; color: var(--text-muted); }
-
-/* Search form */
-.search-form {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.search-form input[type="text"] {
-    flex: 1;
-    padding: 0.6rem 1rem;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-size: 1rem;
-}
-
-/* Buttons */
-button, .btn {
-    padding: 0.6rem 1.2rem;
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-
-button:hover, .btn:hover {
-    background: var(--accent-hover);
-}
-
-/* Cards grid */
-.card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1rem;
-}
-
-.card-item {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1rem;
-}
-
-.card-item h3 {
-    color: var(--text);
-    margin-top: 0;
-}
-
-.type-line {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.card-actions a {
-    color: var(--accent);
-    text-decoration: none;
-    font-size: 0.9rem;
-}
-
-.card-actions a:hover {
-    color: var(--accent-hover);
-}
-
-/* Mana symbols */
-.mana {
-    display: inline-block;
-    width: 1.4rem;
-    height: 1.4rem;
-    line-height: 1.4rem;
-    text-align: center;
-    border-radius: 50%;
-    font-size: 0.75rem;
-    font-weight: 700;
-    margin-right: 2px;
-}
-
-.mana-W { background: #f9faf4; color: #333; }
-.mana-U { background: #0e68ab; color: white; }
-.mana-B { background: #150b00; color: #ccc; border: 1px solid #444; }
-.mana-R { background: #d3202a; color: white; }
-.mana-G { background: #00733e; color: white; }
-
-/* Stats grid */
-.stats-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    margin: 1rem 0;
-}
-
-.stat {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.75rem 1.25rem;
-    text-align: center;
-    min-width: 100px;
-}
-
-.stat-value {
-    display: block;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--accent);
-}
-
-.stat-label {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-top: 0.25rem;
-}
-
-.stat-warning .stat-value {
-    color: var(--warning);
-}
-
-/* Tables */
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0.5rem 0;
-}
-
-th, td {
-    padding: 0.5rem 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-}
-
-th {
-    color: var(--text-muted);
-    font-size: 0.85rem;
+/* --- Prose recovery (Preflight strips these) --- */
+.prose-content h2 {
+    font-size: 1.25rem;
     font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 1.75rem 0 0.75rem;
 }
-
-td {
-    font-size: 0.9rem;
+.prose-content h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--body);
+    margin: 1.25rem 0 0.5rem;
 }
-
-tr:hover {
-    background: rgba(233, 69, 96, 0.05);
-}
-
-/* View toggle tabs */
-.view-tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin: 1rem 0;
-}
-
-.tab-btn {
-    padding: 0.4rem 1rem;
-    background: var(--bg-input);
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-
-.tab-btn.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-}
-
-.tab-btn:hover:not(.active) {
-    background: var(--border);
-    color: var(--text);
-}
-
-/* Card table */
-.card-table .reasoning {
-    max-width: 300px;
+.prose-content h4 {
     font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-/* Details / Accordion */
-details {
-    margin: 0.5rem 0;
-}
-
-summary {
-    cursor: pointer;
     font-weight: 600;
-    color: var(--text);
-    padding: 0.5rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 1rem 0 0.4rem;
 }
-
-summary:hover {
-    color: var(--accent);
+.prose-content p {
+    color: #cfd4e6;
+    margin: 0.5rem 0;
+    line-height: 1.65;
 }
-
-/* Forms */
-.form-group {
+.prose-content ul {
+    list-style: disc;
+    padding-left: 1.25rem;
     margin: 0.5rem 0;
 }
-
-.form-group label {
-    display: block;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    margin-bottom: 0.25rem;
+.prose-content li {
+    margin: 0.35rem 0;
+    line-height: 1.6;
+    color: #cfd4e6;
 }
-
-.form-group input[type="text"],
-.form-group input[type="number"] {
-    width: 100%;
-    padding: 0.4rem 0.6rem;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-size: 0.9rem;
+.prose-content a {
+    color: var(--brand);
+    text-decoration: none;
 }
-
-/* Inline form */
-.inline-form {
-    margin-top: 0.5rem;
+.prose-content a:hover {
+    color: var(--brand-hover);
 }
-
-/* Oracle text */
-.oracle-text {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.75rem;
-    font-style: italic;
-    white-space: pre-wrap;
-    margin: 0.5rem 0;
-}
-
-/* Card image */
-.card-image {
-    max-width: 250px;
-    border-radius: 10px;
-    margin: 0.5rem 0;
-}
-
-/* Result cards (reference search) */
-.result-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1rem;
-    margin: 0.75rem 0;
-}
-
-.result-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-}
-
-.result-source {
-    font-size: 0.85rem;
-    color: var(--accent);
+.prose-content strong {
+    color: var(--body);
     font-weight: 600;
 }
 
-.result-score {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.result-content {
-    font-size: 0.9rem;
-    white-space: pre-wrap;
-    line-height: 1.5;
-}
-
-/* Mana curve (legacy CSS bars) */
-.mana-curve {
-    display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    height: 120px;
-    margin: 0.5rem 0;
-}
-
-.curve-bar {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
+/* --- Mana pips --- */
+.mana {
+    display: inline-flex;
     align-items: center;
-    height: 100%;
-}
-
-.curve-bar .bar {
-    background: var(--accent);
-    width: 100%;
-    border-radius: 2px 2px 0 0;
-    display: flex;
-    align-items: flex-start;
     justify-content: center;
-    font-size: 0.7rem;
-    padding-top: 2px;
-    min-height: 1px;
-}
-
-.cmc-label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-top: 4px;
-}
-
-/* Dashboard metrics row */
-.dashboard-metrics {
-    display: flex;
-    gap: 1rem;
-    margin: 1.5rem 0;
-}
-
-.metric-card {
-    flex: 1;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1rem;
-    text-align: center;
-}
-
-.metric-value {
-    display: block;
-    font-size: 1.8rem;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
     font-weight: 700;
-    color: var(--accent);
+    margin-right: 3px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.mana-W { background: #f6f3e6; color: #2b2b2b; }
+.mana-U { background: #2371b8; color: #fff; }
+.mana-B { background: #1c1620; color: #d8d0dc; box-shadow: inset 0 0 0 1px #4a4450; }
+.mana-R { background: #d3202a; color: #fff; }
+.mana-G { background: #1a7d4d; color: #fff; }
+.mana-C { background: #b9b4ce; color: #2b2b2b; }
+
+/* --- Deck view: widened container for visual modes --- */
+#app-main.wide { max-width: 1400px; }
+
+/* --- Deck view: display/group toggle buttons (state toggled in JS) --- */
+.tab-btn {
+    padding: 0.4rem 0.9rem;
+    background: var(--field);
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 9999px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 500;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.tab-btn:hover:not(.active) { background: var(--panel2); color: var(--body); }
+.tab-btn.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
 }
 
-.metric-label {
-    display: block;
+/* --- Deck view: static card tables (By Type / By Role) --- */
+.card-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.card-table th {
+    text-align: left;
+    padding: 0.4rem 0.6rem;
     font-size: 0.7rem;
-    color: var(--text-muted);
-    margin-top: 0.25rem;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
 }
-
-/* Chart grid */
-.chart-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin: 1rem 0;
-}
-
-.chart-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1rem;
-}
-
-.chart-card h3 {
-    margin: 0 0 0.5rem;
-    color: var(--text);
-    font-size: 1rem;
-}
-
-.chart-full {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1rem;
-    margin: 1rem 0;
-}
-
-.chart-full h3 {
-    margin: 0 0 0.5rem;
-    color: var(--text);
-    font-size: 1rem;
-}
-
-/* Collapsible deck sections */
-.deck-section {
-    margin: 1.5rem 0;
-}
-
-.deck-section > summary {
-    font-size: 1.3rem;
-    padding: 0.75rem 0;
-}
-
-/* Delete button */
-.btn-delete {
-    background: transparent;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    padding: 0.2rem 0.6rem;
-    font-size: 0.8rem;
-    margin-left: 0.5rem;
-}
-
-.btn-delete:hover {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-}
-
-/* Alerts */
-.alert {
-    padding: 0.75rem 1rem;
-    border-radius: 4px;
-    margin-bottom: 1rem;
-}
-
-.alert-error {
-    background: rgba(233, 69, 96, 0.15);
-    border: 1px solid var(--accent);
-    color: var(--accent);
-}
-
-/* Generated note */
-.generated-note {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-/* Key cards */
-.key-cards {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-/* Profile section */
-.profile-section {
-    margin: 1.5rem 0;
-}
-
-/* Footer */
-.footer {
-    text-align: center;
-    padding: 2rem;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    border-top: 1px solid var(--border);
-    margin-top: 3rem;
-}
-
-/* Links */
-a {
-    color: var(--accent);
-}
-
-a:hover {
-    color: var(--accent-hover);
-}
-
-/* Loading overlay */
-.loading-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(10, 10, 20, 0.92);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-}
-
-.loading-content {
-    text-align: center;
-    width: 400px;
-    max-width: 90vw;
-}
-
-.loading-commander {
-    font-size: 1.4rem;
-    color: var(--text);
-    margin-bottom: 1.5rem;
-}
-
-.loading-bar-track {
-    width: 100%;
-    height: 12px;
-    background: var(--bg-input);
-    border-radius: 6px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-}
-
-.loading-bar-fill {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
-    border-radius: 6px;
-    transition: width 0.5s ease-out;
-}
-
-.loading-text {
-    margin-top: 1.25rem;
-    font-size: 0.95rem;
-    color: var(--text-muted);
-    font-style: italic;
-    min-height: 1.6em;
-}
-
-/* --- View toolbar --- */
-.view-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 1rem 0;
-    flex-wrap: wrap;
-}
-
-.view-toolbar .toolbar-spacer {
-    flex: 1;
-}
-
-.view-toolbar .toolbar-divider {
-    width: 1px;
-    height: 24px;
-    background: var(--border);
-    margin: 0 0.5rem;
-}
-
-.view-toolbar .toolbar-label {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-right: 0.25rem;
-}
-
-.group-select {
+.card-table td {
     padding: 0.4rem 0.6rem;
-    background: var(--bg-input);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 0.85rem;
-    cursor: pointer;
+    border-bottom: 1px solid rgba(42, 51, 80, 0.5);
 }
+.card-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+.card-table .reasoning { max-width: 320px; font-size: 0.78rem; color: var(--muted); }
 
-.group-select:focus {
-    outline: 1px solid var(--accent);
-}
-
-/* --- Deck layout with sidebar --- */
-.deck-with-sidebar {
-    display: flex;
-    gap: 1rem;
-}
-
-.deck-main-content {
-    flex: 1;
-    min-width: 0;
-}
+/* ============================================================
+ * Deck views generated in JS (class names referenced in deck_view.html)
+ * ============================================================ */
 
 /* --- Card preview sidebar --- */
 .card-preview-sidebar {
     position: sticky;
-    top: 1rem;
+    top: 5rem;
     width: 260px;
     min-width: 260px;
-    max-height: calc(100vh - 2rem);
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    max-height: calc(100vh - 6rem);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
     padding: 1rem;
     display: flex;
     flex-direction: column;
     align-items: center;
-    z-index: 10;
     align-self: flex-start;
+    z-index: 10;
 }
-
 .card-preview-sidebar img {
     max-width: 240px;
     width: 100%;
-    border-radius: 10px;
-    margin-bottom: 0.5rem;
+    border-radius: 12px;
+    margin-bottom: 0.6rem;
 }
-
 .card-preview-sidebar .preview-name {
     font-weight: 600;
     font-size: 0.95rem;
     text-align: center;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.2rem;
 }
-
 .card-preview-sidebar .preview-price {
     font-size: 0.85rem;
-    color: var(--accent);
+    color: var(--brand);
 }
-
 .card-preview-sidebar .preview-placeholder {
-    color: var(--text-muted);
+    color: var(--muted);
     font-size: 0.85rem;
     text-align: center;
-    padding: 2rem 0;
+    padding: 2.5rem 0;
 }
+.card-preview-sidebar.hidden { display: none; }
 
-.card-preview-sidebar.hidden {
-    display: none;
+.deck-with-sidebar { display: flex; gap: 1.25rem; }
+.deck-main-content { flex: 1; min-width: 0; }
+
+/* --- Visual grid --- */
+.visual-grid-section { margin-bottom: 1.5rem; }
+.visual-grid-header,
+.visual-stack-header,
+.visual-spoiler-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--line);
 }
-
-/* --- Visual Grid --- */
-.visual-grid-section {
-    margin-bottom: 1.5rem;
-}
-
-.visual-grid-header {
-    font-size: 1.05rem;
-    color: var(--text);
-    margin: 0 0 0.5rem;
-    padding-bottom: 0.25rem;
-    border-bottom: 1px solid var(--border);
-}
-
-.visual-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
+.visual-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .visual-grid-card {
     width: 130px;
     cursor: pointer;
@@ -697,228 +202,119 @@ a:hover {
     border-radius: 8px;
     transition: transform 0.15s ease;
 }
-
-.visual-grid-card img {
-    width: 100%;
-    border-radius: 8px;
-    display: block;
-}
-
+.visual-grid-card img { width: 100%; border-radius: 8px; display: block; }
 .visual-grid-card:hover {
-    transform: scale(1.03);
-    box-shadow: 0 0 8px rgba(233, 69, 96, 0.4);
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 0 0 2px var(--brand), 0 8px 20px rgba(0, 0, 0, 0.5);
 }
-
 .visual-grid-card .grid-card-qty {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    background: var(--accent);
-    color: #fff;
-    font-size: 0.7rem;
-    font-weight: 700;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: absolute; top: 4px; right: 4px;
+    background: var(--brand); color: #fff;
+    font-size: 0.7rem; font-weight: 700;
+    width: 20px; height: 20px; border-radius: 9999px;
+    display: flex; align-items: center; justify-content: center;
 }
 
-/* --- Visual Stack --- */
-.visual-stack-columns {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.visual-stack-column {
-    flex: 1 1 200px;
-    min-width: 180px;
-    max-width: 280px;
-}
-
-.visual-stack-header {
-    font-size: 1.05rem;
-    color: var(--text);
-    margin: 0 0 0.5rem;
-    padding-bottom: 0.25rem;
-    border-bottom: 1px solid var(--border);
-}
-
+/* --- Visual stack --- */
+.visual-stack-columns { display: flex; gap: 1rem; flex-wrap: wrap; }
+.visual-stack-column { flex: 1 1 200px; min-width: 180px; max-width: 280px; }
 .visual-stack-card {
-    height: 32px;
+    height: 34px;
     overflow: hidden;
-    transition: height 0.3s ease, margin-bottom 0.3s ease;
+    transition: height 0.25s ease, margin-bottom 0.25s ease;
     cursor: pointer;
     position: relative;
+    margin-bottom: 4px;
 }
-
 .visual-stack-card .card-bar {
-    height: 32px;
+    height: 34px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 8px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 0.8rem;
+    padding: 0 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 0.82rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: background 0.15s ease, border-color 0.15s ease;
 }
+.visual-stack-card .card-bar .bar-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.visual-stack-card .card-bar .bar-mana { color: var(--muted); font-size: 0.72rem; margin-left: 6px; flex-shrink: 0; }
+.visual-stack-card .card-bar:hover { border-color: var(--brand); background: var(--panel2); }
+.visual-stack-card.expanded { height: auto; margin-bottom: 10px; }
+.visual-stack-card .stack-card-image { display: none; padding: 6px 0; }
+.visual-stack-card.expanded .stack-card-image { display: block; }
+.visual-stack-card .stack-card-image img { width: 100%; border-radius: 10px; }
 
-.visual-stack-card .card-bar .bar-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.visual-stack-card .card-bar .bar-mana {
-    color: var(--text-muted);
-    font-size: 0.7rem;
-    margin-left: 6px;
-    flex-shrink: 0;
-}
-
-.visual-stack-card .card-bar:hover {
-    border-color: var(--accent);
-    background: rgba(233, 69, 96, 0.1);
-}
-
-.visual-stack-card.expanded {
-    height: auto;
-    margin-bottom: 8px;
-}
-
-.visual-stack-card .stack-card-image {
-    display: none;
-    padding: 4px 0;
-}
-
-.visual-stack-card.expanded .stack-card-image {
-    display: block;
-}
-
-.visual-stack-card .stack-card-image img {
-    width: 100%;
-    border-radius: 8px;
-}
-
-/* --- Visual Spoiler --- */
-.visual-spoiler-section {
-    margin-bottom: 1.5rem;
-}
-
-.visual-spoiler-header {
-    font-size: 1.05rem;
-    color: var(--text);
-    margin: 0 0 0.5rem;
-    padding-bottom: 0.25rem;
-    border-bottom: 1px solid var(--border);
-}
-
-.visual-spoiler {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-
+/* --- Visual spoiler --- */
+.visual-spoiler-section { margin-bottom: 1.5rem; }
+.visual-spoiler { display: flex; flex-wrap: wrap; gap: 12px; }
 .visual-spoiler-card {
     width: 200px;
     cursor: pointer;
     border-radius: 8px;
     position: relative;
-    transition: transform 0.15s ease;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-
-.visual-spoiler-card img {
-    width: 100%;
-    border-radius: 8px;
-    display: block;
-}
-
+.visual-spoiler-card img { width: 100%; border-radius: 10px; display: block; }
 .visual-spoiler-card:hover {
-    transform: scale(1.02);
-    box-shadow: 0 0 8px rgba(233, 69, 96, 0.3);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 0 0 2px var(--brand), 0 8px 24px rgba(0, 0, 0, 0.5);
 }
-
 .visual-spoiler-card .spoiler-card-qty {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    background: var(--accent);
-    color: #fff;
-    font-size: 0.75rem;
-    font-weight: 700;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: absolute; top: 6px; right: 6px;
+    background: var(--brand); color: #fff;
+    font-size: 0.75rem; font-weight: 700;
+    width: 22px; height: 22px; border-radius: 9999px;
+    display: flex; align-items: center; justify-content: center;
 }
 
-/* --- Full card overlay (hover expand for grid) --- */
+/* --- Floating full-card hover overlay --- */
 .card-hover-overlay {
-    position: fixed;
-    z-index: 1000;
-    pointer-events: none;
-    display: none;
+    position: fixed; z-index: 1000;
+    pointer-events: none; display: none;
 }
-
-.card-hover-overlay.visible {
-    display: block;
-}
-
+.card-hover-overlay.visible { display: block; }
 .card-hover-overlay img {
     max-width: 300px;
-    border-radius: 10px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
 }
 
-/* Widen container on deck page when visual views are active */
-.container.container-wide {
-    max-width: 1400px;
+/* ============================================================
+ * Deck-generation loading overlay
+ * ============================================================ */
+.loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(6, 9, 18, 0.9);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
 }
-
-/* Responsive */
-@media (max-width: 768px) {
-    .nav {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    .card-grid {
-        grid-template-columns: 1fr;
-    }
-    .stats-grid {
-        justify-content: center;
-    }
-    .dashboard-metrics {
-        flex-wrap: wrap;
-    }
-    .metric-card {
-        flex: 1 1 45%;
-    }
-    .chart-grid {
-        grid-template-columns: 1fr;
-    }
-    .deck-with-sidebar {
-        flex-direction: column;
-    }
-    .card-preview-sidebar {
-        position: static;
-        width: 100%;
-        min-width: 0;
-        max-height: none;
-        flex-direction: row;
-        gap: 1rem;
-    }
-    .card-preview-sidebar img {
-        max-width: 120px;
-    }
-    .visual-stack-column {
-        max-width: 100%;
-    }
+.loading-content { text-align: center; width: 420px; max-width: 90vw; }
+.loading-commander {
+    font-size: 1.4rem; font-weight: 600;
+    color: var(--body); margin-bottom: 1.5rem;
+}
+.loading-bar-track {
+    width: 100%; height: 10px;
+    background: var(--field);
+    border-radius: 9999px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+}
+.loading-bar-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--brand), var(--brand-hover));
+    border-radius: 9999px;
+    transition: width 0.5s ease-out;
+}
+.loading-text {
+    margin-top: 1.25rem;
+    font-size: 0.95rem;
+    color: var(--muted);
+    min-height: 1.6em;
 }

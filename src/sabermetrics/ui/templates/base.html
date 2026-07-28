@@ -1,31 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Sabermetrics{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              ink:     '#0b1020',
+              panel:   '#151b30',
+              panel2:  '#1b233d',
+              field:   '#1e2740',
+              line:    '#2a3350',
+              body:    '#e6e8f0',
+              muted:   '#9aa3c0',
+              brand:   { DEFAULT: '#e94560', hover: '#ff6b81' },
+            },
+            fontFamily: {
+              sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+            },
+            boxShadow: {
+              panel: '0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3)',
+            },
+          },
+        },
+      };
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-    <nav class="nav">
-        <a href="{{ url_for('main.index') }}" class="nav-brand">Sabermetrics</a>
-        <div class="nav-links">
-            <a href="{{ url_for('main.index') }}">Home</a>
-            <a href="{{ url_for('main.reference_search') }}">Rules Search</a>
-            <a href="{{ url_for('main.cost_report') }}">Cost Report</a>
+<body class="min-h-screen bg-ink text-body font-sans antialiased flex flex-col">
+    <nav class="sticky top-0 z-30 border-b border-line/70 bg-panel/80 backdrop-blur supports-[backdrop-filter]:bg-panel/60">
+        <div class="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 h-14">
+            <a href="{{ url_for('main.index') }}" class="flex items-center gap-2 font-bold tracking-tight text-body hover:text-white transition-colors">
+                <span class="grid h-7 w-7 place-items-center rounded-lg bg-brand text-white text-sm font-black">S</span>
+                <span>Sabermetrics</span>
+            </a>
+            {% set ep = request.endpoint %}
+            <div class="flex items-center gap-1 text-sm">
+                {% set links = [
+                    ('main.index', 'Home'),
+                    ('main.reference_search', 'Rules Search'),
+                    ('main.cost_report', 'Cost Report'),
+                ] %}
+                {% for endpoint, label in links %}
+                <a href="{{ url_for(endpoint) }}"
+                   class="rounded-lg px-3 py-1.5 transition-colors {% if ep == endpoint %}bg-brand/15 text-brand{% else %}text-muted hover:bg-white/5 hover:text-body{% endif %}">
+                    {{ label }}
+                </a>
+                {% endfor %}
+            </div>
         </div>
     </nav>
 
-    <main class="container">
+    <main id="app-main" class="mx-auto w-full max-w-6xl flex-1 px-4 sm:px-6 py-8 transition-[max-width]">
         {% if error is defined and error %}
-        <div class="alert alert-error">{{ error }}</div>
+        <div class="mb-6 rounded-xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-brand-hover">
+            {{ error }}
+        </div>
         {% endif %}
 
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="footer">
-        <p>Sabermetrics for Magic &mdash; Local-only Commander deck optimization</p>
+    <footer class="border-t border-line/70 py-6 text-center text-xs text-muted">
+        Sabermetrics for Magic &mdash; local-only Commander deck optimization
     </footer>
 
     {% block scripts %}{% endblock %}

@@ -3,174 +3,169 @@
 
 {% block content %}
 {% if error is defined and error %}
-<h1>{{ error }}</h1>
+<h1 class="text-2xl font-bold tracking-tight">{{ error }}</h1>
 {% elif deck %}
 
 {% set comp = deck.rationale.composition if deck.rationale and deck.rationale.composition else {} %}
 
-<h1>{{ deck.commander_name }}{% if deck.deck_name %} — {{ deck.deck_name }}{% endif %}</h1>
-<p class="generated-note">Generated: {{ deck.generated_at[:16] }}</p>
+<div class="mb-6">
+    <h1 class="text-2xl font-bold tracking-tight">
+        {{ deck.commander_name }}{% if deck.deck_name %} <span class="text-muted font-normal">— {{ deck.deck_name }}</span>{% endif %}
+    </h1>
+    <p class="mt-1 text-xs text-muted">Generated: {{ deck.generated_at[:16] }}</p>
+</div>
 
 <!-- Hero: 5 key metric cards -->
-<div class="dashboard-metrics">
-    <div class="metric-card">
-        <span class="metric-value">{{ deck.estimated_bracket }}</span>
-        <span class="metric-label">Power Bracket</span>
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    {% set metrics = [
+        (deck.estimated_bracket, 'Power Bracket'),
+        ('$' ~ '%.0f'|format(comp.total_price_usd or 0), 'Total Price'),
+        ('%.2f'|format(comp.average_cmc or 0), 'Avg CMC'),
+        ('%.2f'|format(avg_cvar or 0), 'Avg CVAR'),
+        (deck.cards|length, 'Cards'),
+    ] %}
+    {% for value, label in metrics %}
+    <div class="rounded-2xl border border-line bg-panel p-4 text-center shadow-panel">
+        <div class="text-2xl font-bold text-brand">{{ value }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">{{ label }}</div>
     </div>
-    <div class="metric-card">
-        <span class="metric-value">${{ "%.0f"|format(comp.total_price_usd or 0) }}</span>
-        <span class="metric-label">Total Price</span>
-    </div>
-    <div class="metric-card">
-        <span class="metric-value">{{ "%.2f"|format(comp.average_cmc or 0) }}</span>
-        <span class="metric-label">Avg CMC</span>
-    </div>
-    <div class="metric-card">
-        <span class="metric-value">{{ "%.2f"|format(avg_cvar or 0) }}</span>
-        <span class="metric-label">Avg CVAR</span>
-    </div>
-    <div class="metric-card">
-        <span class="metric-value">{{ deck.cards|length }}</span>
-        <span class="metric-label">Cards</span>
-    </div>
+    {% endfor %}
 </div>
 
-<!-- Chart row 1: Mana Curve + Type Distribution -->
-<div class="chart-grid">
-    <div class="chart-card">
-        <h3>Mana Curve</h3>
+<!-- Charts -->
+<div class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">Mana Curve</h3>
         <canvas id="chart-mana-curve"></canvas>
     </div>
-    <div class="chart-card">
-        <h3>Type Distribution</h3>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">Type Distribution</h3>
         <canvas id="chart-type-dist"></canvas>
     </div>
-</div>
-
-<!-- Chart row 2: Component Radar + Color Pips vs Sources -->
-<div class="chart-grid">
-    <div class="chart-card">
-        <h3>Component Balance</h3>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">Component Balance</h3>
         <canvas id="chart-radar"></canvas>
     </div>
-    <div class="chart-card">
-        <h3>Color Pips vs Sources</h3>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <h3 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">Color Pips vs Sources</h3>
         <canvas id="chart-pips"></canvas>
     </div>
 </div>
 
-<!-- Chart row 3: Value Map (full width) -->
-<div class="chart-full">
-    <h3>Value Map &mdash; CVAR Score vs Price</h3>
+<div class="mt-4 rounded-2xl border border-line bg-panel p-4 shadow-panel">
+    <h3 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">Value Map &mdash; CVAR Score vs Price</h3>
     <canvas id="chart-value" height="100"></canvas>
 </div>
 
 <!-- Card List -->
-<details class="deck-section" id="card-list-section" open>
-    <summary>Card List ({{ deck.cards|length }})</summary>
+<details class="group mt-8 rounded-2xl border border-line bg-panel/40 shadow-panel" id="card-list-section" open>
+    <summary class="flex cursor-pointer list-none items-center gap-2 px-5 py-4 text-lg font-semibold [&::-webkit-details-marker]:hidden">
+        <svg class="h-4 w-4 text-muted transition-transform group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor"><path d="M7 5l6 5-6 5V5z"/></svg>
+        Card List ({{ deck.cards|length }})
+    </summary>
 
-    <div class="view-toolbar">
-        <span class="toolbar-label">Display:</span>
-        <button class="tab-btn active" data-mode="table" onclick="switchMode('table', this)">Table</button>
-        <button class="tab-btn" data-mode="stack" onclick="switchMode('stack', this)">Stack</button>
-        <button class="tab-btn" data-mode="spoiler" onclick="switchMode('spoiler', this)">Spoiler</button>
-        <span class="toolbar-divider"></span>
-        <span class="toolbar-label">Group:</span>
-        <button class="tab-btn group-btn active" data-group="type" onclick="switchGroup('type', this)">By Type</button>
-        <button class="tab-btn group-btn" data-group="role" onclick="switchGroup('role', this)">By Role</button>
-    </div>
-
-    <div class="deck-with-sidebar" id="deck-layout">
-        <div class="deck-main-content" id="deck-main">
-
-            <!-- Text By Type view (default) -->
-            <div id="view-type" class="card-view">
-            {% set type_order = ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Battle', 'Land', 'Other'] %}
-            {% for card_type in type_order %}
-            {% if deck.cards_by_type.get(card_type) %}
-            {% set type_cards = deck.cards_by_type[card_type] %}
-            {% set total = type_cards|sum(attribute='qty') %}
-            <details open>
-                <summary>{{ card_type }} ({{ total }})</summary>
-                <table class="card-table">
-                    <thead>
-                        <tr>
-                            <th>Qty</th>
-                            <th>Card</th>
-                            <th>Mana Cost</th>
-                            <th>CMC</th>
-                            <th>CVAR</th>
-                            <th>Price</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for card in type_cards|sort(attribute='name') %}
-                        <tr>
-                            <td>{{ card.qty if card.qty > 1 else '' }}</td>
-                            <td>{{ card.name }}</td>
-                            <td>{{ card.mana_cost or '' }}</td>
-                            <td>{{ card.cmc or '' }}</td>
-                            <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
-                            <td>${{ "%.2f"|format(card.price_usd or 0) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </details>
-            {% endif %}
-            {% endfor %}
-            </div>
-
-            <!-- Text By Role view -->
-            <div id="view-role" class="card-view" style="display: none;">
-            {% set role_order = ['land', 'ramp', 'draw', 'removal', 'wincon', 'utility', 'other'] %}
-            {% set role_labels = {'land': 'Lands', 'ramp': 'Ramp', 'draw': 'Card Draw', 'removal': 'Removal', 'wincon': 'Win Conditions', 'utility': 'Utility', 'other': 'Other'} %}
-            {% for role in role_order %}
-            {% if deck.cards_by_role.get(role) %}
-            <details open>
-                <summary>{{ role_labels.get(role, role) }} ({{ deck.cards_by_role[role]|length }})</summary>
-                <table class="card-table">
-                    <thead>
-                        <tr>
-                            <th>Card</th>
-                            <th>Type</th>
-                            <th>CMC</th>
-                            <th>Fit</th>
-                            <th>CVAR</th>
-                            <th>Reasoning</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for card in deck.cards_by_role[role]|sort(attribute='name') %}
-                        <tr>
-                            <td>{{ card.name }}</td>
-                            <td>{{ card.type_line or '' }}</td>
-                            <td>{{ card.cmc or '' }}</td>
-                            <td>{{ card.fit_score or '' }}/10</td>
-                            <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
-                            <td class="reasoning">{{ card.reasoning or '' }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </details>
-            {% endif %}
-            {% endfor %}
-            </div>
-
-            <!-- Visual Stack (built by JS) -->
-            <div id="view-visual-stack" class="card-view" style="display: none;"></div>
-
-            <!-- Visual Spoiler (built by JS) -->
-            <div id="view-visual-spoiler" class="card-view" style="display: none;"></div>
-
+    <div class="px-5 pb-5">
+        <div class="view-toolbar flex flex-wrap items-center gap-2 py-2">
+            <span class="text-xs uppercase tracking-wider text-muted">Display:</span>
+            <button class="tab-btn active" data-mode="table" onclick="switchMode('table', this)">Table</button>
+            <button class="tab-btn" data-mode="stack" onclick="switchMode('stack', this)">Stack</button>
+            <button class="tab-btn" data-mode="spoiler" onclick="switchMode('spoiler', this)">Spoiler</button>
+            <span class="mx-1 h-5 w-px bg-line"></span>
+            <span class="text-xs uppercase tracking-wider text-muted">Group:</span>
+            <button class="tab-btn group-btn active" data-group="type" onclick="switchGroup('type', this)">By Type</button>
+            <button class="tab-btn group-btn" data-group="role" onclick="switchGroup('role', this)">By Role</button>
         </div>
 
-        <div class="card-preview-sidebar hidden" id="card-preview-sidebar">
-            <img id="preview-img" src="" alt="Card preview" style="display:none">
-            <div class="preview-name" id="preview-name"></div>
-            <div class="preview-price" id="preview-price"></div>
-            <div class="preview-placeholder" id="preview-placeholder">Hover a card to preview</div>
+        <div class="deck-with-sidebar mt-3" id="deck-layout">
+            <div class="deck-main-content" id="deck-main">
+
+                <!-- Text By Type view (default) -->
+                <div id="view-type" class="card-view space-y-4">
+                {% set type_order = ['Creature', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Planeswalker', 'Battle', 'Land', 'Other'] %}
+                {% for card_type in type_order %}
+                {% if deck.cards_by_type.get(card_type) %}
+                {% set type_cards = deck.cards_by_type[card_type] %}
+                {% set total = type_cards|sum(attribute='qty') %}
+                <details open class="rounded-xl border border-line bg-panel">
+                    <summary class="cursor-pointer list-none px-4 py-2.5 text-sm font-semibold text-body [&::-webkit-details-marker]:hidden">
+                        {{ card_type }} <span class="text-muted">({{ total }})</span>
+                    </summary>
+                    <div class="overflow-x-auto px-4 pb-3">
+                        <table class="card-table">
+                            <thead>
+                                <tr>
+                                    <th>Qty</th><th>Card</th><th>Mana Cost</th><th>CMC</th><th>CVAR</th><th>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for card in type_cards|sort(attribute='name') %}
+                                <tr>
+                                    <td>{{ card.qty if card.qty > 1 else '' }}</td>
+                                    <td class="text-body">{{ card.name }}</td>
+                                    <td class="text-muted">{{ card.mana_cost or '' }}</td>
+                                    <td class="text-muted">{{ card.cmc or '' }}</td>
+                                    <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
+                                    <td>${{ "%.2f"|format(card.price_usd or 0) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+                {% endif %}
+                {% endfor %}
+                </div>
+
+                <!-- Text By Role view -->
+                <div id="view-role" class="card-view space-y-4" style="display: none;">
+                {% set role_order = ['land', 'ramp', 'draw', 'removal', 'wincon', 'utility', 'other'] %}
+                {% set role_labels = {'land': 'Lands', 'ramp': 'Ramp', 'draw': 'Card Draw', 'removal': 'Removal', 'wincon': 'Win Conditions', 'utility': 'Utility', 'other': 'Other'} %}
+                {% for role in role_order %}
+                {% if deck.cards_by_role.get(role) %}
+                <details open class="rounded-xl border border-line bg-panel">
+                    <summary class="cursor-pointer list-none px-4 py-2.5 text-sm font-semibold text-body [&::-webkit-details-marker]:hidden">
+                        {{ role_labels.get(role, role) }} <span class="text-muted">({{ deck.cards_by_role[role]|length }})</span>
+                    </summary>
+                    <div class="overflow-x-auto px-4 pb-3">
+                        <table class="card-table">
+                            <thead>
+                                <tr>
+                                    <th>Card</th><th>Type</th><th>CMC</th><th>Fit</th><th>CVAR</th><th>Reasoning</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for card in deck.cards_by_role[role]|sort(attribute='name') %}
+                                <tr>
+                                    <td class="text-body">{{ card.name }}</td>
+                                    <td class="text-muted">{{ card.type_line or '' }}</td>
+                                    <td class="text-muted">{{ card.cmc or '' }}</td>
+                                    <td>{{ card.fit_score or '' }}/10</td>
+                                    <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
+                                    <td class="reasoning">{{ card.reasoning or '' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+                {% endif %}
+                {% endfor %}
+                </div>
+
+                <!-- Visual Stack (built by JS) -->
+                <div id="view-visual-stack" class="card-view" style="display: none;"></div>
+
+                <!-- Visual Spoiler (built by JS) -->
+                <div id="view-visual-spoiler" class="card-view" style="display: none;"></div>
+
+            </div>
+
+            <div class="card-preview-sidebar hidden" id="card-preview-sidebar">
+                <img id="preview-img" src="" alt="Card preview" style="display:none">
+                <div class="preview-name" id="preview-name"></div>
+                <div class="preview-price" id="preview-price"></div>
+                <div class="preview-placeholder" id="preview-placeholder">Hover a card to preview</div>
+            </div>
         </div>
     </div>
 </details>
@@ -182,34 +177,38 @@
 
 <!-- Narrative (collapsed) -->
 {% if deck.rationale and deck.rationale.narrative %}
-<details class="deck-section">
-    <summary>Strategy & Narrative</summary>
+<details class="group mt-4 rounded-2xl border border-line bg-panel/40 shadow-panel">
+    <summary class="flex cursor-pointer list-none items-center gap-2 px-5 py-4 text-lg font-semibold [&::-webkit-details-marker]:hidden">
+        <svg class="h-4 w-4 text-muted transition-transform group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor"><path d="M7 5l6 5-6 5V5z"/></svg>
+        Strategy &amp; Narrative
+    </summary>
+    <div class="prose-content px-5 pb-5">
+        <h3 class="!mt-0">Game Plan</h3>
+        <p>{{ deck.rationale.narrative.game_plan }}</p>
 
-    <h3>Game Plan</h3>
-    <p>{{ deck.rationale.narrative.game_plan }}</p>
+        {% if deck.rationale.narrative.key_synergies %}
+        <h3>Key Synergies</h3>
+        <ul>
+            {% for syn in deck.rationale.narrative.key_synergies %}
+            <li>{{ syn }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
 
-    {% if deck.rationale.narrative.key_synergies %}
-    <h3>Key Synergies</h3>
-    <ul>
-        {% for syn in deck.rationale.narrative.key_synergies %}
-        <li>{{ syn }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
+        {% if deck.rationale.narrative.weaknesses %}
+        <h3>Weaknesses</h3>
+        <ul>
+            {% for w in deck.rationale.narrative.weaknesses %}
+            <li>{{ w }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
 
-    {% if deck.rationale.narrative.weaknesses %}
-    <h3>Weaknesses</h3>
-    <ul>
-        {% for w in deck.rationale.narrative.weaknesses %}
-        <li>{{ w }}</li>
-        {% endfor %}
-    </ul>
-    {% endif %}
-
-    {% if deck.rationale.narrative.suggested_play_pattern %}
-    <h3>Play Pattern</h3>
-    <p>{{ deck.rationale.narrative.suggested_play_pattern }}</p>
-    {% endif %}
+        {% if deck.rationale.narrative.suggested_play_pattern %}
+        <h3>Play Pattern</h3>
+        <p>{{ deck.rationale.narrative.suggested_play_pattern }}</p>
+        {% endif %}
+    </div>
 </details>
 {% endif %}
 
@@ -217,22 +216,23 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // Dark theme defaults
-Chart.defaults.color = '#e0e0e0';
-Chart.defaults.borderColor = '#2a2a4a';
+Chart.defaults.color = '#9aa3c0';
+Chart.defaults.borderColor = '#2a3350';
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
 const ROLE_COLORS = {
-    ramp: '#00733e',
-    draw: '#0e68ab',
+    ramp: '#1a7d4d',
+    draw: '#2371b8',
     removal: '#d3202a',
     wincon: '#e94560',
     utility: '#ff9800',
-    other: '#a0a0b0',
-    land: '#666'
+    other: '#9aa3c0',
+    land: '#6b7394'
 };
 
 const MTG_COLORS = {
-    W: '#f9faf4', U: '#0e68ab', B: '#666',
-    R: '#d3202a', G: '#00733e'
+    W: '#f6f3e6', U: '#2371b8', B: '#6b7394',
+    R: '#d3202a', G: '#1a7d4d'
 };
 
 // 1. Mana Curve — bar chart
@@ -245,7 +245,7 @@ new Chart(document.getElementById('chart-mana-curve'), {
             label: 'Cards',
             data: manaCurve,
             backgroundColor: '#e94560',
-            borderRadius: 3,
+            borderRadius: 4,
         }]
     },
     options: {
@@ -262,8 +262,8 @@ const typeDist = {{ chart_type_dist | tojson }};
 const typeLabels = Object.keys(typeDist);
 const typeData = Object.values(typeDist);
 const typePalette = [
-    '#e94560', '#0e68ab', '#ff9800', '#a0a0b0',
-    '#00733e', '#f9faf4', '#9c27b0', '#666'
+    '#e94560', '#2371b8', '#ff9800', '#9aa3c0',
+    '#1a7d4d', '#f6f3e6', '#9c6ade', '#6b7394'
 ];
 new Chart(document.getElementById('chart-type-dist'), {
     type: 'doughnut',
@@ -272,7 +272,7 @@ new Chart(document.getElementById('chart-type-dist'), {
         datasets: [{
             data: typeData,
             backgroundColor: typePalette.slice(0, typeLabels.length),
-            borderColor: '#1a1a2e',
+            borderColor: '#151b30',
             borderWidth: 2,
         }]
     },
@@ -300,10 +300,10 @@ new Chart(document.getElementById('chart-radar'), {
             {
                 label: 'Target',
                 data: compData.target,
-                backgroundColor: 'rgba(14, 104, 171, 0.1)',
-                borderColor: '#0e68ab',
+                backgroundColor: 'rgba(35, 113, 184, 0.1)',
+                borderColor: '#2371b8',
                 borderDash: [4, 4],
-                pointBackgroundColor: '#0e68ab',
+                pointBackgroundColor: '#2371b8',
             }
         ]
     },
@@ -311,10 +311,10 @@ new Chart(document.getElementById('chart-radar'), {
         scales: {
             r: {
                 beginAtZero: true,
-                ticks: { stepSize: 2 },
-                grid: { color: '#2a2a4a' },
-                angleLines: { color: '#2a2a4a' },
-                pointLabels: { color: '#e0e0e0' }
+                ticks: { stepSize: 2, backdropColor: 'transparent' },
+                grid: { color: '#2a3350' },
+                angleLines: { color: '#2a3350' },
+                pointLabels: { color: '#e6e8f0' }
             }
         },
         plugins: { legend: { position: 'bottom' } }
@@ -333,7 +333,7 @@ new Chart(document.getElementById('chart-pips'), {
                 label: 'Colored Pips',
                 data: pipData.pips,
                 backgroundColor: pipData.colors.map(c => MTG_COLORS[c] || '#888'),
-                borderRadius: 3,
+                borderRadius: 4,
             },
             {
                 label: 'Mana Sources',
@@ -342,7 +342,7 @@ new Chart(document.getElementById('chart-pips'), {
                     const hex = MTG_COLORS[c] || '#888';
                     return hex + '88';  // 50% opacity
                 }),
-                borderRadius: 3,
+                borderRadius: 4,
             }
         ]
     },
@@ -718,15 +718,15 @@ function renderCurrentView() {
 
     // Show/hide sidebar + widen container
     const sidebar = document.getElementById('card-preview-sidebar');
-    const container = document.querySelector('.container');
+    const container = document.getElementById('app-main');
     if (isVisual) {
         sidebar.classList.remove('hidden');
         showCommanderPreview();
-        container.classList.add('container-wide');
+        container.classList.add('wide');
     } else {
         sidebar.classList.add('hidden');
         clearHoverTimer();
-        container.classList.remove('container-wide');
+        container.classList.remove('wide');
     }
 
     // Show the right view
