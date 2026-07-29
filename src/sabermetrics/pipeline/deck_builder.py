@@ -72,6 +72,8 @@ class DeckBuildRequest(BaseModel):
     user_intent: str | None = None
     deck_name: str | None = None
     trace_cards: list[str] | None = None
+    owner_id: str | None = None  # user who requested the build (cost attribution)
+    deck_id: str | None = None  # pre-minted id (lets the caller attribute cost)
 
 
 class DeckBuildResult(BaseModel):
@@ -2129,7 +2131,7 @@ class DeckBuilder:
             detected_combos=combo_ids,
         )
 
-        deck_id = str(uuid.uuid4())
+        deck_id = request.deck_id or str(uuid.uuid4())
         elapsed = time.time() - start_time
 
         return GeneratedDeck(

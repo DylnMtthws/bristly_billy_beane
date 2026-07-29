@@ -52,6 +52,35 @@ def _can_access_deck(owner_id: str | None) -> bool:
     )
 
 
+def _monthly_spend(db_path: Path) -> float:
+    """Total LLM spend across all users in the trailing 30 days."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        return conn.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_log "
+            "WHERE timestamp >= datetime('now', '-30 days')"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+
+def _quota_reset_label() -> str:
+    """Human label for when the per-user monthly quota next resets."""
+    from datetime import date
+
+    today = date.today()
+    year, month = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
+    return date(year, month, 1).strftime("%B 1")
+
+
+def _generation_blocked(is_ajax: bool, message: str, status: int):
+    """Return a blocked-generation response (JSON for XHR, else flash+redirect)."""
+    if is_ajax:
+        return jsonify({"error": message}), status
+    flash(message, "error")
+    return redirect(request.referrer or url_for("main.index"))
+
+
 @bp.before_request
 def _require_login():
     """Gate every user-portal route behind an authenticated, active session.
@@ -349,8 +378,37 @@ def generate_deck():
             return jsonify({"error": "No commander selected"}), 400
         return redirect(url_for("main.index"))
 
+    from sabermetrics.config import settings
+
+    # Global cost ceiling (friendly pre-check; the client enforces the hard stop).
+    if _monthly_spend(db_path) >= settings.llm.monthly_cost_ceiling_usd:
+        return _generation_blocked(
+            is_ajax,
+            "Generation is paused: the monthly cost ceiling has been reached. "
+            "Please try again next month.",
+            503,
+        )
+
+    # Per-user monthly quota (admin-overridable; global default otherwise).
+    decks_repo = db.DecksRepo(db_path)
+    used = decks_repo.count_this_month(current_user.id)
+    quota = current_user.monthly_deck_quota
+    if used >= quota:
+        return _generation_blocked(
+            is_ajax,
+            f"Monthly limit reached ({used}/{quota} decks). "
+            f"Your quota resets {_quota_reset_label()}.",
+            429,
+        )
+
+    import uuid as _uuid
+
+    from sabermetrics.errors import LLMCostCeilingExceeded
+
+    deck_id = str(_uuid.uuid4())
     try:
         from sabermetrics.pipeline.deck_builder import DeckBuilder, DeckBuildRequest
+        from sabermetrics.reasoning.client import cost_attribution
 
         builder = DeckBuilder(db_path)
         req = DeckBuildRequest(
@@ -360,8 +418,12 @@ def generate_deck():
             strategy=strategy,
             user_intent=user_intent,
             deck_name=deck_name,
+            owner_id=current_user.id,
+            deck_id=deck_id,
         )
-        result = builder.build(req)
+        # Attribute every LLM cost this build incurs to this user + deck.
+        with cost_attribution(current_user.id, deck_id):
+            result = builder.build(req)
         # Claim ownership so the deck is scoped to this user (privacy + quota).
         db.DecksRepo(db_path).set_owner(result.deck.id, current_user.id)
         deck_url = url_for("main.view_deck", deck_id=result.deck.id)
@@ -370,6 +432,12 @@ def generate_deck():
             return jsonify({"deck_url": deck_url})
         return redirect(deck_url)
 
+    except LLMCostCeilingExceeded:
+        return _generation_blocked(
+            is_ajax,
+            "Generation stopped: the monthly cost ceiling was reached mid-build.",
+            503,
+        )
     except Exception as e:
         logger.error("Deck generation failed: %s", e)
         if is_ajax:
