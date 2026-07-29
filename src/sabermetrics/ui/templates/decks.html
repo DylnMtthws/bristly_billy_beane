@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_macros.html" import deck_row %}
+{% block title %}My Decks{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-4">
+    <h1 class="text-2xl font-bold tracking-tight">My Decks</h1>
+    <form method="get" action="{{ url_for('main.decks') }}" class="flex gap-2">
+        <input type="text" name="q" value="{{ query }}" placeholder="Filter by commander or name…"
+               class="w-64 rounded-xl border border-line bg-field px-4 py-2 text-sm placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30">
+        <button type="submit" class="rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">Filter</button>
+    </form>
+</div>
+
+{% if decks %}
+<div class="mt-6 overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                <th class="px-4 py-3"></th>
+                <th class="px-4 py-3 font-medium">Commander</th>
+                <th class="px-4 py-3 font-medium">Deck</th>
+                <th class="px-4 py-3 font-medium">Budget</th>
+                <th class="px-4 py-3 font-medium">Power</th>
+                <th class="px-4 py-3 font-medium">Bracket</th>
+                <th class="px-4 py-3 font-medium">Generated</th>
+                <th class="px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-line/60">
+            {% for d in decks %}
+            {{ deck_row(d, favorited=(d.id in fav_ids), show_delete=True) }}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif query %}
+<p class="mt-6 text-sm text-muted">No decks match "{{ query }}".</p>
+{% else %}
+<div class="mt-6 rounded-2xl border border-dashed border-line bg-panel/40 p-10 text-center">
+    <p class="text-sm text-muted">You haven't generated any decks yet.</p>
+    <a href="{{ url_for('main.explore') }}" class="mt-3 inline-block rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">Explore commanders</a>
+</div>
+{% endif %}
+{% endblock %}

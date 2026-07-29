@@ -95,20 +95,20 @@ def test_index_requires_login(anon_client) -> None:
 
 @pytest.mark.skipif(not HAS_DB, reason="No database available")
 def test_index_loads(client) -> None:
-    """Home page loads with 200 status."""
+    """Home dashboard loads with 200 status."""
     response = client.get("/")
     assert response.status_code == 200
-    assert b"Commander Search" in response.data
+    assert b"Monthly quota" in response.data
 
 
 @pytest.mark.skipif(not HAS_DB, reason="No database available")
-def test_index_search(client) -> None:
-    """Commander search returns results."""
-    response = client.get("/?q=Korvold")
+def test_explore_search(client) -> None:
+    """Explore search returns results."""
+    response = client.get("/explore?q=Korvold")
     assert response.status_code == 200
     # Should find Korvold if in DB
     if b"Korvold" in response.data:
-        assert b"View Profile" in response.data
+        assert b"Profile" in response.data
 
 
 @pytest.mark.skipif(not HAS_DB, reason="No database available")
@@ -167,7 +167,7 @@ def test_templates_exist() -> None:
     """All required templates exist."""
     template_dir = Path(__file__).parent.parent / "src" / "sabermetrics" / "ui" / "templates"
     expected = [
-        "base.html", "index.html", "deck_view.html",
+        "base.html", "home.html", "deck_view.html",
         "profile_view.html", "reference_search.html", "cost_report.html",
     ]
     for name in expected:

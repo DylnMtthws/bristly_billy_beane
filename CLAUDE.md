@@ -426,11 +426,11 @@ Track progress here. Update as phases complete.
 status:
   original_build: "Complete — P1..P8 (single-user generator). Refresh automation, launchd plists, JSON logging, Karsten mana analysis, deep statistical profiles."
   current_initiative: "Multi-user + feedback beta (see ~/.claude/plans/imperative-giggling-pond.md; portal phases P0..P7)"
-  current_phase: "Portal-P2 — admin portal: user management (DONE)"
-  portal_completed: ["P0", "P1", "P2"]
+  current_phase: "Portal-P3 — user portal restructure (DONE)"
+  portal_completed: ["P0", "P1", "P2", "P3"]
   in_progress: []
   blocked: []
-  notes: "P0: portal tables + commander_candidates view + column adds (ensure_portal_schema in scripts/setup_db.py). P1: Flask-Login auth (ui/auth.py, ui/extensions.py) — UsersRepo/InviteRepo + argon2 in db.py; /login /logout /invite/<token>; CSRF, login rate-limit, hardened cookies, ProxyFix, waitress; main routes login-gated; create-admin + invite-user CLI. P2: admin portal (ui/admin_routes.py) blueprint at /admin gated by before_request (must be logged-in admin — role-based, NOT a separate env token); routes: overview, users list, users/create (→ one-time invite link), users/<id>/status (enable/disable, can't self-disable), users/<id>/quota (override, blank=default), users/<id>/reinvite; admin_base.html + admin/overview.html + admin/users.html; base nav shows Admin+Logout for admins. Bootstrap: `sabermetrics create-admin --email you@x`. Local http preview: SABER_COOKIE_SECURE=0. NEXT: P3 user portal restructure (home dashboard, Explore+filters over commander_candidates, favorites, owner-scoped decks, profile) — this is where the Tailwind restyle from PR #11 should be reconciled/merged."
+  notes: "P0 schema; P1 auth (Flask-Login, invites, hardening, create-admin/invite-user CLI); P2 admin user mgmt (/admin, role-gated). Tailwind (PR#11) merged to main; portal branch rebased on it. P3: user portal — db.py FavoritesRepo (commanders+decks toggle/list/ids) + DecksRepo (list_for_owner, owner_of, set_owner, count_this_month) + UsersRepo.update_profile; ui/explore_filters.py (pure WHERE builder over commander_candidates: colors atmost/exactly, abilities=keywords LIKE, price/cmc ranges, sort, pagination); routes: home dashboard (quota meter, recent decks, fav shortcuts), /explore (filter sidebar + hearts + pagination), /favorites/commanders, /favorites/decks, /decks (owner-scoped, delete), /profile (edit + change password), favorite toggle endpoints (JSON, CSRF via X-CSRFToken). Owner-scoping: generate sets owner_id; view/delete/deck-fav authorized (owner or admin → else 403). Templates all Tailwind (home/explore/decks/favorites_*/profile + _macros.html + build form moved to profile_view). index.html DELETED. NEXT: P4 quota ENFORCEMENT (block 21st/month + global $ ceiling) + cost attribution (contextvar in reasoning/client.py, cost_log.user_id/deck_id, thread owner via DeckBuildRequest)."
 ```
 
 </context>

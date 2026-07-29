@@ -320,6 +320,17 @@ class UsersRepo:
             )
             conn.commit()
 
+    def update_profile(
+        self, user_id: str, display_name: str, avatar_emoji: str | None
+    ) -> None:
+        """Update a user's display name and avatar emoji."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE users SET display_name = ?, avatar_emoji = ? WHERE id = ?",
+                (display_name, avatar_emoji, user_id),
+            )
+            conn.commit()
+
     def set_status(self, user_id: str, status: str) -> None:
         """Set a user's status (``invited`` | ``active`` | ``disabled``)."""
         with connect(self.db_path) as conn:
@@ -423,3 +434,157 @@ class InviteRepo:
                 (datetime.now().isoformat(timespec="seconds"), token),
             )
             conn.commit()
+
+
+class FavoritesRepo:
+    """Per-user favorites for commanders and generated decks."""
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = db_path
+
+    # --- commanders ---
+
+    def toggle_commander(self, user_id: str, commander_id: str) -> bool:
+        """Toggle a commander favorite. Returns the new state (True = favorited)."""
+        with connect(self.db_path) as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM favorite_commanders WHERE user_id = ? AND commander_id = ?",
+                (user_id, commander_id),
+            ).fetchone()
+            if exists:
+                conn.execute(
+                    "DELETE FROM favorite_commanders WHERE user_id = ? AND commander_id = ?",
+                    (user_id, commander_id),
+                )
+                conn.commit()
+                return False
+            conn.execute(
+                "INSERT INTO favorite_commanders (user_id, commander_id, created_at) "
+                "VALUES (?, ?, ?)",
+                (user_id, commander_id, datetime.now().isoformat(timespec="seconds")),
+            )
+            conn.commit()
+            return True
+
+    def commander_ids(self, user_id: str) -> set[str]:
+        """Return the set of commander ids this user has favorited."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT commander_id FROM favorite_commanders WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+        return {r[0] for r in rows}
+
+    def list_commanders(self, user_id: str) -> list[dict]:
+        """Return favorited commanders with card info + current price, newest first."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT c.id, c.name, c.type_line, c.color_identity, c.mana_cost,
+                          c.image_uri, cc.price_usd, f.created_at
+                   FROM favorite_commanders f
+                   JOIN cards c ON c.id = f.commander_id
+                   LEFT JOIN commander_candidates cc ON cc.id = c.id
+                   WHERE f.user_id = ?
+                   ORDER BY f.created_at DESC""",
+                (user_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # --- decks ---
+
+    def toggle_deck(self, user_id: str, deck_id: str) -> bool:
+        """Toggle a deck favorite. Returns the new state (True = favorited)."""
+        with connect(self.db_path) as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM favorite_decks WHERE user_id = ? AND deck_id = ?",
+                (user_id, deck_id),
+            ).fetchone()
+            if exists:
+                conn.execute(
+                    "DELETE FROM favorite_decks WHERE user_id = ? AND deck_id = ?",
+                    (user_id, deck_id),
+                )
+                conn.commit()
+                return False
+            conn.execute(
+                "INSERT INTO favorite_decks (user_id, deck_id, created_at) VALUES (?, ?, ?)",
+                (user_id, deck_id, datetime.now().isoformat(timespec="seconds")),
+            )
+            conn.commit()
+            return True
+
+    def deck_ids(self, user_id: str) -> set[str]:
+        """Return the set of deck ids this user has favorited."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT deck_id FROM favorite_decks WHERE user_id = ?", (user_id,)
+            ).fetchall()
+        return {r[0] for r in rows}
+
+    def list_decks(self, user_id: str) -> list[dict]:
+        """Return favorited decks (only those still owned/visible to the user)."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT gd.id, gd.deck_name, gd.budget_usd, gd.power_target,
+                          gd.estimated_bracket, gd.generated_at, gd.owner_id,
+                          c.name AS commander_name, f.created_at AS favorited_at
+                   FROM favorite_decks f
+                   JOIN generated_decks gd ON gd.id = f.deck_id
+                   JOIN cards c ON c.id = gd.commander_id
+                   WHERE f.user_id = ?
+                   ORDER BY f.created_at DESC""",
+                (user_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+class DecksRepo:
+    """Owner-scoped access to generated decks (privacy + quota counting)."""
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = db_path
+
+    def list_for_owner(self, user_id: str, *, limit: int | None = None) -> list[dict]:
+        """Return decks owned by ``user_id``, newest first."""
+        sql = (
+            "SELECT gd.id, gd.deck_name, gd.budget_usd, gd.power_target, "
+            "gd.strategy, gd.estimated_bracket, gd.cvar_score, gd.generated_at, "
+            "c.name AS commander_name "
+            "FROM generated_decks gd JOIN cards c ON c.id = gd.commander_id "
+            "WHERE gd.owner_id = ? ORDER BY gd.generated_at DESC"
+        )
+        params: list = [user_id]
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        with connect(self.db_path) as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def owner_of(self, deck_id: str) -> str | None:
+        """Return the owner id of a deck, or None if the deck/owner is unset."""
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT owner_id FROM generated_decks WHERE id = ?", (deck_id,)
+            ).fetchone()
+        return row[0] if row else None
+
+    def set_owner(self, deck_id: str, user_id: str) -> None:
+        """Assign a deck's owner (used right after generation)."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE generated_decks SET owner_id = ? WHERE id = ?",
+                (user_id, deck_id),
+            )
+            conn.commit()
+
+    def count_this_month(self, user_id: str) -> int:
+        """Count decks this user generated in the current calendar month (UTC)."""
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM generated_decks "
+                "WHERE owner_id = ? "
+                "AND generated_at >= strftime('%Y-%m-01 00:00:00', 'now')",
+                (user_id,),
+            ).fetchone()
+        return int(row[0]) if row else 0

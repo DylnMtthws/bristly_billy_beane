@@ -1,0 +1,61 @@
+{# Reusable UI fragments for the user portal (P3). #}
+
+{% macro heart(kind, id, favorited, removable=False) %}
+<button type="button" class="fav-btn {% if favorited %}is-fav{% endif %}"
+        data-fav-{{ kind }} data-id="{{ id }}"
+        aria-pressed="{{ 'true' if favorited else 'false' }}"
+        {% if removable %}data-remove-on-unfav{% endif %}
+        title="{{ 'Remove favorite' if favorited else 'Add favorite' }}">&#10084;</button>
+{% endmacro %}
+
+{% macro commander_card(c, favorited=False, removable=False) %}
+<div class="flex flex-col rounded-2xl border border-line bg-panel p-4 shadow-panel transition-colors hover:border-line/40 hover:bg-panel2"
+     {% if removable %}data-fav-card{% endif %}>
+    <div class="flex items-start justify-between gap-2">
+        <h3 class="text-base font-semibold text-body">{{ c.name }}</h3>
+        {{ heart('commander', c.id, favorited, removable) }}
+    </div>
+    <p class="mt-0.5 text-xs text-muted">{{ c.type_line }}</p>
+    <div class="mt-2 flex items-center gap-1">
+        {% for col in c.color_identity %}
+        <span class="mana mana-{{ col }}">{{ col }}</span>
+        {% endfor %}
+        {% if not c.color_identity %}<span class="mana mana-C">C</span>{% endif %}
+        {% if c.price_usd is not none %}
+        <span class="ml-auto text-sm font-medium text-brand">${{ "%.2f"|format(c.price_usd) }}</span>
+        {% endif %}
+    </div>
+    <div class="mt-3 flex items-center gap-3 border-t border-line/70 pt-3 text-sm">
+        <a href="{{ url_for('main.commander_profile', name=c.name) }}"
+           class="font-medium text-brand hover:text-brand-hover">Profile</a>
+        <a href="{{ url_for('main.commander_profile', name=c.name) }}#build"
+           class="font-medium text-muted hover:text-body">Build&nbsp;deck &rarr;</a>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro deck_row(d, favorited=False, show_delete=False) %}
+<tr class="transition-colors hover:bg-white/5" {% if favorited %}data-fav-card{% endif %}>
+    <td class="px-4 py-3">{{ heart('deck', d.id, favorited, removable=favorited) }}</td>
+    <td class="px-4 py-3 font-medium text-body">{{ d.commander_name }}</td>
+    <td class="px-4 py-3 text-muted">{{ d.deck_name or '—' }}</td>
+    <td class="px-4 py-3">${{ "%.0f"|format(d.budget_usd or 0) }}</td>
+    <td class="px-4 py-3">{{ d.power_target }}</td>
+    <td class="px-4 py-3">{{ d.estimated_bracket }}</td>
+    <td class="px-4 py-3 text-muted">{{ (d.generated_at or '')[:16] }}</td>
+    <td class="px-4 py-3">
+        <div class="flex items-center justify-end gap-2">
+            <a href="{{ url_for('main.view_deck', deck_id=d.id) }}"
+               class="font-medium text-brand hover:text-brand-hover">View</a>
+            {% if show_delete %}
+            <form method="post" action="{{ url_for('main.delete_deck', deck_id=d.id) }}"
+                  onsubmit="return confirm('Delete this deck?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        class="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:border-brand hover:bg-brand hover:text-white">Delete</button>
+            </form>
+            {% endif %}
+        </div>
+    </td>
+</tr>
+{% endmacro %}

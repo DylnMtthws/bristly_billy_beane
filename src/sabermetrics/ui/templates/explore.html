@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from "_macros.html" import commander_card %}
+{% block title %}Explore Commanders{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold tracking-tight">Explore Commanders</h1>
+<p class="mt-1 text-sm text-muted">Filter by colors, abilities, price, and mana value.</p>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-[260px,1fr]">
+    <!-- Filters -->
+    <form method="get" action="{{ url_for('main.explore') }}"
+          class="h-max rounded-2xl border border-line bg-panel p-4 shadow-panel lg:sticky lg:top-20">
+        <div>
+            <label class="mb-1 block text-xs font-medium text-muted">Search</label>
+            <input type="text" name="q" value="{{ eq.q }}" placeholder="Commander name…"
+                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none">
+        </div>
+
+        <div class="mt-4">
+            <label class="mb-1.5 block text-xs font-medium text-muted">Colors</label>
+            <div class="flex flex-wrap gap-1.5">
+                {% for col in all_colors %}
+                <label class="cursor-pointer">
+                    <input type="checkbox" name="color" value="{{ col }}" class="peer sr-only"
+                           {% if col in eq.colors %}checked{% endif %}>
+                    <span class="mana mana-{{ col }} opacity-40 ring-2 ring-transparent peer-checked:opacity-100 peer-checked:ring-white/60">{{ col }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <select name="color_mode" class="mt-2 w-full rounded-lg border border-line bg-field px-2 py-1.5 text-xs focus:border-brand focus:outline-none">
+                <option value="atmost" {% if eq.color_mode == 'atmost' %}selected{% endif %}>At most these colors</option>
+                <option value="exactly" {% if eq.color_mode == 'exactly' %}selected{% endif %}>Exactly these colors</option>
+            </select>
+        </div>
+
+        <div class="mt-4">
+            <label class="mb-1 block text-xs font-medium text-muted">Price (USD)</label>
+            <div class="flex items-center gap-2">
+                <input type="number" name="price_min" min="0" step="0.5" value="{{ eq.price_min if eq.price_min is not none else '' }}" placeholder="min"
+                       class="w-full rounded-lg border border-line bg-field px-2 py-1.5 text-sm focus:border-brand focus:outline-none">
+                <span class="text-muted">–</span>
+                <input type="number" name="price_max" min="0" step="0.5" value="{{ eq.price_max if eq.price_max is not none else '' }}" placeholder="max"
+                       class="w-full rounded-lg border border-line bg-field px-2 py-1.5 text-sm focus:border-brand focus:outline-none">
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <label class="mb-1 block text-xs font-medium text-muted">Mana value (CMC)</label>
+            <div class="flex items-center gap-2">
+                <input type="number" name="cmc_min" min="0" step="1" value="{{ eq.cmc_min if eq.cmc_min is not none else '' }}" placeholder="min"
+                       class="w-full rounded-lg border border-line bg-field px-2 py-1.5 text-sm focus:border-brand focus:outline-none">
+                <span class="text-muted">–</span>
+                <input type="number" name="cmc_max" min="0" step="1" value="{{ eq.cmc_max if eq.cmc_max is not none else '' }}" placeholder="max"
+                       class="w-full rounded-lg border border-line bg-field px-2 py-1.5 text-sm focus:border-brand focus:outline-none">
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <label class="mb-1.5 block text-xs font-medium text-muted">Abilities</label>
+            <div class="max-h-44 space-y-1 overflow-y-auto pr-1">
+                {% for a in all_abilities %}
+                <label class="flex items-center gap-2 text-sm text-body">
+                    <input type="checkbox" name="ability" value="{{ a }}" class="accent-brand"
+                           {% if a in eq.abilities %}checked{% endif %}>
+                    {{ a }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <label class="mb-1 block text-xs font-medium text-muted">Sort</label>
+            <select name="sort" class="w-full rounded-lg border border-line bg-field px-2 py-1.5 text-sm focus:border-brand focus:outline-none">
+                <option value="name" {% if eq.sort == 'name' %}selected{% endif %}>Name (A–Z)</option>
+                <option value="price_asc" {% if eq.sort == 'price_asc' %}selected{% endif %}>Price: low → high</option>
+                <option value="price_desc" {% if eq.sort == 'price_desc' %}selected{% endif %}>Price: high → low</option>
+                <option value="cmc_asc" {% if eq.sort == 'cmc_asc' %}selected{% endif %}>CMC: low → high</option>
+                <option value="cmc_desc" {% if eq.sort == 'cmc_desc' %}selected{% endif %}>CMC: high → low</option>
+            </select>
+        </div>
+
+        <div class="mt-5 flex gap-2">
+            <button type="submit" class="flex-1 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">Apply</button>
+            <a href="{{ url_for('main.explore') }}" class="rounded-xl border border-line px-4 py-2 text-sm text-muted transition-colors hover:bg-white/5 hover:text-body">Clear</a>
+        </div>
+    </form>
+
+    <!-- Results -->
+    <div>
+        {% if results %}
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {% for c in results %}
+            {{ commander_card(c, favorited=(c.id in fav_ids)) }}
+            {% endfor %}
+        </div>
+
+        <div class="mt-6 flex items-center justify-between text-sm">
+            {% if eq.page > 1 %}
+            <a href="{{ url_for('main.explore', q=eq.q, color=eq.colors, color_mode=eq.color_mode, ability=eq.abilities, price_min=eq.price_min, price_max=eq.price_max, cmc_min=eq.cmc_min, cmc_max=eq.cmc_max, sort=eq.sort, page=eq.page-1) }}"
+               class="rounded-lg border border-line px-3 py-1.5 text-muted hover:bg-white/5 hover:text-body">&larr; Prev</a>
+            {% else %}<span></span>{% endif %}
+            <span class="text-muted">Page {{ eq.page }}</span>
+            {% if has_next %}
+            <a href="{{ url_for('main.explore', q=eq.q, color=eq.colors, color_mode=eq.color_mode, ability=eq.abilities, price_min=eq.price_min, price_max=eq.price_max, cmc_min=eq.cmc_min, cmc_max=eq.cmc_max, sort=eq.sort, page=eq.page+1) }}"
+               class="rounded-lg border border-line px-3 py-1.5 text-muted hover:bg-white/5 hover:text-body">Next &rarr;</a>
+            {% else %}<span></span>{% endif %}
+        </div>
+        {% else %}
+        <div class="rounded-2xl border border-dashed border-line bg-panel/40 p-10 text-center">
+            <p class="text-sm text-muted">No commanders match these filters.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

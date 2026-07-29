@@ -39,6 +39,52 @@
     </div>
 </div>
 
+<!-- Build a deck -->
+<section id="build" class="mt-8 scroll-mt-20 rounded-2xl border border-line bg-panel p-5 shadow-panel">
+    <h2 class="text-sm font-semibold uppercase tracking-wider text-muted">Build a Deck</h2>
+    <form method="post" action="{{ url_for('main.generate_deck') }}" class="build-form mt-3 grid gap-4 sm:grid-cols-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="commander_id" value="{{ commander_id }}">
+        <label class="block sm:col-span-2">
+            <span class="mb-1 block text-xs font-medium text-muted">Deck name</span>
+            <input type="text" name="deck_name" placeholder="e.g., Budget Aggro"
+                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none">
+        </label>
+        <label class="block">
+            <span class="mb-1 block text-xs font-medium text-muted">Budget ($)</span>
+            <input type="number" name="budget" value="200" step="10" min="10"
+                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm focus:border-brand focus:outline-none">
+        </label>
+        <label class="block">
+            <span class="mb-1 block text-xs font-medium text-muted">Power (1-5)</span>
+            <input type="number" name="power" value="3" min="1" max="5"
+                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm focus:border-brand focus:outline-none">
+        </label>
+        <label class="block">
+            <span class="mb-1 block text-xs font-medium text-muted">Strategy (optional)</span>
+            <input type="text" name="strategy" placeholder="e.g., aggro, combo"
+                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none">
+        </label>
+        <label class="block">
+            <span class="mb-1 block text-xs font-medium text-muted">Build direction (optional)</span>
+            <input type="text" name="user_intent" placeholder="Optional intent"
+                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none">
+        </label>
+        <div class="sm:col-span-2">
+            <button type="submit" class="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">Generate</button>
+        </div>
+    </form>
+</section>
+
+<!-- Loading overlay for deck generation -->
+<div id="loading-overlay" class="loading-overlay" style="display:none">
+    <div class="loading-content">
+        <h2 class="loading-commander" id="loading-commander"></h2>
+        <div class="loading-bar-track"><div class="loading-bar-fill" id="loading-bar"></div></div>
+        <p class="loading-text" id="loading-text">Preparing…</p>
+    </div>
+</div>
+
 {% if profile %}
 <section class="prose-content mt-10">
     <div class="flex items-center justify-between">
@@ -134,18 +180,9 @@
     {% endif %}
 </section>
 {% else %}
-<section class="mt-10 rounded-2xl border border-line bg-panel p-6 text-center shadow-panel">
-    <p class="text-sm text-muted">No profile generated yet. Use the CLI or generate a deck to create one.</p>
-    <form method="post" action="{{ url_for('main.generate_deck') }}" class="mt-4">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="commander_id" value="{{ commander_id }}">
-        <input type="hidden" name="budget" value="200">
-        <input type="hidden" name="power" value="3">
-        <button type="submit"
-                class="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
-            Generate Deck (creates profile)
-        </button>
-    </form>
+<section class="mt-10 rounded-2xl border border-dashed border-line bg-panel/40 p-6 text-center">
+    <p class="text-sm text-muted">No profile generated yet. Generate a deck above to create one.</p>
+    <a href="#build" class="mt-3 inline-block rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">Build a deck</a>
 </section>
 {% endif %}
 
@@ -183,4 +220,59 @@
 {% endif %}
 
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var flavor = [
+        "Summoning the commander…",
+        "Scouting the multiverse for candidates…",
+        "Crunching the numbers… hold my mana rock",
+        "Asking the AI to judge the pool…",
+        "Assembling the 99… budget is a feature",
+        "Writing the game plan…",
+        "Calculating power level…"
+    ];
+    var overlay = document.getElementById('loading-overlay');
+    if (!overlay) return;
+    var bar = document.getElementById('loading-bar');
+    var text = document.getElementById('loading-text');
+    var cmdrEl = document.getElementById('loading-commander');
+    var csrf = document.querySelector('meta[name="csrf-token"]');
+    csrf = csrf ? csrf.getAttribute('content') : '';
+    var progTimer, flavorTimer;
+
+    function show(name) {
+        cmdrEl.textContent = name;
+        bar.style.width = '0%';
+        text.textContent = flavor[0];
+        overlay.style.display = 'flex';
+        var p = 0, i = 0;
+        progTimer = setInterval(function () { p += (90 - p) * 0.04; bar.style.width = p + '%'; }, 500);
+        flavorTimer = setInterval(function () { i = (i + 1) % flavor.length; text.textContent = flavor[i]; }, 4000);
+    }
+    function stop() { clearInterval(progTimer); clearInterval(flavorTimer); }
+
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form.classList.contains('build-form')) return;
+        e.preventDefault();
+        show({{ commander_name | tojson }});
+        fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrf }
+        })
+        .then(function (resp) { return resp.json().then(function (d) { return { ok: resp.ok, d: d }; }); })
+        .then(function (r) {
+            if (r.ok && r.d.deck_url) {
+                stop(); bar.style.width = '100%'; text.textContent = 'Done! Redirecting…';
+                setTimeout(function () { window.location.href = r.d.deck_url; }, 600);
+            } else { stop(); overlay.style.display = 'none'; alert(r.d.error || 'Deck generation failed.'); }
+        })
+        .catch(function (err) { stop(); overlay.style.display = 'none'; alert('Deck generation failed: ' + err.message); });
+    });
+})();
+</script>
 {% endblock %}

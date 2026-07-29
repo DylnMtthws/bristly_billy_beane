@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}Sabermetrics{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -43,13 +44,15 @@
             {% set ep = request.endpoint %}
             <div class="flex items-center gap-1 text-sm">
                 {% set links = [
-                    ('main.index', 'Home'),
-                    ('main.reference_search', 'Rules Search'),
-                    ('main.cost_report', 'Cost Report'),
+                    ('main.index', 'Home', 'main.index'),
+                    ('main.explore', 'Explore', 'main.explore'),
+                    ('main.decks', 'Decks', 'main.decks'),
+                    ('main.favorite_commanders', 'Favorites', 'main.favorite'),
+                    ('main.reference_search', 'Rules', 'main.reference_search'),
                 ] %}
-                {% for endpoint, label in links %}
+                {% for endpoint, label, prefix in links %}
                 <a href="{{ url_for(endpoint) }}"
-                   class="rounded-lg px-3 py-1.5 transition-colors {% if ep == endpoint %}bg-brand/15 text-brand{% else %}text-muted hover:bg-white/5 hover:text-body{% endif %}">
+                   class="rounded-lg px-3 py-1.5 transition-colors {% if ep and ep.startswith(prefix) %}bg-brand/15 text-brand{% else %}text-muted hover:bg-white/5 hover:text-body{% endif %}">
                     {{ label }}
                 </a>
                 {% endfor %}
@@ -60,6 +63,11 @@
                     Admin
                 </a>
                 {% endif %}
+                <a href="{{ url_for('main.profile') }}"
+                   class="ml-1 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors {% if ep == 'main.profile' %}bg-brand/15 text-brand{% else %}text-muted hover:bg-white/5 hover:text-body{% endif %}">
+                    <span>{{ current_user.avatar_emoji or '🧙' }}</span>
+                    <span class="hidden sm:inline">{{ current_user.display_name }}</span>
+                </a>
                 <a href="{{ url_for('auth.logout') }}"
                    class="rounded-lg px-3 py-1.5 text-muted transition-colors hover:bg-white/5 hover:text-body">
                     Logout
@@ -77,12 +85,60 @@
         </div>
         {% endif %}
 
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% for category, message in messages %}
+          <div class="mb-4 rounded-xl px-4 py-3 text-sm {% if category == 'error' %}border border-brand/40 bg-brand/10 text-brand-hover{% elif category == 'success' %}border border-emerald-500/40 bg-emerald-500/10 text-emerald-400{% else %}border border-line bg-panel text-body{% endif %}">{{ message }}</div>
+          {% endfor %}
+        {% endwith %}
+
         {% block content %}{% endblock %}
     </main>
 
     <footer class="border-t border-line/70 py-6 text-center text-xs text-muted">
-        Sabermetrics for Magic &mdash; local-only Commander deck optimization
+        Sabermetrics for Magic &mdash; Commander deck optimization &amp; feedback beta
     </footer>
+
+    <script>
+    // Shared favorite (heart) toggling. Any element with data-fav-commander or
+    // data-fav-deck posts a toggle and reflects the new state via .is-fav.
+    (function () {
+        var csrf = document.querySelector('meta[name="csrf-token"]');
+        csrf = csrf ? csrf.getAttribute('content') : '';
+
+        function bind(selector, urlFor) {
+            document.querySelectorAll(selector).forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var id = btn.getAttribute('data-id');
+                    btn.disabled = true;
+                    fetch(urlFor(id), {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+                    .then(function (data) {
+                        btn.classList.toggle('is-fav', !!data.favorited);
+                        btn.setAttribute('aria-pressed', data.favorited ? 'true' : 'false');
+                        if (btn.hasAttribute('data-remove-on-unfav') && !data.favorited) {
+                            var card = btn.closest('[data-fav-card]');
+                            if (card) card.remove();
+                        }
+                    })
+                    .catch(function () {})
+                    .finally(function () { btn.disabled = false; });
+                });
+            });
+        }
+
+        bind('[data-fav-commander]', function (id) {
+            return '/favorites/commander/' + encodeURIComponent(id) + '/toggle';
+        });
+        bind('[data-fav-deck]', function (id) {
+            return '/favorites/deck/' + encodeURIComponent(id) + '/toggle';
+        });
+    })();
+    </script>
 
     {% block scripts %}{% endblock %}
 </body>
