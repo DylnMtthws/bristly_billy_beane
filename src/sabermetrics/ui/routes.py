@@ -463,6 +463,45 @@ def delete_deck(deck_id: str):
     return redirect(url_for("main.decks"))
 
 
+@bp.route("/deck/<deck_id>/card/<path:card_id>/feedback", methods=["POST"])
+def card_feedback(deck_id: str, card_id: str):
+    """Owner-only: save a thumbs vote + comment for a card in this deck."""
+    db_path = _db_path()
+    owner = db.DecksRepo(db_path).owner_of(deck_id)
+    if owner is None:
+        return jsonify({"error": "not found"}), 404
+    if owner != current_user.id:
+        return jsonify({"error": "forbidden"}), 403
+
+    vote = request.form.get("vote") or None
+    if vote not in (None, "up", "down"):
+        return jsonify({"error": "invalid vote"}), 400
+    comment = request.form.get("comment")
+    card_name = request.form.get("card_name") or ""
+    db.FeedbackRepo(db_path).upsert_card(
+        current_user.id, deck_id, card_id, card_name, vote, comment
+    )
+    return jsonify({"ok": True, "vote": vote, "comment": (comment or "").strip()})
+
+
+@bp.route("/deck/<deck_id>/feedback", methods=["POST"])
+def deck_feedback(deck_id: str):
+    """Owner-only: save the deck's overall verdict + comment."""
+    db_path = _db_path()
+    owner = db.DecksRepo(db_path).owner_of(deck_id)
+    if owner is None:
+        return jsonify({"error": "not found"}), 404
+    if owner != current_user.id:
+        return jsonify({"error": "forbidden"}), 403
+
+    verdict = request.form.get("verdict") or None
+    if verdict not in (None, "good", "bad", "mixed"):
+        return jsonify({"error": "invalid verdict"}), 400
+    comment = request.form.get("comment")
+    db.FeedbackRepo(db_path).upsert_deck(current_user.id, deck_id, verdict, comment)
+    return jsonify({"ok": True, "verdict": verdict})
+
+
 @bp.route("/deck/<deck_id>")
 def view_deck(deck_id: str):
     """View a generated deck."""
@@ -740,6 +779,13 @@ def view_deck(deck_id: str):
             "role": card.get("slot_role", "other"),
         })
 
+    # Feedback: only the deck's owner rates it (admins viewing get read-only).
+    owner_id = deck_data.get("owner_id")
+    can_feedback = owner_id is not None and owner_id == current_user.id
+    feedback_repo = db.FeedbackRepo(db_path)
+    card_feedback = feedback_repo.card_map(current_user.id, deck_id) if can_feedback else {}
+    deck_feedback = feedback_repo.deck(current_user.id, deck_id) if can_feedback else None
+
     return render_template(
         "deck_view.html",
         deck=deck_data,
@@ -749,6 +795,9 @@ def view_deck(deck_id: str):
         chart_components=chart_components,
         chart_pip_vs_sources=chart_pip_vs_sources,
         chart_value_scatter=chart_value_scatter,
+        can_feedback=can_feedback,
+        card_feedback=card_feedback,
+        deck_feedback=deck_feedback,
     )
 
 
