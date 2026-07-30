@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold tracking-tight">Profile</h1>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-2">
+    <!-- Account + quota -->
+    <div class="space-y-6">
+        <div class="rounded-2xl border border-line bg-panel p-5 shadow-panel">
+            <div class="flex items-center gap-3">
+                <span class="grid h-11 w-11 place-items-center rounded-full bg-field text-2xl">{{ current_user.avatar_emoji or '🧙' }}</span>
+                <div>
+                    <div class="font-semibold text-body">{{ current_user.display_name }}</div>
+                    <div class="text-sm text-muted">{{ current_user.email }} · {{ current_user.role }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="rounded-2xl border border-line bg-panel p-5 shadow-panel">
+            <div class="flex items-baseline justify-between">
+                <div class="text-sm font-medium text-body">This month</div>
+                <div class="text-sm text-muted">{{ used }} / {{ quota }} decks</div>
+            </div>
+            <div class="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-field">
+                <div class="h-full rounded-full bg-brand" style="width: {{ (used / quota * 100) | round if quota else 0 }}%"></div>
+            </div>
+            <div class="mt-1.5 text-xs text-muted">{{ remaining }} remaining · {{ total_decks }} decks all-time</div>
+        </div>
+    </div>
+
+    <!-- Edit forms -->
+    <div class="space-y-6">
+        <form method="post" action="{{ url_for('main.profile') }}" class="space-y-4 rounded-2xl border border-line bg-panel p-5 shadow-panel">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-muted">Edit profile</h2>
+            <label class="block">
+                <span class="mb-1 block text-xs font-medium text-muted">Display name</span>
+                <input type="text" name="display_name" value="{{ current_user.display_name }}" required
+                       class="w-full rounded-lg border border-line bg-field px-3 py-2 text-sm focus:border-brand focus:outline-none">
+            </label>
+            <label class="block">
+                <span class="mb-1 block text-xs font-medium text-muted">Avatar emoji</span>
+                <input type="text" name="avatar_emoji" value="{{ current_user.avatar_emoji or '' }}" maxlength="8" placeholder="🧙"
+                       class="w-24 rounded-lg border border-line bg-field px-3 py-2 text-sm focus:border-brand focus:outline-none">
+            </label>
+            <button type="submit" class="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">Save</button>
+        </form>
+
+        <form method="post" action="{{ url_for('main.change_password') }}" class="space-y-4 rounded-2xl border border-line bg-panel p-5 shadow-panel">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-muted">Change password</h2>
+            {% set pw_cls = "w-full rounded-lg border border-line bg-field px-3 py-2 text-sm focus:border-brand focus:outline-none" %}
+            <label class="block">
+                <span class="mb-1 block text-xs font-medium text-muted">Current password</span>
+                <input type="password" name="current_password" class="{{ pw_cls }}">
+            </label>
+            <label class="block">
+                <span class="mb-1 block text-xs font-medium text-muted">New password</span>
+                <input type="password" name="new_password" class="{{ pw_cls }}">
+            </label>
+            <label class="block">
+                <span class="mb-1 block text-xs font-medium text-muted">Confirm new password</span>
+                <input type="password" name="confirm_password" class="{{ pw_cls }}">
+            </label>
+            <button type="submit" class="rounded-xl border border-line px-5 py-2.5 text-sm font-semibold text-body transition-colors hover:border-brand hover:bg-brand hover:text-white">Update password</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

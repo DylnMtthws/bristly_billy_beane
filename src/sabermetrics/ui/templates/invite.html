@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Accept Invite{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-sm">
+{% if invalid %}
+    <h1 class="text-2xl font-bold tracking-tight">Invite Invalid</h1>
+    <p class="mt-2 text-sm text-muted">This invite link is invalid, already used, or expired. Ask the admin for a new one.</p>
+{% else %}
+    <h1 class="text-2xl font-bold tracking-tight">Set Up Your Account</h1>
+    <p class="mt-1 text-sm text-muted">Creating your account for <strong class="text-body">{{ email }}</strong>.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+      <div class="mt-4 rounded-xl px-4 py-3 text-sm {% if category == 'error' %}border border-brand/40 bg-brand/10 text-brand-hover{% else %}border border-line bg-panel text-body{% endif %}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% set field_cls = "w-full rounded-lg border border-line bg-field px-3 py-2 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" %}
+    <form method="post" class="mt-6 space-y-4 rounded-2xl border border-line bg-panel p-6 shadow-panel">
+        {{ form.hidden_tag() }}
+        <label class="block">
+            <span class="mb-1 block text-xs font-medium text-muted">Display name</span>
+            {{ form.display_name(placeholder="How your name shows in the app", class=field_cls) }}
+            {% for e in form.display_name.errors %}<span class="mt-1 block text-xs text-brand-hover">{{ e }}</span>{% endfor %}
+        </label>
+        <label class="block">
+            <span class="mb-1 block text-xs font-medium text-muted">Avatar emoji (optional)</span>
+            {{ form.avatar_emoji(placeholder="🧙", class=field_cls) }}
+        </label>
+        <label class="block">
+            <span class="mb-1 block text-xs font-medium text-muted">Password</span>
+            {{ form.password(placeholder="At least 8 characters", class=field_cls) }}
+            {% for e in form.password.errors %}<span class="mt-1 block text-xs text-brand-hover">{{ e }}</span>{% endfor %}
+        </label>
+        <label class="block">
+            <span class="mb-1 block text-xs font-medium text-muted">Confirm password</span>
+            {{ form.confirm(class=field_cls) }}
+            {% for e in form.confirm.errors %}<span class="mt-1 block text-xs text-brand-hover">{{ e }}</span>{% endfor %}
+        </label>
+        <button type="submit"
+                class="w-full rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
+            Create Account
+        </button>
+    </form>
+{% endif %}
+</div>
+{% endblock %}

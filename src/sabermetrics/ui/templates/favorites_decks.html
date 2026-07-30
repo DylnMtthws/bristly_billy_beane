@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_macros.html" import deck_row %}
+{% block title %}Favorite Decks{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-2 border-b border-line pb-3">
+    <a href="{{ url_for('main.favorite_commanders') }}" class="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-white/5 hover:text-body">Commanders</a>
+    <a href="{{ url_for('main.favorite_decks') }}" class="rounded-lg bg-brand/15 px-3 py-1.5 text-sm font-medium text-brand">Decks</a>
+</div>
+
+<h1 class="mt-6 text-2xl font-bold tracking-tight">Favorite Decks</h1>
+
+{% if decks %}
+<div class="mt-6 overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                <th class="px-4 py-3"></th>
+                <th class="px-4 py-3 font-medium">Commander</th>
+                <th class="px-4 py-3 font-medium">Deck</th>
+                <th class="px-4 py-3 font-medium">Budget</th>
+                <th class="px-4 py-3 font-medium">Power</th>
+                <th class="px-4 py-3 font-medium">Bracket</th>
+                <th class="px-4 py-3 font-medium">Generated</th>
+                <th class="px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-line/60">
+            {% for d in decks %}
+            {{ deck_row(d, favorited=True, show_delete=False) }}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="mt-6 rounded-2xl border border-dashed border-line bg-panel/40 p-10 text-center">
+    <p class="text-sm text-muted">No favorite decks yet. Star a deck from <a href="{{ url_for('main.decks') }}" class="text-brand hover:text-brand-hover">your decks</a>.</p>
+</div>
+{% endif %}
+{% endblock %}

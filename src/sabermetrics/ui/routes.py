@@ -14,12 +14,86 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+from flask_login import current_user
 
+from sabermetrics import db
 from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
+from sabermetrics.ui.explore_filters import ABILITY_OPTIONS, WUBRG, build_explore_query
 
 bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
+
+
+def _parse_json_col(value, default="[]"):
+    """Decode a JSON-encoded text column into a Python object."""
+    if isinstance(value, str):
+        try:
+            return json.loads(value or default)
+        except json.JSONDecodeError:
+            return json.loads(default)
+    return value if value is not None else json.loads(default)
+
+
+def _can_access_deck(owner_id: str | None) -> bool:
+    """A deck is visible to its owner or any admin."""
+    return bool(
+        owner_id == current_user.id or getattr(current_user, "is_admin", False)
+    )
+
+
+def _monthly_spend(db_path: Path) -> float:
+    """Total LLM spend across all users in the trailing 30 days."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        return conn.execute(
+            "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_log "
+            "WHERE timestamp >= datetime('now', '-30 days')"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+
+def _quota_reset_label() -> str:
+    """Human label for when the per-user monthly quota next resets."""
+    from datetime import date
+
+    today = date.today()
+    year, month = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
+    return date(year, month, 1).strftime("%B 1")
+
+
+def _generation_blocked(is_ajax: bool, message: str, status: int):
+    """Return a blocked-generation response (JSON for XHR, else flash+redirect)."""
+    if is_ajax:
+        return jsonify({"error": message}), status
+    flash(message, "error")
+    return redirect(request.referrer or url_for("main.index"))
+
+
+@bp.before_request
+def _require_login():
+    """Gate every user-portal route behind an authenticated, active session.
+
+    Public auth routes (login/logout/invite) live in the ``auth`` blueprint and
+    are unaffected. Static assets are served by the app's own static endpoint,
+    also outside this blueprint.
+    """
+    if not current_user.is_authenticated:
+        from sabermetrics.ui.auth import login_manager
+
+        return login_manager.unauthorized()
+    return None
 
 
 def _db_path() -> Path:
@@ -28,51 +102,188 @@ def _db_path() -> Path:
 
 @bp.route("/")
 def index():
-    """Home page: commander search and recent decks."""
+    """Home dashboard: quota meter, recent decks, favorite quick-builds, stats."""
     db_path = _db_path()
-    query = request.args.get("q", "").strip()
+    user_id = current_user.id
 
-    commanders = []
-    recent_decks = []
+    decks_repo = db.DecksRepo(db_path)
+    favs = db.FavoritesRepo(db_path)
+
+    recent_decks = decks_repo.list_for_owner(user_id, limit=6)
+    fav_commanders = favs.list_commanders(user_id)
+    for c in fav_commanders:
+        c["color_identity"] = _parse_json_col(c.get("color_identity"))
+
+    used = decks_repo.count_this_month(user_id)
+    quota = current_user.monthly_deck_quota
+    total_decks = len(decks_repo.list_for_owner(user_id))
+
+    stats = {
+        "decks": total_decks,
+        "favorites": len(fav_commanders),
+        "quota_used": used,
+        "quota": quota,
+        "quota_remaining": max(0, quota - used),
+        "quota_pct": min(100, round(used / quota * 100)) if quota else 0,
+    }
+
+    return render_template(
+        "home.html",
+        recent_decks=recent_decks,
+        fav_commanders=fav_commanders[:6],
+        stats=stats,
+    )
+
+
+@bp.route("/explore")
+def explore():
+    """Browse legal commanders with color/ability/price/CMC filters."""
+    db_path = _db_path()
+    eq = build_explore_query(request.args)
+
+    sql = (
+        "SELECT id, name, type_line, color_identity, keywords, mana_cost, cmc, "
+        "image_uri, price_usd, rarity FROM commander_candidates "
+        f"WHERE {eq.where_sql} ORDER BY {eq.order_sql} LIMIT ? OFFSET ?"
+    )
+    # Fetch one extra row to detect a next page without a COUNT query.
+    params = [*eq.params, eq.limit + 1, eq.offset]
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
-        # Search commanders
-        if query:
-            cursor = conn.execute(
-                "SELECT MIN(id) as id, name, type_line, color_identity, mana_cost "
-                "FROM cards WHERE name LIKE ? AND is_legal_commander = 1 "
-                "GROUP BY name ORDER BY name LIMIT 20",
-                (f"%{query}%",),
-            )
-            commanders = [dict(row) for row in cursor]
-            for c in commanders:
-                ci = c.get("color_identity", "[]")
-                if isinstance(ci, str):
-                    c["color_identity"] = json.loads(ci)
-
-        # Recent generated decks
-        cursor = conn.execute(
-            "SELECT gd.id, gd.commander_id, gd.budget_usd, gd.power_target, "
-            "gd.estimated_bracket, gd.generated_at, gd.deck_name, "
-            "c.name as commander_name "
-            "FROM generated_decks gd "
-            "JOIN cards c ON gd.commander_id = c.id "
-            "ORDER BY gd.generated_at DESC LIMIT 10"
-        )
-        recent_decks = [dict(row) for row in cursor]
+        rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
     except Exception as e:
-        logger.warning("Index query error: %s", e)
+        logger.warning("Explore query error: %s", e)
+        rows = []
     finally:
         conn.close()
 
+    has_next = len(rows) > eq.limit
+    rows = rows[: eq.limit]
+    for r in rows:
+        r["color_identity"] = _parse_json_col(r.get("color_identity"))
+
+    fav_ids = db.FavoritesRepo(db_path).commander_ids(current_user.id)
+
     return render_template(
-        "index.html",
-        query=query,
-        commanders=commanders,
-        recent_decks=recent_decks,
+        "explore.html",
+        results=rows,
+        eq=eq,
+        has_next=has_next,
+        fav_ids=fav_ids,
+        all_colors=WUBRG,
+        all_abilities=ABILITY_OPTIONS,
     )
+
+
+@bp.route("/decks")
+def decks():
+    """List the current user's generated decks (with optional name search)."""
+    db_path = _db_path()
+    query = request.args.get("q", "").strip().lower()
+
+    all_decks = db.DecksRepo(db_path).list_for_owner(current_user.id)
+    if query:
+        all_decks = [
+            d
+            for d in all_decks
+            if query in (d.get("commander_name") or "").lower()
+            or query in (d.get("deck_name") or "").lower()
+        ]
+    fav_ids = db.FavoritesRepo(db_path).deck_ids(current_user.id)
+
+    return render_template("decks.html", decks=all_decks, fav_ids=fav_ids, query=query)
+
+
+@bp.route("/favorites/commanders")
+def favorite_commanders():
+    """Grid of the user's favorited commanders."""
+    db_path = _db_path()
+    commanders = db.FavoritesRepo(db_path).list_commanders(current_user.id)
+    for c in commanders:
+        c["color_identity"] = _parse_json_col(c.get("color_identity"))
+    return render_template("favorites_commanders.html", commanders=commanders)
+
+
+@bp.route("/favorites/decks")
+def favorite_decks():
+    """List the user's favorited decks."""
+    db_path = _db_path()
+    decks_list = db.FavoritesRepo(db_path).list_decks(current_user.id)
+    return render_template("favorites_decks.html", decks=decks_list)
+
+
+@bp.route("/favorites/commander/<commander_id>/toggle", methods=["POST"])
+def toggle_favorite_commander(commander_id: str):
+    """Async: toggle a commander favorite. Returns the new state."""
+    favorited = db.FavoritesRepo(_db_path()).toggle_commander(
+        current_user.id, commander_id
+    )
+    return jsonify({"favorited": favorited})
+
+
+@bp.route("/favorites/deck/<deck_id>/toggle", methods=["POST"])
+def toggle_favorite_deck(deck_id: str):
+    """Async: toggle a deck favorite (only decks the user can access)."""
+    db_path = _db_path()
+    owner = db.DecksRepo(db_path).owner_of(deck_id)
+    if owner is None:
+        return jsonify({"error": "not found"}), 404
+    if not _can_access_deck(owner):
+        return jsonify({"error": "forbidden"}), 403
+    favorited = db.FavoritesRepo(db_path).toggle_deck(current_user.id, deck_id)
+    return jsonify({"favorited": favorited})
+
+
+@bp.route("/profile", methods=["GET", "POST"])
+def profile():
+    """View and edit the current user's profile."""
+    db_path = _db_path()
+    users = db.UsersRepo(db_path)
+
+    if request.method == "POST":
+        display_name = (request.form.get("display_name") or "").strip()
+        avatar = (request.form.get("avatar_emoji") or "").strip() or None
+        if not display_name:
+            flash("Display name can't be empty.", "error")
+        else:
+            users.update_profile(current_user.id, display_name, avatar)
+            flash("Profile updated.", "success")
+        return redirect(url_for("main.profile"))
+
+    decks_repo = db.DecksRepo(db_path)
+    used = decks_repo.count_this_month(current_user.id)
+    quota = current_user.monthly_deck_quota
+    return render_template(
+        "profile.html",
+        used=used,
+        quota=quota,
+        remaining=max(0, quota - used),
+        total_decks=len(decks_repo.list_for_owner(current_user.id)),
+    )
+
+
+@bp.route("/profile/password", methods=["POST"])
+def change_password():
+    """Change the current user's password (requires the current one)."""
+    db_path = _db_path()
+    users = db.UsersRepo(db_path)
+    current = request.form.get("current_password") or ""
+    new = request.form.get("new_password") or ""
+    confirm = request.form.get("confirm_password") or ""
+
+    row = users.get(current_user.id)
+    if not db.verify_password(row.get("password_hash"), current):
+        flash("Current password is incorrect.", "error")
+    elif len(new) < 8:
+        flash("New password must be at least 8 characters.", "error")
+    elif new != confirm:
+        flash("New passwords do not match.", "error")
+    else:
+        users.set_password(current_user.id, db.hash_password(new))
+        flash("Password changed.", "success")
+    return redirect(url_for("main.profile"))
 
 
 @bp.route("/commander/<path:name>/profile")
@@ -167,8 +378,37 @@ def generate_deck():
             return jsonify({"error": "No commander selected"}), 400
         return redirect(url_for("main.index"))
 
+    from sabermetrics.config import settings
+
+    # Global cost ceiling (friendly pre-check; the client enforces the hard stop).
+    if _monthly_spend(db_path) >= settings.llm.monthly_cost_ceiling_usd:
+        return _generation_blocked(
+            is_ajax,
+            "Generation is paused: the monthly cost ceiling has been reached. "
+            "Please try again next month.",
+            503,
+        )
+
+    # Per-user monthly quota (admin-overridable; global default otherwise).
+    decks_repo = db.DecksRepo(db_path)
+    used = decks_repo.count_this_month(current_user.id)
+    quota = current_user.monthly_deck_quota
+    if used >= quota:
+        return _generation_blocked(
+            is_ajax,
+            f"Monthly limit reached ({used}/{quota} decks). "
+            f"Your quota resets {_quota_reset_label()}.",
+            429,
+        )
+
+    import uuid as _uuid
+
+    from sabermetrics.errors import LLMCostCeilingExceeded
+
+    deck_id = str(_uuid.uuid4())
     try:
         from sabermetrics.pipeline.deck_builder import DeckBuilder, DeckBuildRequest
+        from sabermetrics.reasoning.client import cost_attribution
 
         builder = DeckBuilder(db_path)
         req = DeckBuildRequest(
@@ -178,38 +418,49 @@ def generate_deck():
             strategy=strategy,
             user_intent=user_intent,
             deck_name=deck_name,
+            owner_id=current_user.id,
+            deck_id=deck_id,
         )
-        result = builder.build(req)
+        # Attribute every LLM cost this build incurs to this user + deck.
+        with cost_attribution(current_user.id, deck_id):
+            result = builder.build(req)
+        # Claim ownership so the deck is scoped to this user (privacy + quota).
+        db.DecksRepo(db_path).set_owner(result.deck.id, current_user.id)
         deck_url = url_for("main.view_deck", deck_id=result.deck.id)
 
         if is_ajax:
             return jsonify({"deck_url": deck_url})
         return redirect(deck_url)
 
+    except LLMCostCeilingExceeded:
+        return _generation_blocked(
+            is_ajax,
+            "Generation stopped: the monthly cost ceiling was reached mid-build.",
+            503,
+        )
     except Exception as e:
         logger.error("Deck generation failed: %s", e)
         if is_ajax:
             return jsonify({"error": f"Deck generation failed: {e}"}), 500
-        return render_template(
-            "index.html",
-            query="",
-            commanders=[],
-            recent_decks=[],
-            error=f"Deck generation failed: {e}",
-        )
+        flash(f"Deck generation failed: {e}", "error")
+        return redirect(url_for("main.index"))
 
 
 @bp.route("/deck/<deck_id>/delete", methods=["POST"])
 def delete_deck(deck_id: str):
-    """Delete a generated deck."""
+    """Delete a generated deck (owner or admin only)."""
     db_path = _db_path()
+    owner = db.DecksRepo(db_path).owner_of(deck_id)
+    if owner is not None and not _can_access_deck(owner):
+        abort(403)
     conn = sqlite3.connect(str(db_path))
     try:
+        conn.execute("DELETE FROM favorite_decks WHERE deck_id = ?", (deck_id,))
         conn.execute("DELETE FROM generated_decks WHERE id = ?", (deck_id,))
         conn.commit()
     finally:
         conn.close()
-    return redirect(url_for("main.index"))
+    return redirect(url_for("main.decks"))
 
 
 @bp.route("/deck/<deck_id>")
@@ -231,6 +482,11 @@ def view_deck(deck_id: str):
         row = cursor.fetchone()
         if row is None:
             return render_template("deck_view.html", error="Deck not found")
+
+        # Privacy: a deck is visible only to its owner (or an admin).
+        owner_id = row["owner_id"]
+        if owner_id is not None and not _can_access_deck(owner_id):
+            abort(403)
 
         deck_data = dict(row)
         deck_data["cards"] = json.loads(deck_data.get("cards_json", "[]"))

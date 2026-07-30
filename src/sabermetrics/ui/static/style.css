@@ -71,6 +71,29 @@
     font-weight: 600;
 }
 
+/* --- Favorite (heart) button --- */
+.fav-btn {
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 1.15rem;
+    line-height: 1;
+    color: var(--muted);
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+.fav-btn:hover {
+    color: var(--brand-hover);
+    transform: scale(1.15);
+}
+.fav-btn.is-fav {
+    color: var(--brand);
+}
+.fav-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
 /* --- Mana pips --- */
 .mana {
     display: inline-flex;

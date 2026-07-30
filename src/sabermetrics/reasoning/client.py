@@ -8,10 +8,13 @@ Singleton wrapper for all LLM calls. Handles:
 - Model name validation
 """
 
+import contextvars
 import logging
 import os
 import sqlite3
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import anthropic
@@ -24,6 +27,26 @@ from sabermetrics.errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Cost attribution: DeckBuilder sets this around a generation so every LLM call
+# logged during it is tagged with the owning user + deck. Unset => unattributed
+# (e.g. CLI builds, background refreshes). A ContextVar keeps this correct even
+# if generations ever run concurrently.
+_cost_context: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "saber_cost_context", default=None
+)
+
+
+@contextmanager
+def cost_attribution(
+    user_id: str | None, deck_id: str | None
+) -> Iterator[None]:
+    """Attribute cost_log rows written in this scope to a user + deck."""
+    token = _cost_context.set({"user_id": user_id, "deck_id": deck_id})
+    try:
+        yield
+    finally:
+        _cost_context.reset(token)
 
 # ADR-011: allowed models. All three are current, active model IDs (verified
 # against the Anthropic model catalog). Keep this set in sync with the models
@@ -370,13 +393,14 @@ class AnthropicClient:
 
     def _log_cost(self, result: CallResult, call_type: str) -> None:
         """Log API call cost to the cost_log table."""
+        ctx = _cost_context.get() or {}
         conn = sqlite3.connect(str(self.db_path))
         try:
             conn.execute(
                 "INSERT INTO cost_log "
                 "(call_type, model, input_tokens, cached_input_tokens, "
-                "output_tokens, cost_usd, request_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "output_tokens, cost_usd, request_id, user_id, deck_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     call_type,
                     result.model,
@@ -385,6 +409,8 @@ class AnthropicClient:
                     result.output_tokens,
                     result.cost_usd,
                     result.request_id,
+                    ctx.get("user_id"),
+                    ctx.get("deck_id"),
                 ),
             )
             conn.commit()

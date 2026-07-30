@@ -158,6 +158,8 @@ DDL_STATEMENTS = [
         id TEXT PRIMARY KEY,
         commander_id TEXT NOT NULL,
         profile_id TEXT,
+        owner_id TEXT,
+        deck_name TEXT,
         budget_usd REAL,
         power_target INTEGER,
         strategy TEXT,
@@ -169,6 +171,9 @@ DDL_STATEMENTS = [
         FOREIGN KEY (commander_id) REFERENCES cards(id)
     )
     """,
+    # NB: idx on generated_decks(owner_id) is created in ensure_portal_schema(),
+    # after the column is ALTER-added — an index here would fail on pre-existing
+    # DBs whose generated_decks lacks the column until the migration runs.
     # 1.7 Reference Layer
     """
     CREATE TABLE IF NOT EXISTS reference_chunks (
@@ -227,11 +232,15 @@ DDL_STATEMENTS = [
         output_tokens INTEGER,
         cost_usd REAL,
         request_id TEXT,
+        user_id TEXT,
+        deck_id TEXT,
         metadata TEXT
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_cost_timestamp ON cost_log(timestamp DESC)",
     "CREATE INDEX IF NOT EXISTS idx_cost_call_type ON cost_log(call_type)",
+    # idx on cost_log(user_id)/(deck_id) are created in ensure_portal_schema(),
+    # after the columns are ALTER-added (see note on generated_decks above).
     """
     CREATE TABLE IF NOT EXISTS source_health (
         source TEXT PRIMARY KEY,
@@ -309,7 +318,153 @@ DDL_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_protection_candidates_score ON protection_candidates(protection_score DESC)",
+    # 1.14 Multi-user portal: accounts, invites, favorites, feedback
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE,
+        display_name TEXT,
+        avatar_emoji TEXT,
+        password_hash TEXT,
+        role TEXT NOT NULL DEFAULT 'user',
+        status TEXT NOT NULL DEFAULT 'invited',
+        monthly_deck_quota INTEGER,
+        invited_by TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login_at TIMESTAMP,
+        FOREIGN KEY (invited_by) REFERENCES users(id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)",
+    "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)",
+    """
+    CREATE TABLE IF NOT EXISTS invite_tokens (
+        token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        expires_at TIMESTAMP,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_invite_tokens_user ON invite_tokens(user_id)",
+    """
+    CREATE TABLE IF NOT EXISTS favorite_commanders (
+        user_id TEXT NOT NULL,
+        commander_id TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, commander_id),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (commander_id) REFERENCES cards(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS favorite_decks (
+        user_id TEXT NOT NULL,
+        deck_id TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, deck_id),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (deck_id) REFERENCES generated_decks(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS card_feedback (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        deck_id TEXT NOT NULL,
+        card_id TEXT,
+        card_name TEXT NOT NULL,
+        vote TEXT,
+        comment TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, deck_id, card_id),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (deck_id) REFERENCES generated_decks(id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_card_feedback_name ON card_feedback(card_name)",
+    "CREATE INDEX IF NOT EXISTS idx_card_feedback_deck ON card_feedback(deck_id)",
+    "CREATE INDEX IF NOT EXISTS idx_card_feedback_user ON card_feedback(user_id)",
+    """
+    CREATE TABLE IF NOT EXISTS deck_feedback (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        deck_id TEXT NOT NULL,
+        verdict TEXT,
+        comment TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, deck_id),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (deck_id) REFERENCES generated_decks(id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_deck_feedback_deck ON deck_feedback(deck_id)",
+    "CREATE INDEX IF NOT EXISTS idx_deck_feedback_user ON deck_feedback(user_id)",
 ]
+
+
+# Canonical commander source for the Explore page: one row per commander NAME
+# (cheapest legal printing), exposing a computed price_usd. Mirrors the
+# card_candidates view in analytics/filters.py but filters to legal commanders.
+# Uses SELECT * so it inherits any runtime-added `cards` columns (role_tags,
+# functional_categories) without referencing columns that may not exist yet.
+COMMANDER_CANDIDATE_VIEW_SQL = """
+CREATE VIEW IF NOT EXISTS commander_candidates AS
+WITH latest AS (
+    SELECT MAX(snapshot_date) AS d FROM card_prices
+),
+latest_prices AS (
+    SELECT cp.card_id, cp.price_usd
+    FROM card_prices cp, latest
+    WHERE cp.snapshot_date = latest.d
+),
+ranked AS (
+    SELECT
+        c.*,
+        lp.price_usd AS price_usd,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.name
+            ORDER BY (lp.price_usd IS NULL) ASC, lp.price_usd ASC, c.id ASC
+        ) AS _rn
+    FROM cards c
+    LEFT JOIN latest_prices lp ON lp.card_id = c.id
+    WHERE c.is_legal_commander = 1
+)
+SELECT * FROM ranked WHERE _rn = 1
+"""
+
+
+def ensure_portal_schema(conn: sqlite3.Connection) -> None:
+    """Idempotently apply multi-user portal migrations to an existing database.
+
+    The new portal tables live in DDL_STATEMENTS (created for fresh DBs). This
+    handler covers what CREATE TABLE IF NOT EXISTS cannot: adding columns to
+    pre-existing tables and creating the commander_candidates view. Mirrors the
+    PRAGMA table_info + ALTER TABLE pattern in analytics/role_tagger. Safe to
+    run repeatedly and on an already-populated database.
+    """
+    column_migrations = {
+        "generated_decks": [("owner_id", "TEXT"), ("deck_name", "TEXT")],
+        "cost_log": [("user_id", "TEXT"), ("deck_id", "TEXT")],
+    }
+    for table, cols in column_migrations.items():
+        cursor = conn.execute(f"PRAGMA table_info({table})")
+        existing = {row[1] for row in cursor.fetchall()}
+        for col_name, col_type in cols:
+            if col_name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
+
+    conn.execute(COMMANDER_CANDIDATE_VIEW_SQL)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_generated_decks_owner "
+        "ON generated_decks(owner_id)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_user ON cost_log(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_deck ON cost_log(deck_id)")
+    conn.commit()
 
 
 def setup_database(db_path: Path) -> None:
@@ -329,6 +484,9 @@ def setup_database(db_path: Path) -> None:
 
         for ddl in DDL_STATEMENTS:
             conn.execute(ddl)
+
+        # Idempotent column/view migrations for pre-existing databases
+        ensure_portal_schema(conn)
 
         # Insert initial schema version
         conn.execute(

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+
+{% block nav %}
+<nav class="sticky top-0 z-30 border-b border-line/70 bg-panel/80 backdrop-blur supports-[backdrop-filter]:bg-panel/60">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 h-14">
+        <a href="{{ url_for('admin.overview') }}" class="flex items-center gap-2 font-bold tracking-tight text-body hover:text-white transition-colors">
+            <span class="grid h-7 w-7 place-items-center rounded-lg bg-brand text-white text-sm font-black">S</span>
+            <span>Admin</span>
+        </a>
+        {% set ep = request.endpoint %}
+        <div class="flex items-center gap-1 text-sm">
+            {% set links = [
+                ('admin.overview', 'Overview'),
+                ('admin.users', 'Users'),
+            ] %}
+            {% for endpoint, label in links %}
+            <a href="{{ url_for(endpoint) }}"
+               class="rounded-lg px-3 py-1.5 transition-colors {% if ep == endpoint %}bg-brand/15 text-brand{% else %}text-muted hover:bg-white/5 hover:text-body{% endif %}">
+                {{ label }}
+            </a>
+            {% endfor %}
+            <a href="{{ url_for('main.index') }}"
+               class="rounded-lg px-3 py-1.5 text-muted transition-colors hover:bg-white/5 hover:text-body">
+                &larr; User site
+            </a>
+            <a href="{{ url_for('auth.logout') }}"
+               class="rounded-lg px-3 py-1.5 text-muted transition-colors hover:bg-white/5 hover:text-body">
+                Logout
+            </a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
