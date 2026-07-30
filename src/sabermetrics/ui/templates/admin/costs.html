@@ -1,0 +1,83 @@
+{% extends "admin_base.html" %}
+{% block title %}Costs{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold tracking-tight">Cost &amp; Usage</h1>
+<p class="mt-1 text-sm text-muted">LLM spend, by call type and by user.</p>
+
+<div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+    {% set used_pct = (totals.last_30d / ceiling * 100) if ceiling else 0 %}
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">${{ "%.2f"|format(totals.last_30d) }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Spend 30d</div>
+    </div>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">${{ "%.2f"|format(totals.all_time) }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">All-time</div>
+    </div>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">${{ "%.2f"|format(ceiling) }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Monthly ceiling</div>
+    </div>
+    <div class="rounded-2xl border p-4 shadow-panel {% if used_pct >= 100 %}border-amber-500/40 bg-amber-500/10{% else %}border-line bg-panel{% endif %}">
+        <div class="text-2xl font-bold {% if used_pct >= 100 %}text-amber-400{% else %}text-brand{% endif %}">{{ "%.0f"|format(used_pct) }}%</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Ceiling used</div>
+    </div>
+</div>
+
+<div class="mt-8 grid gap-6 lg:grid-cols-2">
+    <div>
+        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">By call type</h2>
+        <div class="overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                        <th class="px-4 py-3 font-medium">Type</th>
+                        <th class="px-4 py-3 font-medium">Calls</th>
+                        <th class="px-4 py-3 font-medium">Cost</th>
+                        <th class="px-4 py-3 font-medium">Tokens (in/out)</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-line/60">
+                    {% for r in by_type %}
+                    <tr class="transition-colors hover:bg-white/5">
+                        <td class="px-4 py-3 font-medium text-body">{{ r.call_type }}</td>
+                        <td class="px-4 py-3 text-muted">{{ r.calls }}</td>
+                        <td class="px-4 py-3">${{ "%.4f"|format(r.cost) }}</td>
+                        <td class="px-4 py-3 text-muted">{{ "{:,}".format(r.input_tokens|int) }} / {{ "{:,}".format(r.output_tokens|int) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="px-4 py-6 text-center text-sm text-muted">No usage yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div>
+        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">By user</h2>
+        <div class="overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                        <th class="px-4 py-3 font-medium">User</th>
+                        <th class="px-4 py-3 font-medium">Calls</th>
+                        <th class="px-4 py-3 font-medium">Cost</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-line/60">
+                    {% for r in by_user %}
+                    <tr class="transition-colors hover:bg-white/5">
+                        <td class="px-4 py-3 font-medium text-body">{{ r.user }}</td>
+                        <td class="px-4 py-3 text-muted">{{ r.calls }}</td>
+                        <td class="px-4 py-3">${{ "%.4f"|format(r.cost) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="3" class="px-4 py-6 text-center text-sm text-muted">No usage yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "admin_base.html" %}
+{% block title %}Commanders{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold tracking-tight">Popular Commanders</h1>
+<p class="mt-1 text-sm text-muted">Across all testers.</p>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-2">
+    <div>
+        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">Most generated</h2>
+        <div class="overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                        <th class="px-4 py-3 font-medium">Commander</th>
+                        <th class="px-4 py-3 font-medium">Decks</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-line/60">
+                    {% for r in generated %}
+                    <tr class="transition-colors hover:bg-white/5">
+                        <td class="px-4 py-3 font-medium text-body">{{ r.commander }}</td>
+                        <td class="px-4 py-3 text-muted">{{ r.decks }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="2" class="px-4 py-6 text-center text-sm text-muted">No decks generated yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div>
+        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted">Most favorited</h2>
+        <div class="overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                        <th class="px-4 py-3 font-medium">Commander</th>
+                        <th class="px-4 py-3 font-medium">Favorites</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-line/60">
+                    {% for r in favorited %}
+                    <tr class="transition-colors hover:bg-white/5">
+                        <td class="px-4 py-3 font-medium text-body">{{ r.commander }}</td>
+                        <td class="px-4 py-3 text-muted">{{ r.favorites }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="2" class="px-4 py-6 text-center text-sm text-muted">No favorites yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

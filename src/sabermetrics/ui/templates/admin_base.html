@@ -13,6 +13,9 @@
             {% set links = [
                 ('admin.overview', 'Overview'),
                 ('admin.users', 'Users'),
+                ('admin.feedback', 'Feedback'),
+                ('admin.costs', 'Costs'),
+                ('admin.commanders', 'Commanders'),
             ] %}
             {% for endpoint, label in links %}
             <a href="{{ url_for(endpoint) }}"

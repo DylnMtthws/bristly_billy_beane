@@ -63,6 +63,9 @@
                 <th class="px-4 py-3 font-medium">Email</th>
                 <th class="px-4 py-3 font-medium">Name</th>
                 <th class="px-4 py-3 font-medium">Role</th>
+                <th class="px-4 py-3 font-medium">Decks</th>
+                <th class="px-4 py-3 font-medium">Spend</th>
+                <th class="px-4 py-3 font-medium">Ratings</th>
                 <th class="px-4 py-3 font-medium">Status</th>
                 <th class="px-4 py-3 font-medium">Quota</th>
                 <th class="px-4 py-3 font-medium">Last login</th>
@@ -72,9 +75,14 @@
         <tbody class="divide-y divide-line/60">
             {% for u in users %}
             <tr class="transition-colors hover:bg-white/5">
-                <td class="px-4 py-3 font-medium text-body">{{ u.email }}</td>
+                <td class="px-4 py-3 font-medium text-body">
+                    <a href="{{ url_for('admin.user_detail', user_id=u.id) }}" class="text-brand hover:text-brand-hover">{{ u.email }}</a>
+                </td>
                 <td class="px-4 py-3 text-muted">{{ u.display_name or '—' }}</td>
                 <td class="px-4 py-3">{{ u.role }}</td>
+                <td class="px-4 py-3">{{ u.decks }}</td>
+                <td class="px-4 py-3 text-muted">${{ "%.2f"|format(u.spend or 0) }}</td>
+                <td class="px-4 py-3 text-muted">{{ u.card_fb }}c / {{ u.deck_fb }}d</td>
                 <td class="px-4 py-3">
                     {% set tone = {'active': 'bg-emerald-500/15 text-emerald-400', 'invited': 'bg-amber-500/15 text-amber-400', 'disabled': 'bg-white/10 text-muted'} %}
                     <span class="rounded-full px-2 py-0.5 text-xs font-medium {{ tone.get(u.status, 'bg-white/10 text-muted') }}">{{ u.status }}</span>

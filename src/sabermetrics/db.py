@@ -675,3 +675,195 @@ class FeedbackRepo:
                 (user_id, deck_id),
             ).fetchone()
         return dict(row) if row else None
+
+
+class AdminAnalyticsRepo:
+    """Read-only aggregates for the admin portal (P6).
+
+    Feedback aggregates group by ``card_name`` so they survive deck deletion
+    (feedback rows are intentionally kept as research data even when a deck is
+    removed). Joins to decks/commanders are LEFT joins for the same reason.
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = db_path
+
+    def overview(self) -> dict:
+        """High-level KPIs for the admin landing page."""
+        with connect(self.db_path) as conn:
+            def scalar(sql: str) -> float:
+                return conn.execute(sql).fetchone()[0]
+
+            status_rows = conn.execute(
+                "SELECT status, COUNT(*) n FROM users GROUP BY status"
+            ).fetchall()
+            return {
+                "users_by_status": {r["status"]: r["n"] for r in status_rows},
+                "total_users": scalar("SELECT COUNT(*) FROM users"),
+                "total_decks": scalar("SELECT COUNT(*) FROM generated_decks"),
+                "spend_30d": scalar(
+                    "SELECT COALESCE(SUM(cost_usd),0) FROM cost_log "
+                    "WHERE timestamp >= datetime('now','-30 days')"
+                ),
+                "spend_all": scalar("SELECT COALESCE(SUM(cost_usd),0) FROM cost_log"),
+                "card_feedback": scalar("SELECT COUNT(*) FROM card_feedback"),
+                "deck_feedback": scalar("SELECT COUNT(*) FROM deck_feedback"),
+            }
+
+    # --- Feedback ---
+
+    _FB_SORTS = {
+        "total_desc": "total DESC, net ASC",
+        "net_asc": "net ASC, total DESC",
+        "net_desc": "net DESC, total DESC",
+        "down_desc": "down DESC, total DESC",
+    }
+
+    def card_feedback_aggregate(
+        self, sort: str = "total_desc", limit: int = 300
+    ) -> list[dict]:
+        """Per-card feedback rollup: up/down counts, net, and comment count."""
+        order = self._FB_SORTS.get(sort, self._FB_SORTS["total_desc"])
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                f"""SELECT card_name,
+                        SUM(CASE WHEN vote='up' THEN 1 ELSE 0 END) AS up,
+                        SUM(CASE WHEN vote='down' THEN 1 ELSE 0 END) AS down,
+                        COUNT(*) AS total,
+                        SUM(CASE WHEN vote='up' THEN 1 WHEN vote='down' THEN -1 ELSE 0 END) AS net,
+                        SUM(CASE WHEN comment IS NOT NULL THEN 1 ELSE 0 END) AS comments
+                    FROM card_feedback
+                    GROUP BY card_name
+                    ORDER BY {order}
+                    LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def card_comments(self, card_name: str) -> list[dict]:
+        """All comments/votes for one card, newest first (for the drill-down)."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT cf.vote, cf.comment, cf.updated_at,
+                          u.display_name AS user, cmd.name AS commander, cf.deck_id
+                   FROM card_feedback cf
+                   LEFT JOIN users u ON u.id = cf.user_id
+                   LEFT JOIN generated_decks gd ON gd.id = cf.deck_id
+                   LEFT JOIN cards cmd ON cmd.id = gd.commander_id
+                   WHERE cf.card_name = ?
+                   ORDER BY cf.updated_at DESC""",
+                (card_name,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def deck_feedback_list(self, limit: int = 200) -> list[dict]:
+        """Recent deck verdicts + comments with commander/user context."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT df.deck_id, df.verdict, df.comment, df.updated_at,
+                          u.display_name AS user, cmd.name AS commander
+                   FROM deck_feedback df
+                   LEFT JOIN users u ON u.id = df.user_id
+                   LEFT JOIN generated_decks gd ON gd.id = df.deck_id
+                   LEFT JOIN cards cmd ON cmd.id = gd.commander_id
+                   ORDER BY df.updated_at DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def export_card_rows(self) -> list[dict]:
+        """Flat card-feedback rows for CSV/JSON export."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT u.email AS user, cf.deck_id, cmd.name AS commander,
+                          cf.card_name, cf.vote, cf.comment, cf.updated_at
+                   FROM card_feedback cf
+                   LEFT JOIN users u ON u.id = cf.user_id
+                   LEFT JOIN generated_decks gd ON gd.id = cf.deck_id
+                   LEFT JOIN cards cmd ON cmd.id = gd.commander_id
+                   ORDER BY cf.updated_at DESC""",
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def export_deck_rows(self) -> list[dict]:
+        """Flat deck-feedback rows for CSV/JSON export."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT u.email AS user, df.deck_id, cmd.name AS commander,
+                          df.verdict, df.comment, df.updated_at
+                   FROM deck_feedback df
+                   LEFT JOIN users u ON u.id = df.user_id
+                   LEFT JOIN generated_decks gd ON gd.id = df.deck_id
+                   LEFT JOIN cards cmd ON cmd.id = gd.commander_id
+                   ORDER BY df.updated_at DESC""",
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # --- Users / cost ---
+
+    def per_user_stats(self) -> list[dict]:
+        """Per-user rollup: decks, spend, feedback counts, last login."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT u.id, u.email, u.display_name, u.role, u.status,
+                          u.monthly_deck_quota, u.last_login_at,
+                          (SELECT COUNT(*) FROM generated_decks gd WHERE gd.owner_id=u.id) AS decks,
+                          (SELECT COALESCE(SUM(cost_usd),0) FROM cost_log cl WHERE cl.user_id=u.id) AS spend,
+                          (SELECT COUNT(*) FROM card_feedback cf WHERE cf.user_id=u.id) AS card_fb,
+                          (SELECT COUNT(*) FROM deck_feedback dfb WHERE dfb.user_id=u.id) AS deck_fb
+                   FROM users u
+                   ORDER BY decks DESC, u.created_at DESC""",
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def cost_totals(self) -> dict:
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(cost_usd),0) AS all_time, "
+                "COALESCE(SUM(CASE WHEN timestamp >= datetime('now','-30 days') "
+                "THEN cost_usd ELSE 0 END),0) AS last_30d FROM cost_log"
+            ).fetchone()
+        return {"all_time": row["all_time"], "last_30d": row["last_30d"]}
+
+    def cost_by_call_type(self) -> list[dict]:
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT call_type, COUNT(*) AS calls, COALESCE(SUM(cost_usd),0) AS cost, "
+                "COALESCE(SUM(input_tokens),0) AS input_tokens, "
+                "COALESCE(SUM(output_tokens),0) AS output_tokens "
+                "FROM cost_log GROUP BY call_type ORDER BY cost DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def cost_by_user(self) -> list[dict]:
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT COALESCE(u.display_name, u.email, cl.user_id, '(unattributed)') AS user,
+                          COUNT(*) AS calls, COALESCE(SUM(cl.cost_usd),0) AS cost
+                   FROM cost_log cl LEFT JOIN users u ON u.id = cl.user_id
+                   GROUP BY cl.user_id ORDER BY cost DESC""",
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # --- Popular commanders ---
+
+    def popular_generated(self, limit: int = 20) -> list[dict]:
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT cmd.name AS commander, COUNT(*) AS decks
+                   FROM generated_decks gd JOIN cards cmd ON cmd.id = gd.commander_id
+                   GROUP BY cmd.name ORDER BY decks DESC, commander LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def popular_favorited(self, limit: int = 20) -> list[dict]:
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT cmd.name AS commander, COUNT(*) AS favorites
+                   FROM favorite_commanders f JOIN cards cmd ON cmd.id = f.commander_id
+                   GROUP BY cmd.name ORDER BY favorites DESC, commander LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]

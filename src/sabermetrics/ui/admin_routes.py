@@ -1,17 +1,22 @@
-"""Admin portal (P2): user management.
+"""Admin portal: user management (P2) + analytics (P6).
 
 Blueprint mounted at ``/admin`` and gated so only an authenticated user with the
 ``admin`` role can reach any route (ADR-015 — the admin provisions all accounts).
-P2 covers user management (invite, enable/disable, quota override); the analytics
-views (feedback explorer, cost, popular commanders) arrive in P6.
+P2 covers user management (invite, enable/disable, quota override). P6 adds the
+feedback explorer (+ CSV/JSON export), per-user cost/usage, and popular
+commanders — turning collected feedback into something the owner can analyze.
 """
 
 from __future__ import annotations
 
+import csv
+import io
+import json
 import logging
 
 from flask import (
     Blueprint,
+    Response,
     abort,
     current_app,
     flash,
@@ -29,6 +34,10 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 _VALID_STATUSES = {"active", "disabled", "invited"}
+
+
+def _analytics() -> db.AdminAnalyticsRepo:
+    return db.AdminAnalyticsRepo(current_app.config["DB_PATH"])
 
 
 @bp.before_request
@@ -53,19 +62,31 @@ def _invites() -> db.InviteRepo:
 
 @bp.route("/")
 def overview():
-    """Admin landing: high-level counts (fuller KPIs land in P6)."""
-    counts = _users().count_by_status()
-    return render_template(
-        "admin/overview.html",
-        counts=counts,
-        total_users=sum(counts.values()),
-    )
+    """Admin landing: KPIs across users, decks, spend, and feedback."""
+    return render_template("admin/overview.html", kpi=_analytics().overview())
 
 
 @bp.route("/users")
 def users():
-    """List all users with status, role, quota, and last login."""
-    return render_template("admin/users.html", users=_users().list_all())
+    """List all users with per-user stats (decks, spend, feedback, last login)."""
+    return render_template("admin/users.html", users=_analytics().per_user_stats())
+
+
+@bp.route("/users/<user_id>")
+def user_detail(user_id: str):
+    """Drill-down for a single user: their decks, spend, and feedback."""
+    db_path = current_app.config["DB_PATH"]
+    user = _users().get(user_id)
+    if user is None:
+        abort(404)
+    decks = db.DecksRepo(db_path).list_for_owner(user_id)
+    analytics = _analytics()
+    spend = next(
+        (u["spend"] for u in analytics.per_user_stats() if u["id"] == user_id), 0.0
+    )
+    return render_template(
+        "admin/user_detail.html", user=user, decks=decks, spend=spend
+    )
 
 
 @bp.route("/users/create", methods=["POST"])
@@ -157,3 +178,86 @@ def reinvite(user_id: str):
     flash(f"New invite link for {target.get('email')}:", "success")
     flash(link, "invite")
     return redirect(url_for("admin.users"))
+
+
+# --- Analytics (P6) ---
+
+
+@bp.route("/feedback")
+def feedback():
+    """Feedback explorer: per-card rollup + recent deck verdicts."""
+    sort = request.args.get("sort", "total_desc")
+    analytics = _analytics()
+    return render_template(
+        "admin/feedback.html",
+        cards=analytics.card_feedback_aggregate(sort=sort),
+        deck_feedback=analytics.deck_feedback_list(),
+        sort=sort,
+    )
+
+
+@bp.route("/feedback/card/<path:card_name>")
+def feedback_card(card_name: str):
+    """All comments/votes for one card."""
+    return render_template(
+        "admin/feedback_card.html",
+        card_name=card_name,
+        comments=_analytics().card_comments(card_name),
+    )
+
+
+@bp.route("/feedback/export")
+def feedback_export():
+    """Export all feedback as CSV (card rows) or JSON (card + deck)."""
+    fmt = request.args.get("format", "csv")
+    analytics = _analytics()
+    card_rows = analytics.export_card_rows()
+
+    if fmt == "json":
+        payload = json.dumps(
+            {"card_feedback": card_rows, "deck_feedback": analytics.export_deck_rows()},
+            indent=2,
+        )
+        return Response(
+            payload,
+            mimetype="application/json",
+            headers={"Content-Disposition": "attachment; filename=feedback.json"},
+        )
+
+    buf = io.StringIO()
+    fields = ["user", "deck_id", "commander", "card_name", "vote", "comment", "updated_at"]
+    writer = csv.DictWriter(buf, fieldnames=fields)
+    writer.writeheader()
+    for row in card_rows:
+        writer.writerow({k: row.get(k, "") for k in fields})
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=card_feedback.csv"},
+    )
+
+
+@bp.route("/costs")
+def costs():
+    """Cost & token usage: totals, by call type, and per user."""
+    from sabermetrics.config import settings
+
+    analytics = _analytics()
+    return render_template(
+        "admin/costs.html",
+        totals=analytics.cost_totals(),
+        by_type=analytics.cost_by_call_type(),
+        by_user=analytics.cost_by_user(),
+        ceiling=settings.llm.monthly_cost_ceiling_usd,
+    )
+
+
+@bp.route("/commanders")
+def commanders():
+    """Popular commanders: most-generated and most-favorited."""
+    analytics = _analytics()
+    return render_template(
+        "admin/commanders.html",
+        generated=analytics.popular_generated(),
+        favorited=analytics.popular_favorited(),
+    )
