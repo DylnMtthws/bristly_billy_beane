@@ -44,6 +44,12 @@ def hash_password(password: str) -> str:
     return _PASSWORD_HASHER.hash(password)
 
 
+# A real argon2 hash of a random secret, used to equalize verification time for
+# unknown emails / password-less accounts so login timing can't be used to
+# enumerate valid users. Never matches a real password.
+DUMMY_PASSWORD_HASH = _PASSWORD_HASHER.hash(secrets.token_hex(16))
+
+
 def verify_password(password_hash: str | None, password: str) -> bool:
     """Return True iff ``password`` matches ``password_hash``.
 

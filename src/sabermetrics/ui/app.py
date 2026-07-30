@@ -63,6 +63,9 @@ def create_app(db_path: Path | None = None) -> Flask:
         SESSION_COOKIE_SECURE=_env_bool("SABER_COOKIE_SECURE", True),
         WTF_CSRF_ENABLED=True,
         WTF_CSRF_TIME_LIMIT=None,  # tie CSRF validity to the session
+        # Behind the Cloudflare Tunnel the public origin is HTTPS; make
+        # url_for(_external=True) (e.g. invite links) emit https.
+        PREFERRED_URL_SCHEME="https",
     )
 
     # --- Trust Cloudflare's forwarded headers (1 proxy hop) ---

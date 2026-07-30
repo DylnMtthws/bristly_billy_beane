@@ -438,11 +438,14 @@ def generate_deck():
             "Generation stopped: the monthly cost ceiling was reached mid-build.",
             503,
         )
-    except Exception as e:
-        logger.error("Deck generation failed: %s", e)
+    except Exception:
+        # Log the detail server-side; return a generic message to avoid
+        # leaking internal errors/paths to users.
+        logger.exception("Deck generation failed for commander %s", commander_id)
+        message = "Deck generation failed. Please try again."
         if is_ajax:
-            return jsonify({"error": f"Deck generation failed: {e}"}), 500
-        flash(f"Deck generation failed: {e}", "error")
+            return jsonify({"error": message}), 500
+        flash(message, "error")
         return redirect(url_for("main.index"))
 
 

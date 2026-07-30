@@ -6,7 +6,7 @@ Most EDH tools (EDHREC, deck power calculators, Moxfield analyzers) are frequenc
 
 The name is the thesis: apply *Moneyball*-style value analysis to Magic — find the cards with the best cost-to-impact ratio, not the most popular ones.
 
-> **Scope.** This is a personal, single-user research tool, self-hosted on one machine, Commander format only. It is not a hosted service and has no multi-user support. See [Scope & non-goals](#scope--non-goals).
+> **Scope.** Self-hosted on one machine (a Mac mini), Commander format only. Originally a single-user tool; it is now a **multi-user, invite-only beta** — the owner provisions accounts and invites deck-literate testers to generate decks and leave per-card feedback. Exposed publicly only via a Cloudflare Tunnel. See [`docs/deploy_cloudflare.md`](docs/deploy_cloudflare.md) to run it and [`SECURITY.md`](SECURITY.md) for the security posture + release gate.
 
 ---
 

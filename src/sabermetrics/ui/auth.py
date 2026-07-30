@@ -179,10 +179,12 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         row = _users().get_by_email(form.email.data.strip())
-        if (
-            row is not None
-            and db.verify_password(row.get("password_hash"), form.password.data)
-        ):
+        # Always run one argon2 verify (dummy hash for unknown/password-less
+        # accounts) so response timing can't distinguish valid emails.
+        pw_hash = (row.get("password_hash") if row else None) or db.DUMMY_PASSWORD_HASH
+        password_ok = db.verify_password(pw_hash, form.password.data)
+
+        if row is not None and password_ok:
             if row.get("status") != "active":
                 flash("This account is not active. Ask the admin for an invite.", "error")
             else:

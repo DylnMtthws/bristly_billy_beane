@@ -101,6 +101,16 @@ def test_login_success_grants_access(client, db_path) -> None:
     assert client.get("/").status_code == 200
 
 
+def test_login_unknown_email_rejected(client, db_path) -> None:
+    # No user exists; the generic message + dummy-verify path must not error.
+    resp = client.post(
+        "/login", data={"email": "ghost@local", "password": "whatever123"}
+    )
+    assert resp.status_code == 200
+    assert b"Invalid email or password" in resp.data
+    assert client.get("/").status_code == 302  # still gated
+
+
 def test_login_wrong_password_rejected(client, db_path) -> None:
     _make_active_user(db_path)
     resp = client.post(
