@@ -1,0 +1,32 @@
+{% extends "admin_base.html" %}
+{% block title %}{{ card_name }} feedback{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('admin.feedback') }}" class="text-sm text-muted hover:text-body">&larr; All feedback</a>
+<h1 class="mt-2 text-2xl font-bold tracking-tight">{{ card_name }}</h1>
+<p class="mt-1 text-sm text-muted">{{ comments|length }} rating(s).</p>
+
+{% if comments %}
+<div class="mt-6 space-y-3">
+    {% for c in comments %}
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="flex items-center justify-between gap-3 text-sm">
+            <div>
+                <span class="font-medium text-body">{{ c.user or '—' }}</span>
+                <span class="text-muted">· {{ c.commander or 'Unknown' }}
+                    {% if c.deck_id %}(<a href="{{ url_for('main.view_deck', deck_id=c.deck_id) }}" class="text-brand hover:text-brand-hover">deck</a>){% endif %}
+                </span>
+            </div>
+            <div class="flex items-center gap-2">
+                {% if c.vote == 'up' %}<span class="text-emerald-400">👍</span>{% elif c.vote == 'down' %}<span class="text-brand">👎</span>{% endif %}
+                <span class="text-xs text-muted">{{ (c.updated_at or '')[:16] }}</span>
+            </div>
+        </div>
+        {% if c.comment %}<p class="mt-2 text-sm text-body/90">{{ c.comment }}</p>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="mt-6 text-sm text-muted">No ratings for this card.</p>
+{% endif %}
+{% endblock %}

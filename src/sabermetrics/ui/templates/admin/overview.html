@@ -3,25 +3,29 @@
 
 {% block content %}
 <h1 class="text-2xl font-bold tracking-tight">Admin Overview</h1>
-<p class="mt-1 text-sm text-muted">Provision and manage beta testers.</p>
+<p class="mt-1 text-sm text-muted">Beta activity at a glance.</p>
 
-<div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+<div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
     {% set tiles = [
-        (total_users, 'Users'),
-        (counts.get('active', 0), 'Active'),
-        (counts.get('invited', 0), 'Invited'),
-        (counts.get('disabled', 0), 'Disabled'),
+        (kpi.total_users, 'Users', url_for('admin.users')),
+        (kpi.users_by_status.get('active', 0), 'Active', ''),
+        (kpi.total_decks, 'Decks', ''),
+        ('$' ~ '%.2f'|format(kpi.spend_30d), 'Spend 30d', url_for('admin.costs')),
+        (kpi.card_feedback, 'Card ratings', url_for('admin.feedback')),
+        (kpi.deck_feedback, 'Deck verdicts', url_for('admin.feedback')),
     ] %}
-    {% for value, label in tiles %}
-    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+    {% for value, label, link in tiles %}
+    <a href="{{ link or '#' }}"
+       class="block rounded-2xl border border-line bg-panel p-4 shadow-panel {% if link %}transition-colors hover:border-line/40 hover:bg-panel2{% else %}pointer-events-none{% endif %}">
         <div class="text-2xl font-bold text-brand">{{ value }}</div>
         <div class="mt-1 text-xs uppercase tracking-wider text-muted">{{ label }}</div>
-    </div>
+    </a>
     {% endfor %}
 </div>
 
-<p class="mt-6">
-    <a href="{{ url_for('admin.users') }}" class="text-sm font-medium text-brand hover:text-brand-hover">Manage users &rarr;</a>
-</p>
-<p class="mt-2 text-xs text-muted">Cost, feedback, and popularity analytics arrive in a later phase (P6).</p>
+<div class="mt-8 flex flex-wrap gap-3 text-sm">
+    <a href="{{ url_for('admin.feedback') }}" class="rounded-xl bg-brand px-5 py-2.5 font-semibold text-white transition-colors hover:bg-brand-hover">Feedback explorer &rarr;</a>
+    <a href="{{ url_for('admin.users') }}" class="rounded-xl border border-line px-5 py-2.5 font-medium text-body transition-colors hover:bg-white/5">Manage users</a>
+    <a href="{{ url_for('admin.commanders') }}" class="rounded-xl border border-line px-5 py-2.5 font-medium text-body transition-colors hover:bg-white/5">Popular commanders</a>
+</div>
 {% endblock %}

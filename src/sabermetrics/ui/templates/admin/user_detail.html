@@ -1,0 +1,59 @@
+{% extends "admin_base.html" %}
+{% block title %}{{ user.email }}{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('admin.users') }}" class="text-sm text-muted hover:text-body">&larr; All users</a>
+<h1 class="mt-2 text-2xl font-bold tracking-tight">{{ user.display_name or user.email }}</h1>
+<p class="mt-1 text-sm text-muted">{{ user.email }} · {{ user.role }} · {{ user.status }}</p>
+
+<div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">{{ decks|length }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Decks</div>
+    </div>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">${{ "%.2f"|format(spend or 0) }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Spend</div>
+    </div>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-2xl font-bold text-brand">{{ user.monthly_deck_quota if user.monthly_deck_quota is not none else '20*' }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Quota</div>
+    </div>
+    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <div class="text-sm font-bold text-body">{{ (user.last_login_at or '—')[:16] }}</div>
+        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Last login</div>
+    </div>
+</div>
+
+<h2 class="mt-8 text-sm font-semibold uppercase tracking-wider text-muted">Decks</h2>
+{% if decks %}
+<div class="mt-3 overflow-x-auto rounded-2xl border border-line bg-panel shadow-panel">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
+                <th class="px-4 py-3 font-medium">Commander</th>
+                <th class="px-4 py-3 font-medium">Deck</th>
+                <th class="px-4 py-3 font-medium">Budget</th>
+                <th class="px-4 py-3 font-medium">Power</th>
+                <th class="px-4 py-3 font-medium">Generated</th>
+                <th class="px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-line/60">
+            {% for d in decks %}
+            <tr class="transition-colors hover:bg-white/5">
+                <td class="px-4 py-3 font-medium text-body">{{ d.commander_name }}</td>
+                <td class="px-4 py-3 text-muted">{{ d.deck_name or '—' }}</td>
+                <td class="px-4 py-3">${{ "%.0f"|format(d.budget_usd or 0) }}</td>
+                <td class="px-4 py-3">{{ d.power_target }}</td>
+                <td class="px-4 py-3 text-muted">{{ (d.generated_at or '')[:16] }}</td>
+                <td class="px-4 py-3"><a href="{{ url_for('main.view_deck', deck_id=d.id) }}" class="text-brand hover:text-brand-hover">View</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="mt-3 text-sm text-muted">No decks yet.</p>
+{% endif %}
+{% endblock %}
