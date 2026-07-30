@@ -94,6 +94,72 @@
     cursor: default;
 }
 
+/* --- Card feedback controls --- */
+.card-fb {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.fb-thumb {
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1px 5px;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    filter: grayscale(1) opacity(0.55);
+    transition: filter 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.fb-thumb:hover {
+    filter: grayscale(0) opacity(1);
+    border-color: var(--muted);
+}
+.fb-up.active {
+    filter: none;
+    border-color: #1a7d4d;
+    background: rgba(26, 125, 77, 0.18);
+}
+.fb-down.active {
+    filter: none;
+    border-color: var(--brand);
+    background: rgba(233, 69, 96, 0.18);
+}
+.fb-comment {
+    width: 8rem;
+    background: var(--field);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 0.78rem;
+    color: var(--body);
+}
+.fb-comment:focus {
+    outline: none;
+    border-color: var(--brand);
+}
+
+/* --- Deck verdict buttons --- */
+.verdict-btn {
+    cursor: pointer;
+    background: var(--field);
+    border: 1px solid var(--line);
+    border-radius: 9999px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.verdict-btn:hover {
+    color: var(--body);
+    border-color: var(--muted);
+}
+.verdict-btn.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+}
+
 /* --- Mana pips --- */
 .mana {
     display: inline-flex;

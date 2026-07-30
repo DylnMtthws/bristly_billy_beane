@@ -8,6 +8,14 @@
 
 {% set comp = deck.rationale.composition if deck.rationale and deck.rationale.composition else {} %}
 
+{% macro card_fb(card, fb) %}
+<div class="card-fb" data-card-id="{{ card.card_id }}" data-card-name="{{ card.name }}">
+    <button type="button" class="fb-thumb fb-up {% if fb and fb.vote == 'up' %}active{% endif %}" data-vote="up" title="Good card">&#128077;</button>
+    <button type="button" class="fb-thumb fb-down {% if fb and fb.vote == 'down' %}active{% endif %}" data-vote="down" title="Bad card">&#128078;</button>
+    <input type="text" class="fb-comment" placeholder="why?" value="{{ fb.comment if fb and fb.comment else '' }}">
+</div>
+{% endmacro %}
+
 <div class="mb-6">
     <h1 class="text-2xl font-bold tracking-tight">
         {{ deck.commander_name }}{% if deck.deck_name %} <span class="text-muted font-normal">— {{ deck.deck_name }}</span>{% endif %}
@@ -57,6 +65,25 @@
     <canvas id="chart-value" height="100"></canvas>
 </div>
 
+{% if can_feedback %}
+<!-- Deck-level feedback -->
+<section class="mt-6 rounded-2xl border border-line bg-panel p-5 shadow-panel" id="deck-feedback"
+         data-deck-id="{{ deck.id }}">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-muted">Your feedback on this deck</h2>
+        {% set v = deck_feedback.verdict if deck_feedback else None %}
+        <div class="flex gap-2" id="verdict-group">
+            <button type="button" class="verdict-btn {% if v == 'good' %}active{% endif %}" data-verdict="good">&#128077; Good</button>
+            <button type="button" class="verdict-btn {% if v == 'mixed' %}active{% endif %}" data-verdict="mixed">&#128528; Mixed</button>
+            <button type="button" class="verdict-btn {% if v == 'bad' %}active{% endif %}" data-verdict="bad">&#128078; Bad</button>
+        </div>
+    </div>
+    <textarea id="deck-comment" rows="2" placeholder="How did the deck turn out? What worked, what didn't?"
+              class="mt-3 w-full rounded-lg border border-line bg-field px-3 py-2 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none">{{ deck_feedback.comment if deck_feedback and deck_feedback.comment else '' }}</textarea>
+    <div class="mt-1 h-4 text-xs text-emerald-400" id="deck-fb-status"></div>
+</section>
+{% endif %}
+
 <!-- Card List -->
 <details class="group mt-8 rounded-2xl border border-line bg-panel/40 shadow-panel" id="card-list-section" open>
     <summary class="flex cursor-pointer list-none items-center gap-2 px-5 py-4 text-lg font-semibold [&::-webkit-details-marker]:hidden">
@@ -95,6 +122,7 @@
                             <thead>
                                 <tr>
                                     <th>Qty</th><th>Card</th><th>Mana Cost</th><th>CMC</th><th>CVAR</th><th>Price</th>
+                                    {% if can_feedback %}<th>Your rating</th>{% endif %}
                                 </tr>
                             </thead>
                             <tbody>
@@ -106,6 +134,7 @@
                                     <td class="text-muted">{{ card.cmc or '' }}</td>
                                     <td>{{ "%.1f"|format(card.cvar_score or 0) }}</td>
                                     <td>${{ "%.2f"|format(card.price_usd or 0) }}</td>
+                                    {% if can_feedback %}<td>{{ card_fb(card, card_feedback.get(card.card_id)) }}</td>{% endif %}
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -763,6 +792,89 @@ function switchGroup(group, btn) {
     renderCurrentView();
 }
 </script>
+
+{% if can_feedback %}
+<script>
+// --- Card + deck feedback (owner only) ---
+(function () {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    var csrf = meta ? meta.getAttribute('content') : '';
+    var DECK_ID = {{ deck.id | tojson }};
+
+    function post(url, data, onOk) {
+        var body = new URLSearchParams(data);
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body.toString()
+        }).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+          .then(function (d) { if (onOk) onOk(d); })
+          .catch(function () {});
+    }
+
+    // Per-card controls
+    document.querySelectorAll('.card-fb').forEach(function (box) {
+        var cardId = box.getAttribute('data-card-id');
+        var cardName = box.getAttribute('data-card-name');
+        var up = box.querySelector('.fb-up');
+        var down = box.querySelector('.fb-down');
+        var comment = box.querySelector('.fb-comment');
+
+        function currentVote() {
+            if (up.classList.contains('active')) return 'up';
+            if (down.classList.contains('active')) return 'down';
+            return '';
+        }
+        function save() {
+            post('/deck/' + encodeURIComponent(DECK_ID) + '/card/' + encodeURIComponent(cardId) + '/feedback',
+                { vote: currentVote(), comment: comment.value, card_name: cardName });
+        }
+        function pick(btn, other) {
+            var wasActive = btn.classList.contains('active');
+            other.classList.remove('active');
+            btn.classList.toggle('active', !wasActive);
+            save();
+        }
+        up.addEventListener('click', function () { pick(up, down); });
+        down.addEventListener('click', function () { pick(down, up); });
+        var t;
+        comment.addEventListener('input', function () { clearTimeout(t); t = setTimeout(save, 700); });
+        comment.addEventListener('blur', save);
+    });
+
+    // Deck-level verdict + comment
+    var panel = document.getElementById('deck-feedback');
+    if (panel) {
+        var status = document.getElementById('deck-fb-status');
+        var commentEl = document.getElementById('deck-comment');
+        function verdict() {
+            var b = panel.querySelector('.verdict-btn.active');
+            return b ? b.getAttribute('data-verdict') : '';
+        }
+        function saveDeck() {
+            post('/deck/' + encodeURIComponent(DECK_ID) + '/feedback',
+                { verdict: verdict(), comment: commentEl.value },
+                function () { status.textContent = 'Saved'; setTimeout(function () { status.textContent = ''; }, 1500); });
+        }
+        panel.querySelectorAll('.verdict-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var wasActive = btn.classList.contains('active');
+                panel.querySelectorAll('.verdict-btn').forEach(function (b) { b.classList.remove('active'); });
+                if (!wasActive) btn.classList.add('active');
+                saveDeck();
+            });
+        });
+        var dt;
+        commentEl.addEventListener('input', function () { clearTimeout(dt); dt = setTimeout(saveDeck, 800); });
+        commentEl.addEventListener('blur', saveDeck);
+    }
+})();
+</script>
+{% endif %}
 
 {% endif %}
 {% endblock %}

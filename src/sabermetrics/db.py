@@ -588,3 +588,90 @@ class DecksRepo:
                 (user_id,),
             ).fetchone()
         return int(row[0]) if row else 0
+
+
+class FeedbackRepo:
+    """Per-user feedback on cards (in a deck) and on decks as a whole.
+
+    Feedback is the Phase-1 deliverable: deck owners rate each card (thumbs +
+    comment) and give the deck an overall verdict. One row per (user, deck,
+    card) and per (user, deck); writes upsert.
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = db_path
+
+    @staticmethod
+    def _norm(value: str | None) -> str | None:
+        v = (value or "").strip()
+        return v or None
+
+    def upsert_card(
+        self,
+        user_id: str,
+        deck_id: str,
+        card_id: str,
+        card_name: str,
+        vote: str | None,
+        comment: str | None,
+    ) -> None:
+        """Insert or update a card's feedback (vote in {up, down, None})."""
+        now = datetime.now().isoformat(timespec="seconds")
+        with connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO card_feedback
+                (id, user_id, deck_id, card_id, card_name, vote, comment,
+                 created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, deck_id, card_id) DO UPDATE SET
+                    vote = excluded.vote,
+                    comment = excluded.comment,
+                    card_name = excluded.card_name,
+                    updated_at = excluded.updated_at""",
+                (
+                    new_id(), user_id, deck_id, card_id, card_name,
+                    self._norm(vote), self._norm(comment), now, now,
+                ),
+            )
+            conn.commit()
+
+    def upsert_deck(
+        self, user_id: str, deck_id: str, verdict: str | None, comment: str | None
+    ) -> None:
+        """Insert or update a deck's overall feedback (verdict + comment)."""
+        now = datetime.now().isoformat(timespec="seconds")
+        with connect(self.db_path) as conn:
+            conn.execute(
+                """INSERT INTO deck_feedback
+                (id, user_id, deck_id, verdict, comment, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, deck_id) DO UPDATE SET
+                    verdict = excluded.verdict,
+                    comment = excluded.comment,
+                    updated_at = excluded.updated_at""",
+                (
+                    new_id(), user_id, deck_id,
+                    self._norm(verdict), self._norm(comment), now, now,
+                ),
+            )
+            conn.commit()
+
+    def card_map(self, user_id: str, deck_id: str) -> dict[str, dict]:
+        """Return {card_id: {vote, comment}} for this user's card feedback."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT card_id, vote, comment FROM card_feedback "
+                "WHERE user_id = ? AND deck_id = ?",
+                (user_id, deck_id),
+            ).fetchall()
+        return {r["card_id"]: {"vote": r["vote"], "comment": r["comment"]} for r in rows}
+
+    def deck(self, user_id: str, deck_id: str) -> dict | None:
+        """Return this user's deck-level feedback ({verdict, comment}) or None."""
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT verdict, comment FROM deck_feedback "
+                "WHERE user_id = ? AND deck_id = ?",
+                (user_id, deck_id),
+            ).fetchone()
+        return dict(row) if row else None
