@@ -143,7 +143,7 @@ def explore():
 
     sql = (
         "SELECT id, name, type_line, color_identity, keywords, mana_cost, cmc, "
-        "image_uri, price_usd, rarity FROM commander_candidates "
+        "oracle_text, image_uri, price_usd, rarity FROM commander_candidates "
         f"WHERE {eq.where_sql} ORDER BY {eq.order_sql} LIMIT ? OFFSET ?"
     )
     # Fetch one extra row to detect a next page without a COUNT query.

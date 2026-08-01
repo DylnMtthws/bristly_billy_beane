@@ -88,9 +88,9 @@
     <!-- Results -->
     <div>
         {% if results %}
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="grid gap-4 sm:grid-cols-2">
             {% for c in results %}
-            {{ commander_card(c, favorited=(c.id in fav_ids)) }}
+            {{ commander_card(c, favorited=(c.id in fav_ids), detailed=True) }}
             {% endfor %}
         </div>
 
