@@ -116,7 +116,12 @@ def run_server(host: str = "127.0.0.1", port: int = 5000, db_path: Path | None =
     try:
         from waitress import serve as waitress_serve
 
-        waitress_serve(app, host=host, port=port, threads=8)
+        # Deck generation is a long synchronous request (profile synthesis on a
+        # cache miss + fit scoring can run several minutes). Raise waitress's
+        # default 120s channel timeout so the connection isn't dropped mid-build.
+        waitress_serve(
+            app, host=host, port=port, threads=8, channel_timeout=900
+        )
     except ImportError:
         logger.warning("waitress not installed; falling back to the Flask dev server")
         app.run(host=host, port=port, debug=False)

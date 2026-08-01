@@ -10,10 +10,25 @@ def _default_db_path() -> Path:
     return Path("data/sabermetrics.db")
 
 
+def load_env() -> None:
+    """Load the repo-root .env into os.environ (entry-point only).
+
+    Kept out of package import so the test suite doesn't pick up secrets like
+    ANTHROPIC_API_KEY (which would flip cost-incurring, API-gated tests from
+    skipped to running). Existing env vars win (``override=False``).
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+
+
 @click.group()
 @click.version_option(version="0.1.0")
 def cli() -> None:
     """Sabermetrics for Magic — Commander/EDH deck optimization."""
+    load_env()
 
 
 @cli.command()
