@@ -112,23 +112,6 @@ def test_explore_search(client) -> None:
 
 
 @pytest.mark.skipif(not HAS_DB, reason="No database available")
-def test_reference_search_page(client) -> None:
-    """Reference search page loads."""
-    response = client.get("/reference/search")
-    assert response.status_code == 200
-    assert b"Reference Search" in response.data
-
-
-@pytest.mark.skipif(not HAS_DB, reason="No database available")
-def test_reference_search_with_query(client) -> None:
-    """Reference search returns results for a query."""
-    response = client.get("/reference/search?q=color+identity")
-    assert response.status_code == 200
-    # Should have results if reference chunks are indexed
-    assert b"results" in response.data or b"No results" in response.data
-
-
-@pytest.mark.skipif(not HAS_DB, reason="No database available")
 def test_cost_report_page(client) -> None:
     """Cost report page loads."""
     response = client.get("/report")
@@ -168,7 +151,7 @@ def test_templates_exist() -> None:
     template_dir = Path(__file__).parent.parent / "src" / "sabermetrics" / "ui" / "templates"
     expected = [
         "base.html", "home.html", "deck_view.html",
-        "profile_view.html", "reference_search.html", "cost_report.html",
+        "profile_view.html", "cost_report.html",
     ]
     for name in expected:
         assert (template_dir / name).exists(), f"Missing template: {name}"
