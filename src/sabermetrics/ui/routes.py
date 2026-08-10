@@ -5,7 +5,6 @@ Endpoints:
 - GET /commander/<name>/profile Commander profile view
 - POST /generate-deck           Trigger deck generation
 - GET /deck/<deck_id>           View generated deck
-- GET /reference/search         Search reference material
 - GET /report                   Cost and usage report
 """
 
@@ -798,43 +797,6 @@ def view_deck(deck_id: str):
         can_feedback=can_feedback,
         card_feedback=card_feedback,
         deck_feedback=deck_feedback,
-    )
-
-
-@bp.route("/reference/search")
-def reference_search():
-    """Search reference material (rules, articles)."""
-    query = request.args.get("q", "").strip()
-    results = []
-
-    if query:
-        try:
-            from sabermetrics.reference_layer.retriever import (
-                ReferenceQuery,
-                ReferenceRetriever,
-            )
-
-            db_path = _db_path()
-            retriever = ReferenceRetriever(db_path)
-            rq = ReferenceQuery(query_text=query, top_k=10)
-            raw_results = retriever.retrieve(rq)
-
-            results = [
-                {
-                    "document": r.document,
-                    "section": r.section or "N/A",
-                    "content": r.content,
-                    "score": round(r.similarity_score, 3),
-                }
-                for r in raw_results
-            ]
-        except Exception as e:
-            logger.warning("Reference search failed: %s", e)
-
-    return render_template(
-        "reference_search.html",
-        query=query,
-        results=results,
     )
 
 
