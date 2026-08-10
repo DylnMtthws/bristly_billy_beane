@@ -43,6 +43,7 @@ mkdir -p "$LAUNCH_AGENTS"
 
 # Process each plist
 PLISTS=(
+    "com.sabermetrics.backup.plist"
     "com.sabermetrics.nightly.plist"
     "com.sabermetrics.weekly.plist"
     "com.sabermetrics.monthly.plist"
@@ -80,6 +81,7 @@ echo ""
 echo "Done. Verify with: launchctl list | grep sabermetrics"
 echo ""
 echo "Schedule:"
+echo "  backup     - Daily at 1:00 AM (DB snapshot, 14-day retention)"
 echo "  nightly    - Daily at 2:00 AM"
 echo "  weekly     - Sunday at 3:00 AM"
 echo "  monthly    - 1st of month at 4:00 AM"
