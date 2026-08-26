@@ -34,6 +34,11 @@ logger = logging.getLogger(__name__)
 # Scoring weights, centralized in config/settings.yaml.
 _SCORING = settings.scoring
 
+# Money comparisons run on floats, so a deck priced exactly at budget can sum an
+# ULP above it (40.0 + 0.20 + 0.20 > 40.0 + 0.20 * 2). Sub-cent slack keeps the
+# downgrade safety net from shedding real cards to "fix" a rounding artifact.
+_PRICE_EPSILON = 1e-6
+
 
 def is_playable_as_land(type_line: str) -> bool:
     """Check if a card can be played as a land from hand.
@@ -738,7 +743,7 @@ def rebalance_budget(
                    score=contribution)
 
     # --- Phase 3: downgrade safety net ---
-    while total_price(deck) > budget:
+    while total_price(deck) > budget + _PRICE_EPSILON:
         over = total_price(deck) - budget
         worst = None
         worst_loss = float("inf")
