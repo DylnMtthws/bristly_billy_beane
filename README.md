@@ -1,23 +1,105 @@
-# Sabermetrics for Magic
+# commander-deck-engine
+
+**Sabermetrics for Magic**
 
 [![CI](https://github.com/DylnMtthws/commander-deck-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/DylnMtthws/commander-deck-engine/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **What CI checks.** `pytest` gates the build — a red suite is a broken build,
-> and that is the whole point of the badge. `ruff` and `mypy` run on every
-> commit and their findings are in the log, but they do not fail the build yet:
-> the repo carries roughly 345 lint findings and 45 type errors, and a gate that
-> fails on all of them is one people learn to ignore. `black` is not run at all;
-> it would reformat 137 of 179 files, which is churn rather than signal.
-> Each of these tightens to a hard gate as its count comes down — deliberately,
-> one tool at a time, not by declaring a flag day.
+Generates Commander/EDH decklists by reasoning about *why* a commander wants a
+card, grounding that reasoning in card text, aggregated decklists, community
+discussion and the official rules.
 
-**A Commander/EDH deck builder that reasons about *why* a commander wants a card — not just how often other people run it.**
+> **Scope.** A multi-user web app, self-hosted on one machine, Commander format
+> only. Accounts are provisioned by the owner through one-time invite links —
+> there is no self-registration. The app binds to localhost only; public access
+> is via a Cloudflare Tunnel rather than an exposed port. Not deployed publicly
+> yet. See [Scope & non-goals](#scope--non-goals).
 
-Most EDH tools (EDHREC, deck power calculators, Moxfield analyzers) are frequency counters: they recommend cards because other decks include them. Sabermetrics starts from the commander's actual rules text and asks a different question — *what does this deck need to function, and which cards deliver the most impact per dollar?* It grounds that reasoning in four independent sources (card oracle text, aggregated decklists, community discussion, and the official rules) and spends LLM calls only where cheap deterministic filters can't decide.
+## Architecture in one paragraph
 
-The name is the thesis: apply *Moneyball*-style value analysis to Magic — find the cards with the best cost-to-impact ratio, not the most popular ones.
+A build runs eight stages. Hard filters and role tagging reduce the legal card
+pool; a Pareto filter drops cards dominated within their role; a deck template
+is derived from the commander's profile; four deterministic generators fill
+infrastructure (ramp, draw, removal, protection, lands); empirical staples the
+role scorers reject are reserved from a decklist corpus; a synergy optimizer
+computes role targets and a synergy matrix, greedily fills every remaining slot,
+refines by swap, rebalances against budget, and repairs engine-type floors;
+Commander legality is then enforced as a hard invariant — exactly 99 cards,
+singleton, within colour identity; finally the deck is synthesised, classified
+and persisted. The governing principle is that cheap deterministic work comes
+first and model calls are spent only where scoring alone cannot decide: the
+optimizer remains the selector, and the single batched LLM call is a safety vet
+that audits the assembled deck last, so nothing bypasses it. Every model call
+goes through one wrapper that pins the permitted model IDs, retries transient
+failures with exponential backoff, records input, output and cached-read tokens
+per call to a `cost_log` table, and refuses to make the call at all once the
+configured monthly spend ceiling is reached.
+<!-- TODO: state measured cost per build once cost_log has rows to aggregate.
+     No figure is quoted here on purpose: every cost number in the repo is a
+     target or an estimate, and OPTION_A_DOD.md records that the pricing
+     constants were once wrong by 20-25%. -->
 
-> **Scope.** A multi-user web app, self-hosted on one machine, Commander format only. Accounts are provisioned by the owner through one-time invite links — there is no self-registration. The app binds to localhost only; public access is via a Cloudflare Tunnel rather than an exposed port. Not deployed publicly yet. See [Scope & non-goals](#scope--non-goals).
+## At a glance
+
+| | |
+|---|---|
+| **Language** | Python ≥ 3.11 |
+| **Typing** | Type hints throughout; mypy configured, 45 errors outstanding (reported, not gated) |
+| **Tests** | 774 collected across 67 files — 754 pass, 20 skip without a local database |
+| **CI** | GitHub Actions; pytest gates the build, ruff (345 findings) and mypy report only, black not run |
+| **LLM** | Anthropic — `claude-sonnet-4-6` for profile synthesis, fit scoring and deck synthesis; `claude-haiku-4-5` for refresh; prompt caching enabled |
+| **Data sources** | 11 ingestion modules — Scryfall, EDHREC, Moxfield, Archidekt, deckstats, TopDeck.gg, Commander Spellbook, magicthegathering.io, Reddit, Game Knights, WotC rules |
+| **Retrieval** | `all-MiniLM-L6-v2` on CPU; cosine similarity in numpy over embeddings stored as SQLite blobs |
+| **Interfaces** | Flask web app (3 blueprints) and an 18-command Click CLI |
+| **Auth** | Flask-Login sessions, argon2id hashing, CSRF on POST, invite-only provisioning, no self-registration |
+| **Scheduling** | 4 macOS launchd jobs — nightly, weekly, monthly, quarterly |
+| **Commits** | 157 on `main`, 2026-05-06 to 2026-08-26 |
+
+### Agent and tool integration
+
+There is none, and that is a design choice rather than a gap. The codebase
+contains no tool-calling, no function definitions passed to the model, and no
+agent loop — a grep for `tools=`, `tool_use`, `tool_choice` and `function_call`
+returns nothing. Orchestration is ordinary Python: the pipeline decides what to
+call and when, and each model call is a single request returning structured JSON
+that is parsed and validated by the caller. This is the thinnest of the four
+areas below and is described here for completeness.
+
+### Context engineering
+
+Prompt caching is enabled on every call, with `cache_control: ephemeral` markers
+placed so that the reusable prefix — profile, reference chunks, corpus evidence —
+is cached across the calls that share it. Commander profiles are cached in SQLite
+under a key of commander ID, user-intent hash and set version, so a profile is
+regenerated only when one of those actually changes rather than on every build.
+The reference layer retrieves rules and strategy chunks by cosine similarity and
+injects only the top matches, and the safety vet is one batched call over the
+assembled deck rather than a per-card call in the selection loop.
+
+### Evaluation and guardrails
+
+Correctness is pinned by 774 tests and by invariants the pipeline enforces rather
+than hopes for: legality is re-checked after optimization and repaired to exactly
+99 singleton cards in colour identity, and a separate assertion prevents the
+commander appearing in its own 99. The model wrapper validates model IDs against
+an allowlist and fails fatally on retired IDs instead of 404ing at runtime,
+retries transient failures three times with exponential backoff, and raises
+before spending once the monthly ceiling is hit. When the LLM safety vet throws,
+the failure is logged with a traceback and surfaced in pipeline metrics as a
+negative cost rather than silently skipped — a silently-skipped vet is recorded
+in the project's debugging notes as having produced its worst deck.
+
+### State management
+
+All state lives in one SQLite database of 27 tables — cards, prices, decklists,
+derived metrics, profiles, users, decks, feedback and cost. There is no external
+store and no cache server. Cost attribution uses a `ContextVar` so that rows
+written to `cost_log` by the model wrapper carry the user and deck they belong
+to, which works correctly for web builds without threading identifiers through
+every call signature and degrades cleanly to unattributed for CLI and scheduled
+runs. Per-user monthly deck quotas and a global spend ceiling are both evaluated
+against this same database, and generation traces are persisted for later
+inspection.
 
 ---
 
