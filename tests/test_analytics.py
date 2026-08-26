@@ -4,6 +4,8 @@ import sqlite3
 import time
 from pathlib import Path
 
+import pytest
+
 from sabermetrics.analytics.filters import (
     apply_hard_filters,
     filter_by_budget,
@@ -116,7 +118,7 @@ def test_apply_hard_filters_integration() -> None:
     """Integration test: apply_hard_filters reduces card pool (A4.1)."""
     db_path = Path("data/sabermetrics.db")
     if not db_path.exists():
-        return  # Skip if no DB
+        pytest.skip("no local DB")
 
     # Find Korvold (BRG commander)
     conn = sqlite3.connect(str(db_path))

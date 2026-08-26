@@ -53,19 +53,25 @@ while total_price(deck) > budget + _PRICE_EPSILON:     # greedy_optimizer.py:746
 
 *The cascade.* DB-dependent tests are gated four different ways — a module-level `HAS_DB = DB_PATH.exists()`, a direct `skipif(not DB.exists())`, an inline `pytest.skip("no local DB")`, and a bare early `return` — and all four test for existence, not validity. Once a 0-byte file existed, 18 tests that should have skipped ran against an empty database instead: 12 failed and 6 errored.
 
-The fourth style deserves its own note. `test_analytics.py::test_apply_hard_filters_integration` guards with `if not db_path.exists(): return` (`tests/test_analytics.py:117-119`) rather than a skip, so with no database it reports as *passed* — a test that silently does nothing and calls it success. It was the nineteenth casualty and the only one that had been green: 13 failures and 6 errors in total, and the reason the passed count moves 749 to 748.
+The fourth style deserves its own note. `test_analytics.py::test_apply_hard_filters_integration` guards with `if not db_path.exists(): return` (`tests/test_analytics.py:117-119`) rather than a skip, so with no database it reports as *passed* — a test that silently does nothing and calls it success. It was the nineteenth casualty and the only one that had been green: 13 failures and 6 errors in total, and the reason the passed count moves 749 to 748. (Fixed in review: it now calls `pytest.skip("no local DB")`, matching the other three guard styles, so it reports as skipped rather than passing while doing nothing.)
 
 **The more serious finding.** On a machine with a populated database, the 16 ramp, protection and removal tests were not falling back at all — they were silently merging real database rows into what was supposed to be a synthetic in-memory pool. They passed, but for the wrong reason, and their behavior depended on the state of local data that is gitignored and therefore differs per machine. (The Draw and Land tests were always hermetic; they never open the path they are handed.) CI would never have caught this, because CI has no database. It only surfaces when someone looks.
 
-**Fix.** All 23 sites now point at a shared sentinel whose parent directory does not exist:
+**Fix.** All 23 sites now point at a shared constant that is a real file and is not a database:
 
 ```python
-_NO_DB = Path(__file__).parent / "_nonexistent" / "sabermetrics.db"   # tests/test_generators.py:30
+_NOT_A_DB = Path(__file__)
 ```
 
-`sqlite3` raises `OperationalError` rather than creating anything — which is the already-documented fallback path — so the tests are hermetic and deterministic on populated and empty machines alike. `test_health_monitor_init` now uses `_make_edhrec_db(tmp_path)`, which guarantees an empty `source_health` table and lets the assertion be exact (`report == []`) rather than a tautology (`isinstance(report, list)`).
+`sqlite3.connect()` succeeds — it does not validate the file on open — and the first query raises `sqlite3.DatabaseError: file is not a database`, which the generators already catch alongside `OperationalError` as their documented fallback. The tests are therefore hermetic and deterministic on populated and empty machines alike.
 
-**Verification.** Three consecutive full runs, since the failure mode was degradation across runs rather than a single red result. Stable at `751 passed, 19 skipped`.
+*This replaced an earlier fix, and the reason is the more useful half of the story.* The first attempt pointed at a sentinel inside a directory that does not exist (`_NO_DB = .../_nonexistent/sabermetrics.db`), relying on `sqlite3` raising `OperationalError` rather than creating anything. That works, but its correctness rests on an **absence** — the directory must never exist — and nothing enforced it. Anything that created the directory would silently return all 16 DB-opening tests to the non-hermetic behaviour being fixed, and they would keep passing while doing it. Adding an import-time guard to enforce the absence made the failure loud, but gave it whole-suite blast radius: a stray `mkdir` became `Interrupted: 1 error during collection`, with zero tests run.
+
+Pointing at a file that is guaranteed to exist and guaranteed not to be a database *removes* the invariant rather than defending it. There is nothing to create and nothing to keep absent, so no guard is needed. Verified that the target is byte-identical across a full suite run and that no `-wal`/`-shm`/`-journal` sidecars are produced: SQLite reads the header, rejects it, and writes nothing. `test_health_monitor_init` now uses `_make_edhrec_db(tmp_path)`, which guarantees an empty `source_health` table and lets the assertion be exact (`report == []`) rather than a tautology (`isinstance(report, list)`).
+
+**Verification.** Repeated consecutive full runs, since the failure mode was degradation across runs rather than a single red result. Stable at `754 passed, 20 skipped`, with `data/` clean afterward.
+
+The count moved twice after this note was first written, both deliberately: four fallback-detector tests were added in review (`751 -> 755`), and `test_apply_hard_filters_integration` was converted from a silent `return` to `pytest.skip` (`755 passed -> 754 passed, 19 -> 20 skipped`), which is the fix for the issue described immediately above.
 
 ---
 
