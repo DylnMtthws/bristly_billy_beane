@@ -1,24 +1,57 @@
 """Tests for infrastructure generators (6.5.4)."""
 
+import hashlib
+import logging
 from pathlib import Path
 
+import pytest
 
 from sabermetrics.models.template import DeckTemplate
-from sabermetrics.pipeline.generators.ramp import (
-    RampPackageGenerator,
-    _score_ramp,
-)
 from sabermetrics.pipeline.generators.draw import DrawPackageGenerator
-from sabermetrics.pipeline.generators.removal import (
-    RemovalPackageGenerator,
-    _score_removal,
-)
+from sabermetrics.pipeline.generators.lands import LandPackageGenerator
 from sabermetrics.pipeline.generators.protection import (
     ProtectionPackageGenerator,
     _score_protection,
 )
-from sabermetrics.pipeline.generators.lands import LandPackageGenerator
+from sabermetrics.pipeline.generators.ramp import (
+    RampPackageGenerator,
+    _score_ramp,
+)
+from sabermetrics.pipeline.generators.removal import (
+    RemovalPackageGenerator,
+    _score_removal,
+)
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
+
+# These tests drive the generators from a caller-supplied ``role_tag_pool``, so
+# they are hermetic by design and must never touch the real database.
+#
+# The path below is this test file itself -- a real, existing file that is
+# emphatically not a SQLite database. That is deliberate, and the mechanism is
+# worth spelling out because it looks like a mistake:
+#
+#   sqlite3.connect()   succeeds (it does not validate the file on open)
+#   the first query     raises sqlite3.DatabaseError: file is not a database
+#   the generators      already catch (OperationalError, DatabaseError) and fall
+#                       back to the caller-supplied pool -- their documented path
+#
+# So the generators take their existing, tested fallback, and the tests stay
+# hermetic on populated and empty machines alike.
+#
+# Why not a path that simply does not exist? Because sqlite3.connect() CREATES
+# the file it is given. That was the original bug: 23 call sites pointed at
+# data/sabermetrics.db, 16 of them reached a generator that connected, and the
+# resulting 0-byte file flipped every ``skipif(not DB.exists())`` guard in the
+# suite from skip to failure on the next run. A nonexistent *directory* also
+# prevents creation, but only for as long as the directory stays absent -- an
+# invariant nothing enforces and anything can break. Pointing at a file that is
+# guaranteed to exist (this module is being imported, so it is on disk) and is
+# guaranteed not to be a database removes the invariant instead of defending it:
+# there is nothing to create, and nothing to keep absent.
+#
+# Reading the file cannot damage it: SQLite only reads the header before
+# rejecting it, and writes no journal/-wal/-shm sidecars for a failed open.
+_NOT_A_DB = Path(__file__)
 
 
 def _make_template() -> DeckTemplate:
@@ -184,7 +217,7 @@ def _make_protection_pool() -> list[dict]:
 
 def test_ramp_generator_produces_assignments() -> None:
     """Ramp generator returns SlotAssignment list."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NOT_A_DB)
     template = _make_template()
     result = gen.generate(
         color_identity=["W", "U"],
@@ -201,7 +234,7 @@ def test_ramp_generator_produces_assignments() -> None:
 
 def test_ramp_generator_includes_sol_ring() -> None:
     """Sol Ring should always be auto-included."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=10,
@@ -216,7 +249,7 @@ def test_ramp_generator_includes_sol_ring() -> None:
 
 def test_ramp_generator_respects_budget() -> None:
     """Ramp generator should not exceed budget."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=10,
@@ -231,7 +264,7 @@ def test_ramp_generator_respects_budget() -> None:
 
 def test_ramp_generator_no_duplicates() -> None:
     """No duplicate card names in ramp output."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=10,
@@ -354,7 +387,7 @@ def test_score_ramp_powerstone_prodigy_scores_low() -> None:
 
 def test_draw_generator_produces_assignments() -> None:
     """Draw generator returns valid assignments."""
-    gen = DrawPackageGenerator(Path("data/sabermetrics.db"))
+    gen = DrawPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["U"],
         target_count=8,
@@ -369,7 +402,7 @@ def test_draw_generator_produces_assignments() -> None:
 
 def test_draw_generator_prefers_repeatable() -> None:
     """Repeatable draw should score higher than one-shot."""
-    gen = DrawPackageGenerator(Path("data/sabermetrics.db"))
+    gen = DrawPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["U"],
         target_count=3,
@@ -391,7 +424,7 @@ def test_draw_generator_prefers_repeatable() -> None:
 
 def test_removal_generator_produces_assignments() -> None:
     """Removal generator returns valid assignments."""
-    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RemovalPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["B", "R"],
         target_count=6,
@@ -407,7 +440,7 @@ def test_removal_generator_produces_assignments() -> None:
 
 def test_removal_generator_includes_board_wipes() -> None:
     """Removal package should include board wipes."""
-    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RemovalPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["B", "R"],
         target_count=6,
@@ -578,7 +611,7 @@ def test_score_protection_board_wide_bonus() -> None:
 
 def test_protection_generator_fills_slots() -> None:
     """Protection generator produces target count of cards."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["W", "G"],
         target_count=4,
@@ -595,7 +628,7 @@ def test_protection_generator_fills_slots() -> None:
 
 def test_protection_generator_no_duplicates() -> None:
     """No duplicate card names in protection output."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["W", "G"],
         target_count=4,
@@ -610,7 +643,7 @@ def test_protection_generator_no_duplicates() -> None:
 
 def test_protection_generator_respects_budget() -> None:
     """Protection generator should not exceed budget."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["W", "G"],
         target_count=4,
@@ -625,7 +658,7 @@ def test_protection_generator_respects_budget() -> None:
 
 def test_protection_generator_excludes_already_placed() -> None:
     """Cards already in deck should not be placed again."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NOT_A_DB)
     pool = _make_protection_pool()
     already = [{"name": "Teferi's Protection"}, {"name": "Heroic Intervention"}]
     result = gen.generate(
@@ -646,7 +679,7 @@ def test_protection_generator_excludes_already_placed() -> None:
 
 def test_land_generator_produces_assignments() -> None:
     """Land generator returns valid assignments."""
-    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    gen = LandPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=36,
@@ -661,7 +694,7 @@ def test_land_generator_produces_assignments() -> None:
 
 def test_land_generator_auto_includes_command_tower() -> None:
     """Command Tower should be auto-included for multicolor."""
-    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    gen = LandPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=36,
@@ -679,7 +712,7 @@ def test_land_generator_auto_includes_command_tower() -> None:
 
 def test_ramp_generator_exposes_protected_names() -> None:
     """After generate(), protected_names should contain staple cards."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NOT_A_DB)
     gen.generate(
         color_identity=["W", "U"],
         target_count=10,
@@ -705,7 +738,7 @@ def test_ramp_generator_includes_green_staples_when_green() -> None:
          "oracle_text": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
          "price_usd": 0.25, "cmc": 3, "_cvar_score": 0.65, "role_tags": '["ramp"]'},
     ])
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NOT_A_DB)
     result = gen.generate(
         color_identity=["W", "U", "G"],
         target_count=12,
@@ -744,7 +777,7 @@ def _make_removal_pool_with_staples() -> list[dict]:
 
 def test_removal_generator_exposes_protected_names() -> None:
     """After generate(), protected_names should contain staple cards."""
-    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RemovalPackageGenerator(_NOT_A_DB)
     pool = _make_removal_pool_with_staples()
     gen.generate(
         color_identity=["W", "U", "G"],
@@ -763,7 +796,7 @@ def test_removal_generator_exposes_protected_names() -> None:
 
 def test_removal_auto_includes_swords_for_white() -> None:
     """White deck gets Swords to Plowshares auto-included."""
-    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RemovalPackageGenerator(_NOT_A_DB)
     pool = _make_removal_pool_with_staples()
     result = gen.generate(
         color_identity=["W", "U"],
@@ -783,7 +816,7 @@ def test_removal_auto_includes_swords_for_white() -> None:
 
 def test_protection_generator_exposes_protected_names() -> None:
     """After generate(), protected_names should contain Lightning Greaves."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NOT_A_DB)
     pool = _make_protection_pool()
     # Add Lightning Greaves to pool
     pool.append({
@@ -806,7 +839,7 @@ def test_protection_generator_exposes_protected_names() -> None:
 
 def test_protection_auto_includes_boots() -> None:
     """All decks get Swiftfoot Boots auto-included."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NOT_A_DB)
     pool = _make_protection_pool()
     result = gen.generate(
         color_identity=["W", "G"],
@@ -855,7 +888,7 @@ def test_ramp_generator_never_places_lands() -> None:
 
 def test_land_generator_subtracts_already_placed_lands() -> None:
     """Total lands equal the target even if another stage placed lands."""
-    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    gen = LandPackageGenerator(_NOT_A_DB)
     placed_lands = [
         {"name": f"Stray Land {i}", "type_line": "Land", "cmc": 0}
         for i in range(2)
@@ -886,7 +919,7 @@ def test_draw_generator_type_need_prefers_on_type() -> None:
         "price_usd": 1.0, "cmc": 2, "_cvar_score": 0.55, "role_tags": '["draw"]',
     }
 
-    gen = DrawPackageGenerator(Path("data/sabermetrics.db"))
+    gen = DrawPackageGenerator(_NOT_A_DB)
     template = _make_template()
     template = template.model_copy(update={"type_targets": {"enchantment": 30}})
     result = gen.generate(
@@ -994,7 +1027,7 @@ def test_land_budget_is_an_allotment_not_a_whole_deck_cap() -> None:
     did. With the fix, a $40 allotment buys nonbasics regardless of how
     much the spells cost.
     """
-    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    gen = LandPackageGenerator(_NOT_A_DB)
     expensive_infra = [
         {"name": f"Pricey Staple {i}", "mana_cost": "{2}{B}",
          "cmc": 3, "type_line": "Creature", "price_usd": 15.0}
@@ -1023,3 +1056,81 @@ def test_land_budget_is_an_allotment_not_a_whole_deck_cap() -> None:
         f"only {len(nonbasics)} nonbasics -- land allotment treated as "
         "whole-deck cap again"
     )
+
+
+# --- Fallback detector -----------------------------------------------------
+#
+# The bug this file's _NOT_A_DB sentinel fixes was invisible because the tests
+# passed whether or not the database opened: on a populated machine the
+# generators silently merged real rows into what was meant to be a synthetic
+# pool, and on a clean one they fell back. Nothing asserted which happened.
+#
+# These tests are that missing detector. They pin the fallback contract
+# directly -- unopenable path in, OperationalError caught, warning logged,
+# empty list out -- so the suite goes red if a generator ever stops falling
+# back, starts creating the file it cannot open, or lets the error escape.
+
+
+@pytest.mark.parametrize(
+    ("generator_cls", "loader", "table"),
+    [
+        (RampPackageGenerator, "_load_ramp_candidates", "ramp_candidates"),
+        (RemovalPackageGenerator, "_load_removal_candidates", "removal_candidates"),
+        (
+            ProtectionPackageGenerator,
+            "_load_protection_candidates",
+            "protection_candidates",
+        ),
+    ],
+)
+def test_candidate_loader_falls_back_when_db_unopenable(
+    generator_cls: type,
+    loader: str,
+    table: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An unopenable DB path degrades to an empty candidate list, loudly."""
+    gen = generator_cls(_NOT_A_DB)
+
+    with caplog.at_level(logging.WARNING):
+        result = getattr(gen, loader)(color_identity=["W", "U"])
+
+    # Degraded, not raised: callers rely on falling back to role_tag_pool.
+    assert result == []
+
+    # And it said so. Without this the fallback could silently stop happening.
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        f"Failed to load {table}" in message for message in messages
+    ), f"expected a 'Failed to load {table}' warning, got: {messages}"
+
+
+def test_candidate_loaders_leave_no_trace_on_disk() -> None:
+    """Opening a non-database file must have no filesystem side effects.
+
+    The original regression was a stray 0-byte data/sabermetrics.db, created
+    by sqlite3.connect() on a path that did not exist, which flipped skipif
+    guards across the suite from skip to failure. _NOT_A_DB cannot be created
+    -- it already exists -- so the risk shifts to the two things sqlite3 CAN
+    still do: write journal/-wal/-shm sidecars next to the file it was given,
+    or modify the file itself. Neither is acceptable; the target is source.
+
+    Asserted as "nothing new appeared and the target is byte-identical",
+    rather than "the path does not exist", which is no longer the invariant.
+    """
+    directory = _NOT_A_DB.parent
+    before = set(directory.iterdir())
+    checksum_before = hashlib.sha256(_NOT_A_DB.read_bytes()).hexdigest()
+
+    # All three connecting generators, since any of them could regress.
+    RampPackageGenerator(_NOT_A_DB)._load_ramp_candidates(color_identity=["W"])
+    RemovalPackageGenerator(_NOT_A_DB)._load_removal_candidates(color_identity=["W"])
+    ProtectionPackageGenerator(_NOT_A_DB)._load_protection_candidates(
+        color_identity=["W"]
+    )
+
+    appeared = set(directory.iterdir()) - before
+    assert not appeared, f"generators created files on disk: {sorted(appeared)}"
+
+    checksum_after = hashlib.sha256(_NOT_A_DB.read_bytes()).hexdigest()
+    assert checksum_after == checksum_before, "generators modified the target file"

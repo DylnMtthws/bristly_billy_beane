@@ -4,12 +4,17 @@ import sqlite3
 import time
 from pathlib import Path
 
-from sabermetrics.analytics.filters import (
-    apply_hard_filters,
-    filter_by_budget,
-    filter_by_color_identity,
-    filter_by_legality,
-    filter_singleton_legal,
+import pytest
+
+from sabermetrics.analytics.brackets import BracketResult, classify_bracket
+from sabermetrics.analytics.card_win_equity import wilson_lower_bound
+from sabermetrics.analytics.components import (
+    ManaBaseScore,
+    analyze_mana_base,
+    count_board_wipes,
+    count_card_draw,
+    count_ramp_spells,
+    count_removal,
 )
 from sabermetrics.analytics.cvar import (
     CVARResult,
@@ -19,18 +24,14 @@ from sabermetrics.analytics.cvar import (
     compute_price_efficiency,
     compute_synergy_score,
 )
-from sabermetrics.analytics.components import (
-    ManaBaseScore,
-    analyze_mana_base,
-    count_board_wipes,
-    count_card_draw,
-    count_ramp_spells,
-    count_removal,
-)
-from sabermetrics.analytics.brackets import BracketResult, classify_bracket
-from sabermetrics.analytics.card_win_equity import wilson_lower_bound
 from sabermetrics.analytics.embeddings import EmbeddingCache
-
+from sabermetrics.analytics.filters import (
+    apply_hard_filters,
+    filter_by_budget,
+    filter_by_color_identity,
+    filter_by_legality,
+    filter_singleton_legal,
+)
 
 # --- Filter tests (A4.1) ---
 
@@ -116,7 +117,7 @@ def test_apply_hard_filters_integration() -> None:
     """Integration test: apply_hard_filters reduces card pool (A4.1)."""
     db_path = Path("data/sabermetrics.db")
     if not db_path.exists():
-        return  # Skip if no DB
+        pytest.skip("no local DB")
 
     # Find Korvold (BRG commander)
     conn = sqlite3.connect(str(db_path))

@@ -5,8 +5,8 @@ from pathlib import Path
 
 from sabermetrics.ingestion.base import SyncResult
 from sabermetrics.ingestion.edhrec import EDHRECIngestion
-from sabermetrics.ingestion.reddit import RedditSearch
 from sabermetrics.ingestion.health import SourceHealthMonitor
+from sabermetrics.ingestion.reddit import RedditSearch
 
 
 def test_sync_result_model() -> None:
@@ -184,12 +184,12 @@ def test_store_empty_commander_skipped_on_incremental(tmp_path: Path) -> None:
     assert len(stale) == 0
 
 
-def test_health_monitor_init() -> None:
+def test_health_monitor_init(tmp_path: Path) -> None:
     """SourceHealthMonitor can be instantiated and report from empty DB."""
-    db_path = Path("data/sabermetrics.db")
+    db_path = _make_edhrec_db(tmp_path)
     monitor = SourceHealthMonitor(db_path)
     report = monitor.get_health_report()
-    assert isinstance(report, list)
+    assert report == []
 
 
 # --- Corrected Archidekt ingestion: pure parse/verify helpers ---------------
