@@ -1,0 +1,12 @@
+# Keep GitHub's language statistics representative of the application code.
+#
+# data/ holds the generated SQLite database and derived artifacts. Everything
+# in it except .gitkeep is gitignored, so it contributes nothing to the
+# language bar today; this rule exists so that stays true if data files are
+# ever committed.
+data/** linguist-vendored
+
+# Working notes, design documents and build plans. Linguist already excludes
+# Markdown from the language bar, so this is a classification for GitHub's
+# file listing rather than a change to the percentages.
+docs/** linguist-documentation
