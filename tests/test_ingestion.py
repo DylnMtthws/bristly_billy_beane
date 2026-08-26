@@ -5,8 +5,8 @@ from pathlib import Path
 
 from sabermetrics.ingestion.base import SyncResult
 from sabermetrics.ingestion.edhrec import EDHRECIngestion
-from sabermetrics.ingestion.reddit import RedditSearch
 from sabermetrics.ingestion.health import SourceHealthMonitor
+from sabermetrics.ingestion.reddit import RedditSearch
 
 
 def test_sync_result_model() -> None:

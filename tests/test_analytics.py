@@ -6,12 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from sabermetrics.analytics.filters import (
-    apply_hard_filters,
-    filter_by_budget,
-    filter_by_color_identity,
-    filter_by_legality,
-    filter_singleton_legal,
+from sabermetrics.analytics.brackets import BracketResult, classify_bracket
+from sabermetrics.analytics.card_win_equity import wilson_lower_bound
+from sabermetrics.analytics.components import (
+    ManaBaseScore,
+    analyze_mana_base,
+    count_board_wipes,
+    count_card_draw,
+    count_ramp_spells,
+    count_removal,
 )
 from sabermetrics.analytics.cvar import (
     CVARResult,
@@ -21,18 +24,14 @@ from sabermetrics.analytics.cvar import (
     compute_price_efficiency,
     compute_synergy_score,
 )
-from sabermetrics.analytics.components import (
-    ManaBaseScore,
-    analyze_mana_base,
-    count_board_wipes,
-    count_card_draw,
-    count_ramp_spells,
-    count_removal,
-)
-from sabermetrics.analytics.brackets import BracketResult, classify_bracket
-from sabermetrics.analytics.card_win_equity import wilson_lower_bound
 from sabermetrics.analytics.embeddings import EmbeddingCache
-
+from sabermetrics.analytics.filters import (
+    apply_hard_filters,
+    filter_by_budget,
+    filter_by_color_identity,
+    filter_by_legality,
+    filter_singleton_legal,
+)
 
 # --- Filter tests (A4.1) ---
 

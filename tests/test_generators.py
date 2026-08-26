@@ -6,22 +6,21 @@ from pathlib import Path
 
 import pytest
 
-
 from sabermetrics.models.template import DeckTemplate
-from sabermetrics.pipeline.generators.ramp import (
-    RampPackageGenerator,
-    _score_ramp,
-)
 from sabermetrics.pipeline.generators.draw import DrawPackageGenerator
-from sabermetrics.pipeline.generators.removal import (
-    RemovalPackageGenerator,
-    _score_removal,
-)
+from sabermetrics.pipeline.generators.lands import LandPackageGenerator
 from sabermetrics.pipeline.generators.protection import (
     ProtectionPackageGenerator,
     _score_protection,
 )
-from sabermetrics.pipeline.generators.lands import LandPackageGenerator
+from sabermetrics.pipeline.generators.ramp import (
+    RampPackageGenerator,
+    _score_ramp,
+)
+from sabermetrics.pipeline.generators.removal import (
+    RemovalPackageGenerator,
+    _score_removal,
+)
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
 # These tests drive the generators from a caller-supplied ``role_tag_pool``, so
