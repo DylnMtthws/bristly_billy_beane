@@ -10,6 +10,6 @@ build/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
-project_plan/reference_img/
+docs/project_plan/reference_img/
 .DS_Store
 *.log
