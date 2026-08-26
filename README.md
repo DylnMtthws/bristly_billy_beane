@@ -1,5 +1,16 @@
 # Sabermetrics for Magic
 
+[![CI](https://github.com/DylnMtthws/commander-deck-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/DylnMtthws/commander-deck-engine/actions/workflows/ci.yml)
+
+> **What CI checks.** `pytest` gates the build — a red suite is a broken build,
+> and that is the whole point of the badge. `ruff` and `mypy` run on every
+> commit and their findings are in the log, but they do not fail the build yet:
+> the repo carries roughly 345 lint findings and 45 type errors, and a gate that
+> fails on all of them is one people learn to ignore. `black` is not run at all;
+> it would reformat 137 of 179 files, which is churn rather than signal.
+> Each of these tightens to a hard gate as its count comes down — deliberately,
+> one tool at a time, not by declaring a flag day.
+
 **A Commander/EDH deck builder that reasons about *why* a commander wants a card — not just how often other people run it.**
 
 Most EDH tools (EDHREC, deck power calculators, Moxfield analyzers) are frequency counters: they recommend cards because other decks include them. Sabermetrics starts from the commander's actual rules text and asks a different question — *what does this deck need to function, and which cards deliver the most impact per dollar?* It grounds that reasoning in four independent sources (card oracle text, aggregated decklists, community discussion, and the official rules) and spends LLM calls only where cheap deterministic filters can't decide.
