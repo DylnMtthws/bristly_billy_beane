@@ -387,27 +387,27 @@ documents:
     purpose: "This file. Project context, auto-loaded."
     read_when: "Always, at session start"
 
-  - file: design.md
+  - file: docs/project_plan/design.md
     purpose: "High-level vision, goals, constraints, ADRs"
     read_when: "Before architectural changes"
 
-  - file: SKILLS.md
+  - file: docs/project_plan/SKILLS.md
     purpose: "Recurring task workflows and patterns"
     read_when: "When implementing a workflow that has a defined skill"
 
-  - file: schema.md
+  - file: docs/project_plan/schema.md
     purpose: "All data schemas (SQL, Pydantic, YAML)"
     read_when: "Before any data model changes or DB queries"
 
-  - file: api_contracts.md
+  - file: docs/project_plan/api_contracts.md
     purpose: "Module interfaces and external API contracts"
     read_when: "Before module-to-module integration work"
 
-  - file: prompts.md
+  - file: docs/project_plan/prompts.md
     purpose: "LLM prompt templates with input/output schemas"
     read_when: "Before any reasoning layer changes"
 
-  - file: build_plan.md
+  - file: docs/project_plan/build_plan.md
     purpose: "Phased build sequence with acceptance criteria"
     read_when: "When deciding what to build next"
 ```
