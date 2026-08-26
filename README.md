@@ -196,11 +196,12 @@ Type hints are required; data structures that cross module boundaries use Pydant
 
 Deliberately **not** built, and not planned:
 
-- Multi-user support or public hosting
 - Formats other than Commander/EDH
 - Mobile UI (desktop localhost only)
 - Real-time gameplay assistance or game simulation
 - Manual data entry or human-in-the-loop labeling of any kind
+
+Multi-user support and hosted access were on this list until the July 2026 pivot, ruled out as firmly as the items above. Multi-user is now built; hosted access is planned but not yet deployed.
 
 The guiding constraints are locality (one process, one machine), bounded cost (every operation has a budget), and observability (every recommendation cites its sources).
 
