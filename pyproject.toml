@@ -27,11 +27,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Pinned exactly. These tools gate or report on CI, and an unpinned linter
+# turns main red on someone else's release day with no change to this repo.
+# Bump deliberately, not incidentally.
 dev = [
-    "black",
-    "mypy",
-    "pytest",
-    "ruff",
+    "black==26.5.1",
+    "mypy==2.3.1",
+    "pytest==9.1.1",
+    "ruff==0.16.4",
+    # Stubs for third-party libraries mypy would otherwise report as untyped.
+    "types-PyYAML",
+    "types-waitress",
+    "types-WTForms",
 ]
 
 [project.scripts]
@@ -50,6 +57,13 @@ line-length = 88
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
+
+# pandas ships no official stubs (pandas-stubs is third-party and lags).
+# Scoped to this one module rather than a global ignore_missing_imports, so
+# every other untyped import still surfaces instead of being silently swallowed.
+[[tool.mypy.overrides]]
+module = "pandas.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

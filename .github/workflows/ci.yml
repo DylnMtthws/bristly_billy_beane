@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      # Report-only. Every rule runs and the findings are in this log, but the
+      # repo carries ~345 of them and failing on that would make the build a
+      # thing people route around rather than read. Tighten as the count falls.
+      - name: Lint (ruff, report-only)
+        continue-on-error: true
+        run: ruff check .
+
+      # Report-only, same reasoning: ~45 errors outstanding.
+      - name: Types (mypy, report-only)
+        continue-on-error: true
+        run: mypy src/
+
+      # The gate. This one must pass.
+      - name: Tests (pytest)
+        env:
+          # Verified: the suite passes with this unset, so nothing requires it.
+          # It is set anyway as a guard -- a dummy value means a test that ever
+          # does reach for the API fails loudly on a bad key instead of
+          # depending on whatever happens to be in the runner's environment.
+          ANTHROPIC_API_KEY: dummy-key-not-used-by-tests
+        run: pytest -q
