@@ -1,6 +1,9 @@
 """Tests for infrastructure generators (6.5.4)."""
 
+import logging
 from pathlib import Path
+
+import pytest
 
 
 from sabermetrics.models.template import DeckTemplate
@@ -28,6 +31,23 @@ from sabermetrics.pipeline.slot_assigner import SlotAssignment
 # empty data/sabermetrics.db flips every ``skipif(not DB.exists())`` guard in the
 # suite from skip to failure on the next run.
 _NO_DB = Path(__file__).parent / "_nonexistent" / "sabermetrics.db"
+
+# The guarantee above is an *absence*, and an absence is easy to break by
+# accident: anything that creates tests/_nonexistent/ silently returns the 16
+# DB-opening tests below to the non-hermetic behaviour this sentinel was added
+# to fix, and they would still pass while doing it. Enforce it at import time so
+# the breakage surfaces as a collection error naming the cause, rather than as
+# tests that quietly start reading whatever is in the developer's local DB.
+if _NO_DB.parent.exists():
+    raise RuntimeError(
+        f"{_NO_DB.parent} exists, but these tests require that it does not.\n"
+        "The generators must fail to open _NO_DB (sqlite3.OperationalError) so "
+        "they fall back to the caller-supplied role_tag_pool. If the directory "
+        "exists, sqlite3 will happily CREATE the database file instead, the "
+        "tests stop being hermetic, and an empty data/sabermetrics.db-style "
+        "file starts flipping skipif guards elsewhere in the suite.\n"
+        "Fix: delete the directory. Nothing should ever create it."
+    )
 
 
 def _make_template() -> DeckTemplate:
@@ -1032,3 +1052,63 @@ def test_land_budget_is_an_allotment_not_a_whole_deck_cap() -> None:
         f"only {len(nonbasics)} nonbasics -- land allotment treated as "
         "whole-deck cap again"
     )
+
+
+# --- Fallback detector -----------------------------------------------------
+#
+# The bug this file's _NO_DB sentinel fixes was invisible because the tests
+# passed whether or not the database opened: on a populated machine the
+# generators silently merged real rows into what was meant to be a synthetic
+# pool, and on a clean one they fell back. Nothing asserted which happened.
+#
+# These tests are that missing detector. They pin the fallback contract
+# directly -- unopenable path in, OperationalError caught, warning logged,
+# empty list out -- so the suite goes red if a generator ever stops falling
+# back, starts creating the file it cannot open, or lets the error escape.
+
+
+@pytest.mark.parametrize(
+    ("generator_cls", "loader", "table"),
+    [
+        (RampPackageGenerator, "_load_ramp_candidates", "ramp_candidates"),
+        (RemovalPackageGenerator, "_load_removal_candidates", "removal_candidates"),
+        (
+            ProtectionPackageGenerator,
+            "_load_protection_candidates",
+            "protection_candidates",
+        ),
+    ],
+)
+def test_candidate_loader_falls_back_when_db_unopenable(
+    generator_cls: type,
+    loader: str,
+    table: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An unopenable DB path degrades to an empty candidate list, loudly."""
+    gen = generator_cls(_NO_DB)
+
+    with caplog.at_level(logging.WARNING):
+        result = getattr(gen, loader)(color_identity=["W", "U"])
+
+    # Degraded, not raised: callers rely on falling back to role_tag_pool.
+    assert result == []
+
+    # And it said so. Without this the fallback could silently stop happening.
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        f"Failed to load {table}" in message for message in messages
+    ), f"expected a 'Failed to load {table}' warning, got: {messages}"
+
+
+def test_candidate_loader_does_not_create_the_database() -> None:
+    """The sentinel path must be refused, never created.
+
+    This is the regression that produced a stray 0-byte data/sabermetrics.db
+    and flipped skipif guards across the suite from skip to failure.
+    """
+    gen = RampPackageGenerator(_NO_DB)
+    gen._load_ramp_candidates(color_identity=["W", "U"])
+
+    assert not _NO_DB.exists(), "generator created the database file"
+    assert not _NO_DB.parent.exists(), "generator created the sentinel directory"

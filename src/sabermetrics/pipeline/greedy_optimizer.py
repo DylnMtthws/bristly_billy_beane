@@ -244,6 +244,9 @@ def greedy_fill(
             cheapest = None
             for ci, card in enumerate(eligible):
                 price = float(card.get("price_usd", 0) or 0)
+                # Same float-vs-budget comparison as _PRICE_EPSILON guards, left
+                # bare on purpose: this one fails closed. An ULP of drift can
+                # only skip a card that exactly fills the budget, never overspend.
                 if price > budget_left:
                     continue
                 if cheapest is None or price < float(
@@ -417,6 +420,10 @@ def swap_refine(
 
                 swap_price = float(swap_card.get("price_usd", 0) or 0)
                 new_total = total_price - current_price + swap_price
+                # Bare comparison, deliberately: unlike the Phase 3 guard that
+                # _PRICE_EPSILON protects, drift here only declines an upgrade
+                # that lands exactly on budget. Failing closed costs one swap;
+                # failing open would overspend.
                 if new_total > budget:
                     continue
 
@@ -545,6 +552,8 @@ def _best_single_upgrade(
             if cand.get("name", "") in deck_names:
                 continue
             price_diff = float(cand.get("price_usd", 0) or 0) - cur_price
+            # Bare on purpose -- see _PRICE_EPSILON. This fails closed too: drift
+            # can only reject a break-even swap, never authorise an overspend.
             if price_diff > budget_left:
                 continue
             trial = list(deck)
