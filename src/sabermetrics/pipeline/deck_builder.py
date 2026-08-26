@@ -1,16 +1,34 @@
 """Deck builder orchestrator (D6.2, restructured for synergy optimizer).
 
-8-stage pipeline:
-1. Hard filters + role tag loading
-2. Pareto filter (remove dominated cards per role)
-3. Template derivation (profile-driven composition)
-4. Infrastructure fill (4 deterministic generators)
-5. Role targets + synergy matrix computation
-6. Greedy optimizer + swap refinement
-7. Budget rebalancing (spend-down, sell-one-buy-many, downgrade)
-7b. Enforce Commander legality (exactly 99, singleton, in color identity)
-8. LLM safety vet (one batched call, final gate)
-8. Synthesis + classify + persist
+Two preliminary steps run before the pipeline proper and are not counted as
+stages: request validation, and commander profile acquisition (which may make
+an LLM call and is billed). build() times them as metrics 1_validate and
+2_profile.
+
+Eight stages, listed as build() runs them. The labels match the inline
+``# --- Stage`` comments; the numbering is historical rather than contiguous,
+which is why 4.5 and 7b appear and why 5 and 6 share an entry:
+
+1.   Hard filters + role tag loading
+2.   Structural scoring + Pareto filter (remove dominated cards per role)
+3.   Template derivation (profile-driven composition)
+4.   Infrastructure fill (4 deterministic generators)
+4.5  Empirical staple reservation -- consensus engine pieces the role scorers
+     reject. Occupies differentiator slots, so greedy fills that many fewer
+     and the deck still totals 99.
+5+6  Synergy optimization, all inside _optimize_differentiators:
+     role targets -> synergy matrix -> greedy fill -> swap refinement ->
+     budget rebalancing (the step older comments call stage 7) ->
+     engine-floor repair -> LLM safety vet.
+     The vet is one batched call and is the final gate: it runs last within
+     this stage precisely so nothing bypasses it.
+7b.  Enforce Commander legality (exactly 99, singleton, in color identity)
+8.   Synthesis + classify + persist
+
+Note for anyone renumbering this: the stage labels are inconsistent elsewhere
+in the codebase -- staple reservation is called 4.5 at line 905 but 3.5 at
+line 1202 and in tests/test_empirical_reserve.py. Fixing that is a wider
+change than this docstring.
 """
 
 import json
@@ -121,7 +139,11 @@ class DeckBuilder:
         self.db_path = db_path
 
     def build(self, request: DeckBuildRequest) -> DeckBuildResult:
-        """Execute the 8-stage deck building pipeline.
+        """Execute the eight-stage deck building pipeline.
+
+        See the module docstring for the stage list and for the two
+        preliminary steps (validation, profile acquisition) that run first
+        and are not counted as stages.
 
         Args:
             request: Deck build parameters.
