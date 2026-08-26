@@ -20,6 +20,15 @@ from sabermetrics.pipeline.generators.protection import (
 from sabermetrics.pipeline.generators.lands import LandPackageGenerator
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
+# These tests drive the generators from a caller-supplied ``role_tag_pool``, so
+# they are hermetic by design and must never open the real database. The path
+# below sits inside a directory that does not exist: sqlite3 then raises
+# OperationalError, which the generators already catch as their documented
+# fallback, instead of *creating* a stray empty DB file. That matters because an
+# empty data/sabermetrics.db flips every ``skipif(not DB.exists())`` guard in the
+# suite from skip to failure on the next run.
+_NO_DB = Path(__file__).parent / "_nonexistent" / "sabermetrics.db"
+
 
 def _make_template() -> DeckTemplate:
     return DeckTemplate(
@@ -184,7 +193,7 @@ def _make_protection_pool() -> list[dict]:
 
 def test_ramp_generator_produces_assignments() -> None:
     """Ramp generator returns SlotAssignment list."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NO_DB)
     template = _make_template()
     result = gen.generate(
         color_identity=["W", "U"],
@@ -201,7 +210,7 @@ def test_ramp_generator_produces_assignments() -> None:
 
 def test_ramp_generator_includes_sol_ring() -> None:
     """Sol Ring should always be auto-included."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=10,
@@ -216,7 +225,7 @@ def test_ramp_generator_includes_sol_ring() -> None:
 
 def test_ramp_generator_respects_budget() -> None:
     """Ramp generator should not exceed budget."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=10,
@@ -231,7 +240,7 @@ def test_ramp_generator_respects_budget() -> None:
 
 def test_ramp_generator_no_duplicates() -> None:
     """No duplicate card names in ramp output."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=10,
@@ -354,7 +363,7 @@ def test_score_ramp_powerstone_prodigy_scores_low() -> None:
 
 def test_draw_generator_produces_assignments() -> None:
     """Draw generator returns valid assignments."""
-    gen = DrawPackageGenerator(Path("data/sabermetrics.db"))
+    gen = DrawPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["U"],
         target_count=8,
@@ -369,7 +378,7 @@ def test_draw_generator_produces_assignments() -> None:
 
 def test_draw_generator_prefers_repeatable() -> None:
     """Repeatable draw should score higher than one-shot."""
-    gen = DrawPackageGenerator(Path("data/sabermetrics.db"))
+    gen = DrawPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["U"],
         target_count=3,
@@ -391,7 +400,7 @@ def test_draw_generator_prefers_repeatable() -> None:
 
 def test_removal_generator_produces_assignments() -> None:
     """Removal generator returns valid assignments."""
-    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RemovalPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["B", "R"],
         target_count=6,
@@ -407,7 +416,7 @@ def test_removal_generator_produces_assignments() -> None:
 
 def test_removal_generator_includes_board_wipes() -> None:
     """Removal package should include board wipes."""
-    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RemovalPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["B", "R"],
         target_count=6,
@@ -578,7 +587,7 @@ def test_score_protection_board_wide_bonus() -> None:
 
 def test_protection_generator_fills_slots() -> None:
     """Protection generator produces target count of cards."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["W", "G"],
         target_count=4,
@@ -595,7 +604,7 @@ def test_protection_generator_fills_slots() -> None:
 
 def test_protection_generator_no_duplicates() -> None:
     """No duplicate card names in protection output."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["W", "G"],
         target_count=4,
@@ -610,7 +619,7 @@ def test_protection_generator_no_duplicates() -> None:
 
 def test_protection_generator_respects_budget() -> None:
     """Protection generator should not exceed budget."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["W", "G"],
         target_count=4,
@@ -625,7 +634,7 @@ def test_protection_generator_respects_budget() -> None:
 
 def test_protection_generator_excludes_already_placed() -> None:
     """Cards already in deck should not be placed again."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NO_DB)
     pool = _make_protection_pool()
     already = [{"name": "Teferi's Protection"}, {"name": "Heroic Intervention"}]
     result = gen.generate(
@@ -646,7 +655,7 @@ def test_protection_generator_excludes_already_placed() -> None:
 
 def test_land_generator_produces_assignments() -> None:
     """Land generator returns valid assignments."""
-    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    gen = LandPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=36,
@@ -661,7 +670,7 @@ def test_land_generator_produces_assignments() -> None:
 
 def test_land_generator_auto_includes_command_tower() -> None:
     """Command Tower should be auto-included for multicolor."""
-    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    gen = LandPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["W", "U"],
         target_count=36,
@@ -679,7 +688,7 @@ def test_land_generator_auto_includes_command_tower() -> None:
 
 def test_ramp_generator_exposes_protected_names() -> None:
     """After generate(), protected_names should contain staple cards."""
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NO_DB)
     gen.generate(
         color_identity=["W", "U"],
         target_count=10,
@@ -705,7 +714,7 @@ def test_ramp_generator_includes_green_staples_when_green() -> None:
          "oracle_text": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
          "price_usd": 0.25, "cmc": 3, "_cvar_score": 0.65, "role_tags": '["ramp"]'},
     ])
-    gen = RampPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RampPackageGenerator(_NO_DB)
     result = gen.generate(
         color_identity=["W", "U", "G"],
         target_count=12,
@@ -744,7 +753,7 @@ def _make_removal_pool_with_staples() -> list[dict]:
 
 def test_removal_generator_exposes_protected_names() -> None:
     """After generate(), protected_names should contain staple cards."""
-    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RemovalPackageGenerator(_NO_DB)
     pool = _make_removal_pool_with_staples()
     gen.generate(
         color_identity=["W", "U", "G"],
@@ -763,7 +772,7 @@ def test_removal_generator_exposes_protected_names() -> None:
 
 def test_removal_auto_includes_swords_for_white() -> None:
     """White deck gets Swords to Plowshares auto-included."""
-    gen = RemovalPackageGenerator(Path("data/sabermetrics.db"))
+    gen = RemovalPackageGenerator(_NO_DB)
     pool = _make_removal_pool_with_staples()
     result = gen.generate(
         color_identity=["W", "U"],
@@ -783,7 +792,7 @@ def test_removal_auto_includes_swords_for_white() -> None:
 
 def test_protection_generator_exposes_protected_names() -> None:
     """After generate(), protected_names should contain Lightning Greaves."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NO_DB)
     pool = _make_protection_pool()
     # Add Lightning Greaves to pool
     pool.append({
@@ -806,7 +815,7 @@ def test_protection_generator_exposes_protected_names() -> None:
 
 def test_protection_auto_includes_boots() -> None:
     """All decks get Swiftfoot Boots auto-included."""
-    gen = ProtectionPackageGenerator(Path("data/sabermetrics.db"))
+    gen = ProtectionPackageGenerator(_NO_DB)
     pool = _make_protection_pool()
     result = gen.generate(
         color_identity=["W", "G"],
@@ -855,7 +864,7 @@ def test_ramp_generator_never_places_lands() -> None:
 
 def test_land_generator_subtracts_already_placed_lands() -> None:
     """Total lands equal the target even if another stage placed lands."""
-    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    gen = LandPackageGenerator(_NO_DB)
     placed_lands = [
         {"name": f"Stray Land {i}", "type_line": "Land", "cmc": 0}
         for i in range(2)
@@ -886,7 +895,7 @@ def test_draw_generator_type_need_prefers_on_type() -> None:
         "price_usd": 1.0, "cmc": 2, "_cvar_score": 0.55, "role_tags": '["draw"]',
     }
 
-    gen = DrawPackageGenerator(Path("data/sabermetrics.db"))
+    gen = DrawPackageGenerator(_NO_DB)
     template = _make_template()
     template = template.model_copy(update={"type_targets": {"enchantment": 30}})
     result = gen.generate(
@@ -994,7 +1003,7 @@ def test_land_budget_is_an_allotment_not_a_whole_deck_cap() -> None:
     did. With the fix, a $40 allotment buys nonbasics regardless of how
     much the spells cost.
     """
-    gen = LandPackageGenerator(Path("data/sabermetrics.db"))
+    gen = LandPackageGenerator(_NO_DB)
     expensive_infra = [
         {"name": f"Pricey Staple {i}", "mana_cost": "{2}{B}",
          "cmc": 3, "type_line": "Creature", "price_usd": 15.0}
