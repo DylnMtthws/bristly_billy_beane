@@ -14,6 +14,11 @@ def _default_db_path() -> Path:
 @click.version_option(version="0.1.0")
 def cli() -> None:
     """Sabermetrics for Magic — Commander/EDH deck optimization."""
+    # Load .env so credentials (ANTHROPIC_API_KEY, SABER_SECRET_KEY, ...) are
+    # available to every command without the caller exporting them by hand.
+    from sabermetrics._env import load_env
+
+    load_env()
 
 
 @cli.command()

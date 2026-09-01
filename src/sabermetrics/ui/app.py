@@ -34,6 +34,13 @@ def create_app(db_path: Path | None = None) -> Flask:
     Returns:
         Configured Flask app instance.
     """
+    # Load .env before reading any config from os.environ (SABER_SECRET_KEY,
+    # ANTHROPIC_API_KEY, cookie flags). Covers WSGI servers that import the app
+    # factory directly, not just the CLI serve path.
+    from sabermetrics._env import load_env
+
+    load_env()
+
     app = Flask(
         __name__,
         template_folder=str(Path(__file__).parent / "templates"),
