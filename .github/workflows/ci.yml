@@ -22,7 +22,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,postgres,legacy]"
 
       # Report-only. Every rule runs and the findings are in this log, but the
       # repo carries ~345 of them and failing on that would make the build a

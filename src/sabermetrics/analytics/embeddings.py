@@ -64,7 +64,10 @@ class EmbeddingService:
     def _load_model(self):  # type: ignore[no-untyped-def]
         """Lazy-load the embedding model."""
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError as exc:
+                raise RuntimeError("install sabermetrics[legacy]") from exc
 
             logger.info("Loading embedding model: %s", self._model_name)
             self._model = SentenceTransformer(self._model_name)

@@ -19,10 +19,8 @@ dependencies = [
     "mtg-parser",
     "mtgsdk",
     "numpy",
-    "pandas",
     "pydantic>=2.0",
     "pyyaml",
-    "sentence-transformers",
     "waitress",
 ]
 
@@ -30,6 +28,11 @@ dependencies = [
 # The Postgres driver for the live mtg_v1 adapters. An extra, not a dependency:
 # the ordinary test suite runs against fixtures and must not need a database.
 postgres = ["psycopg[binary]>=3.1"]
+
+# The shipped cEDH path does not import the embedding/data-science stack.
+# Keep it available for the legacy casual generator and refresh jobs without
+# carrying PyTorch and scikit-learn into the production container.
+legacy = ["pandas", "sentence-transformers"]
 
 # Pinned exactly. These tools gate or report on CI, and an unpinned linter
 # turns main red on someone else's release day with no change to this repo.
