@@ -551,3 +551,52 @@ class TestPublicDeployment:
     def test_hybrid_is_a_recognised_mode(self, db_path, monkeypatch):
         monkeypatch.setenv("SABER_AUTH_MODE", "hybrid")
         assert create_app(db_path).config["AUTH_MODE"] == "hybrid"
+
+
+class TestWsgiServerProxyTrust:
+    """The WSGI server must not strip the headers the auth depends on.
+
+    This is the one piece of the chain the Flask test client cannot exercise,
+    and it broke the first real deployment: waitress defaults
+    ``clear_untrusted_proxy_headers`` to True, so it removed ``X-Forwarded-For``
+    before ProxyFix could read it, ``remote_addr`` stayed 127.0.0.1, and every
+    tailnet request was refused as coming from a non-tailnet address.
+
+    Asserting on the call arguments is the only mechanism available short of
+    starting a real server, and it rejects exactly the input that caused the
+    outage: the settings being absent.
+    """
+
+    def _serve_kwargs(self, monkeypatch, db_path):
+        captured = {}
+
+        def fake_serve(app, **kwargs):
+            captured.update(kwargs)
+
+        monkeypatch.setattr("waitress.serve", fake_serve)
+        from sabermetrics.ui.app import run_server
+
+        run_server(port=5999, db_path=db_path)
+        return captured
+
+    def test_localhost_is_a_trusted_proxy(self, monkeypatch, db_path):
+        kwargs = self._serve_kwargs(monkeypatch, db_path)
+        assert kwargs["trusted_proxy"] == "127.0.0.1"
+
+    def test_forwarded_for_is_explicitly_trusted(self, monkeypatch, db_path):
+        """Without this, tailnet identity is refused on every request."""
+        kwargs = self._serve_kwargs(monkeypatch, db_path)
+        assert "x-forwarded-for" in kwargs["trusted_proxy_headers"]
+
+    def test_the_bind_address_stays_local(self, monkeypatch, db_path):
+        kwargs = self._serve_kwargs(monkeypatch, db_path)
+        assert kwargs["host"] == "127.0.0.1"
+
+    def test_a_public_bind_is_overridden(self, monkeypatch, db_path):
+        """The only listener on a public interface should be Tailscale's."""
+        captured = {}
+        monkeypatch.setattr("waitress.serve", lambda app, **kw: captured.update(kw))
+        from sabermetrics.ui.app import run_server
+
+        run_server(host="0.0.0.0", port=5999, db_path=db_path)
+        assert captured["host"] == "127.0.0.1"

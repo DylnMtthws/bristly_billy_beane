@@ -13,7 +13,16 @@ def _default_db_path() -> Path:
 @click.group()
 @click.version_option(version="0.1.0")
 def cli() -> None:
-    """Sabermetrics for Magic — Commander/EDH deck optimization."""
+    """Sabermetrics for Magic — Commander/EDH deck optimization.
+
+    Loads ``.env`` first so the documented configuration actually takes effect;
+    nothing loaded it before, which made every "set it in .env" instruction in
+    the docs and error messages false. Real environment variables still win, so
+    an explicit export overrides the file rather than the reverse.
+    """
+    from sabermetrics.config import load_env_file
+
+    load_env_file()
 
 
 @cli.command()

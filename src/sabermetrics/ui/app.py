@@ -177,7 +177,28 @@ def run_server(
     try:
         from waitress import serve as waitress_serve
 
-        waitress_serve(app, host=host, port=port, threads=8)
+        # trusted_proxy is load-bearing, not tuning. Waitress defaults
+        # `clear_untrusted_proxy_headers` to True, so it STRIPS X-Forwarded-*
+        # from every request unless the sender is named here — and ProxyFix
+        # then has nothing to read, leaving remote_addr as 127.0.0.1.
+        #
+        # That silently breaks tailnet auth: `tailscale serve` proxies from
+        # localhost and sets X-Forwarded-For to the caller's tailnet address,
+        # which is exactly what the identity source check verifies. Found by
+        # deploying it; the test suite could not catch it because the Flask
+        # test client is not waitress.
+        #
+        # Trusting 127.0.0.1 is the trust boundary already documented in
+        # tailscale_auth: a process on this host is trusted, because it could
+        # read the database directly anyway.
+        waitress_serve(
+            app,
+            host=host,
+            port=port,
+            threads=8,
+            trusted_proxy="127.0.0.1",
+            trusted_proxy_headers={"x-forwarded-for", "x-forwarded-host"},
+        )
     except ImportError:
         logger.warning("waitress not installed; falling back to the Flask dev server")
         app.run(host=host, port=port, debug=False)

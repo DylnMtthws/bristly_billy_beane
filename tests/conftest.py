@@ -16,8 +16,10 @@ def build_db(tmp_path_factory) -> Path:
     End-to-end builds persist a generated deck; copying the DB once per session
     keeps the real (symlinked) production database untouched.
     """
-    if not _PROD_DB.exists():
-        pytest.skip("no populated DB available")
+    from tests._populated_db import HAS_POPULATED_DB, SKIP_REASON
+
+    if not HAS_POPULATED_DB:
+        pytest.skip(SKIP_REASON)
     dst = tmp_path_factory.mktemp("build_db") / "saber.db"
     shutil.copy(str(_PROD_DB.resolve()), str(dst))
     return dst
@@ -29,6 +31,7 @@ def canned_profile():
 
     Lets end-to-end build tests skip the profile-synthesis LLM call.
     """
+
     def _make(commander_id: str, colors: list[str]):
         from sabermetrics.models.profile import (
             BehavioralSignals,
@@ -74,14 +77,17 @@ def canned_profile():
             strategic_profile=StrategicProfile(
                 primary_archetype="midrange",
                 game_plan_summary="Play good cards.",
-                win_conditions=[WinCondition(
-                    description="Combat", key_cards=[], reliability="primary"
-                )],
+                win_conditions=[
+                    WinCondition(
+                        description="Combat", key_cards=[], reliability="primary"
+                    )
+                ],
                 build_paths=[],
                 synergy_priorities={},
                 anti_synergies=[],
                 strategic_constraints=StrategicConstraints(
-                    mana_base_requirements="", interaction_density="medium",
+                    mana_base_requirements="",
+                    interaction_density="medium",
                     speed_tier="midrange",
                 ),
                 power_indicators=PowerIndicators(
@@ -93,8 +99,10 @@ def canned_profile():
             sources=ProfileSources(evidence_freshness=EvidenceFreshness()),
         )
         return ProfileResult(
-            profile=profile, cache_hit=True,
-            generation_cost_usd=0.0, generation_time_seconds=0.0,
+            profile=profile,
+            cache_hit=True,
+            generation_cost_usd=0.0,
+            generation_time_seconds=0.0,
         )
 
     return _make
@@ -150,3 +158,26 @@ def cedh_simulator():
     from sabermetrics.cedh.simulator import FixtureSimulatorClient
 
     return FixtureSimulatorClient()
+
+
+@pytest.fixture(autouse=True)
+def _offline_cedh_env(monkeypatch):
+    """Keep every test on the fixture adapters, whatever the shell has set.
+
+    ``MTG_V1_DSN`` and ``HF_TOKEN`` switch the cEDH factory to the live
+    Postgres and the real model provider. A developer with either exported —
+    which is the normal state on the deploy box — would otherwise see tests
+    quietly change what they exercise, and the ones asserting "this is running
+    on fixtures" would fail for a reason that has nothing to do with the code.
+
+    The opt-in smoke tests read the same variables directly at import time, so
+    they are unaffected by this.
+    """
+    for var in ("MTG_V1_DSN", "HF_TOKEN", "SABER_AUTH_MODE", "SABER_PUBLIC"):
+        monkeypatch.delenv(var, raising=False)
+    # Several tests invoke the Click CLI, whose entry point loads `.env`. On a
+    # machine that has actually been deployed that file sets AUTH_MODE,
+    # MTG_V1_DSN and more, so the CLI would put the real deployment's
+    # configuration back after this fixture cleared it. Deleting the variables
+    # is not enough; the loader has to be told to stay out.
+    monkeypatch.setenv("SABER_SKIP_DOTENV", "1")

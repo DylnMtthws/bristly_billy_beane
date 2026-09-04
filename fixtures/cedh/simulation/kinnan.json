@@ -1,8 +1,9 @@
 {
-  "_README": "REPRESENTATIVE FIXTURE, not a measurement of any candidate this repository builds. The probabilities are commander_simulator's published figures for its own authored list (STATE.md, 60,000 games, list A snapshot 2026-09-01). They are reproduced here so the consumer path has a realistic shape to develop against; the simulator_version is prefixed 'fixture:' on load so nothing renders it as a live run.",
+  "_README": "REPRESENTATIVE FIXTURE, not a measurement of any candidate this repository builds. commander_keys lists BOTH the synthetic id the fixture corpus assigns to Kinnan and his real mtg_v1 oracle_id (8d11aa49-...), so the same fixture attaches in offline and live modes without being duplicated. The probabilities are commander_simulator's published figures for its own authored list (STATE.md, 60,000 games, list A snapshot 2026-09-01). They are reproduced here so the consumer path has a realistic shape to develop against; the simulator_version is prefixed 'fixture:' on load so nothing renders it as a live run.",
   "schema": "cedh-simulation-result.v1",
   "commander_keys": [
-    "38d25a87-dcc1-5cc2-a086-48796e7cdced"
+    "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+    "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
   ],
   "candidate_id": "placeholder",
   "deck_sha256": "placeholder",

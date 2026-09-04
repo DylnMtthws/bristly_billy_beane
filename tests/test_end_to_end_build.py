@@ -18,10 +18,12 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
+from tests._populated_db import HAS_POPULATED_DB, SKIP_REASON
+
 DB = Path("data/sabermetrics.db")
 
 
-@pytest.mark.skipif(not DB.exists(), reason="needs populated card DB")
+@pytest.mark.skipif(not HAS_POPULATED_DB, reason=SKIP_REASON)
 def test_end_to_end_build_is_legal_llm_free_and_observable(
     build_db, canned_profile
 ) -> None:

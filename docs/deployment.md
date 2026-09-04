@@ -50,6 +50,26 @@ tailscale serve --bg 5000
 tailscale serve status
 ```
 
+**HTTPS must be enabled for the tailnet first**, or this hangs while it waits
+for a certificate it cannot get. Turn it on once at
+<https://login.tailscale.com/admin/dns> → *Enable HTTPS*. Check with:
+
+```bash
+tailscale status --json | python3 -c "import json,sys; print(json.load(sys.stdin).get('CertDomains'))"
+# null  → not enabled yet
+```
+
+Until it is enabled you can still run tailnet-only over plain HTTP, which is
+encrypted by WireGuard anyway:
+
+```bash
+SABER_COOKIE_SECURE=0 sabermetrics serve    # Secure cookies are not sent over http
+tailscale serve --bg --http=8080 5000
+```
+
+Drop `SABER_COOKIE_SECURE=0` the moment HTTPS is on — without it, sessions and
+CSRF tokens do not persist, and POSTs fail with a 400 that looks like a bug.
+
 That publishes `https://<machine>.<tailnet>.ts.net` with a real certificate,
 reachable only from your tailnet. On this machine that is:
 
@@ -115,9 +135,27 @@ so a public visitor can never arrive already authenticated. That is why a public
 deployment runs in `hybrid` mode: your tailnet requests still authenticate by
 identity, and everyone else gets the password form.
 
+Funnel needs two one-time console changes, and `tailscale funnel` fails
+without them:
+
+1. **HTTPS certificates** — <https://login.tailscale.com/admin/dns> → *Enable HTTPS*
+2. **The funnel node attribute** — <https://login.tailscale.com/admin/acls>:
+
+   ```jsonc
+   "nodeAttrs": [
+     { "target": ["autogroup:member"], "attr": ["funnel"] }
+   ]
+   ```
+
+Verify both before trying:
+
 ```bash
-# One-time: enable Funnel for the tailnet in the admin console
-#   https://login.tailscale.com/admin/acls  →  add "funnel" to nodeAttrs
+tailscale status --json | python3 -c "import json,sys; d=json.load(sys.stdin); \
+  print('https:', d.get('CertDomains')); \
+  print('funnel:', 'funnel' in str(d['Self'].get('CapMap', {})))"
+```
+
+```bash
 
 export SABER_AUTH_MODE=hybrid
 export SABER_PUBLIC=1                # required; turns on the public posture
