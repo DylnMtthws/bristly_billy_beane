@@ -43,9 +43,7 @@ class DecklistIngestionBase(SourceHealthMixin):
 
         try:
             urls = self._discover_deck_urls()
-            logger.info(
-                "[%s] Found %d deck URLs to process", self.name, len(urls)
-            )
+            logger.info("[%s] Found %d deck URLs to process", self.name, len(urls))
 
             for url in urls:
                 try:
@@ -64,9 +62,7 @@ class DecklistIngestionBase(SourceHealthMixin):
                     errors.append(f"Error processing {url}: {e}")
 
                 if items_ingested % 25 == 0 and items_ingested > 0:
-                    logger.info(
-                        "[%s] Processed %d decks", self.name, items_ingested
-                    )
+                    logger.info("[%s] Processed %d decks", self.name, items_ingested)
 
             self._update_source_health(success=True)
             success_flag = True
@@ -191,9 +187,7 @@ class DecklistIngestionBase(SourceHealthMixin):
         finally:
             conn.close()
 
-    def _resolve_card_id(
-        self, conn: sqlite3.Connection, card_name: str
-    ) -> str | None:
+    def _resolve_card_id(self, conn: sqlite3.Connection, card_name: str) -> str | None:
         """Look up a card's Scryfall ID by name."""
         cursor = conn.execute(
             "SELECT id FROM cards WHERE name = ? LIMIT 1", (card_name,)

@@ -45,11 +45,11 @@ class EmpiricalComposition(BaseModel):
     """
 
     lands: int
-    enchantments: int          # non-land enchantments
+    enchantments: int  # non-land enchantments
     creatures: int
     artifacts: int
     auras: int
-    avg_cmc: float             # median of per-deck avg non-land CMC
+    avg_cmc: float  # median of per-deck avg non-land CMC
     # Median fraction of deck value spent on lands in the variant's real
     # decks. Caps the land generator's budget so B2's price-neutral scoring
     # can't blow half the budget on premium mana (the $45 Gemstone Caverns).
@@ -63,8 +63,8 @@ class EmpiricalInclusion(BaseModel):
     variant: str
     variant_size: int
     n_decks: int
-    inclusion: dict[str, float] = Field(default_factory=dict)   # name_lower -> rate
-    reliable: set[str] = Field(default_factory=set)             # tight-CI names
+    inclusion: dict[str, float] = Field(default_factory=dict)  # name_lower -> rate
+    reliable: set[str] = Field(default_factory=set)  # tight-CI names
     composition: EmpiricalComposition | None = None
 
     def rate(self, card_name: str) -> float:
@@ -129,13 +129,15 @@ def compute_composition(
         artifacts=round(statistics.median(artifacts)),
         auras=round(statistics.median(auras)),
         avg_cmc=round(statistics.median(cmcs), 2),
-        land_budget_share=round(
-            statistics.median(land_shares), 3
-        ) if land_shares else 0.0,
+        land_budget_share=(
+            round(statistics.median(land_shares), 3) if land_shares else 0.0
+        ),
     )
 
 
-def _load_composition(db_path: Path, deck_ids: list[str]) -> EmpiricalComposition | None:
+def _load_composition(
+    db_path: Path, deck_ids: list[str]
+) -> EmpiricalComposition | None:
     """Load quantity-aware composition rows for the given decks and reduce.
 
     Queried from deck_cards directly rather than DeckRecord.card_names because
@@ -173,9 +175,7 @@ def _load_composition(db_path: Path, deck_ids: list[str]) -> EmpiricalCompositio
     return compute_composition(per_deck)
 
 
-def empirical_bonus(
-    card: dict, reliable_weight: float, noisy_weight: float
-) -> float:
+def empirical_bonus(card: dict, reliable_weight: float, noisy_weight: float) -> float:
     """Additive selection bonus for a card's empirical inclusion.
 
     Reads ``_empirical_inclusion`` / ``_empirical_reliable`` from the card dict,
@@ -250,7 +250,9 @@ def _select_cluster(
     """
     if strategy:
         s = strategy.lower()
-        matches = [cid for cid, arch in cluster_archetype.items() if arch in s or s in arch]
+        matches = [
+            cid for cid, arch in cluster_archetype.items() if arch in s or s in arch
+        ]
         if matches:
             return max(matches, key=lambda c: sizes.get(c, 0))
     return max(sizes, key=lambda c: sizes.get(c, 0))
@@ -283,7 +285,9 @@ def get_target_cluster_inclusion(
     if len(decks) < min_decks:
         logger.info(
             "[empirical] '%s': %d decks (< %d) — no empirical signal",
-            commander, len(decks), min_decks,
+            commander,
+            len(decks),
+            min_decks,
         )
         return None
 
@@ -334,8 +338,7 @@ def get_target_cluster_inclusion(
     if not variant_reliable:
         target_arch = cluster_archetype.get(target, "mixed")
         same_arch = [
-            cid for cid, arch in cluster_archetype.items()
-            if arch == target_arch
+            cid for cid, arch in cluster_archetype.items() if arch == target_arch
         ]
         pooled_members = [m for cid in same_arch for m in members.get(cid, [])]
         pooled_size = len(pooled_members)
@@ -347,20 +350,25 @@ def get_target_cluster_inclusion(
                     name.lower(): round(c / pooled_size, 3)
                     for name, c in counts.items()
                 }
-                pooled_ids = [
-                    i for cid in same_arch for i in member_ids.get(cid, [])
-                ]
+                pooled_ids = [i for cid in same_arch for i in member_ids.get(cid, [])]
                 composition = _load_composition(db_path, pooled_ids)
                 logger.info(
                     "[empirical] '%s': target cluster too small (n=%d); "
                     "pooled %d same-archetype ('%s') clusters -> n=%d, "
                     "reliable",
-                    commander, size, len(same_arch), target_arch, pooled_size,
+                    commander,
+                    size,
+                    len(same_arch),
+                    target_arch,
+                    pooled_size,
                 )
                 return EmpiricalInclusion(
-                    commander=commander, variant=target_arch,
-                    variant_size=pooled_size, n_decks=len(decks),
-                    inclusion=inclusion, reliable=set(inclusion),
+                    commander=commander,
+                    variant=target_arch,
+                    variant_size=pooled_size,
+                    n_decks=len(decks),
+                    inclusion=inclusion,
+                    reliable=set(inclusion),
                     composition=composition,
                 )
 
@@ -372,12 +380,22 @@ def get_target_cluster_inclusion(
     logger.info(
         "[empirical] '%s': variant='%s' (%d/%d decks), %d cards, "
         "reliable=%s (worst-case margin %.3f vs %.2f bar), composition=%s",
-        commander, variant, size, len(decks), len(inclusion),
-        variant_reliable, (hi - lo) / 2, moe_threshold,
+        commander,
+        variant,
+        size,
+        len(decks),
+        len(inclusion),
+        variant_reliable,
+        (hi - lo) / 2,
+        moe_threshold,
         composition.model_dump() if composition else None,
     )
     return EmpiricalInclusion(
-        commander=commander, variant=variant, variant_size=size,
-        n_decks=len(decks), inclusion=inclusion, reliable=reliable,
+        commander=commander,
+        variant=variant,
+        variant_size=size,
+        n_decks=len(decks),
+        inclusion=inclusion,
+        reliable=reliable,
         composition=composition,
     )

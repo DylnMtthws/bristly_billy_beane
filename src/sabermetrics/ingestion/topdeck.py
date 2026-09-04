@@ -170,7 +170,11 @@ class TopDeckIngestion(SourceHealthMixin):
             raise NetworkError(f"Failed to fetch tournaments: {e}") from e
 
         data = resp.json()
-        return data if isinstance(data, list) else data.get("tournaments", data.get("data", []))
+        return (
+            data
+            if isinstance(data, list)
+            else data.get("tournaments", data.get("data", []))
+        )
 
     def _process_tournament(self, tourney: dict[str, Any]) -> int:
         """Process a single tournament's inline standings into the database.

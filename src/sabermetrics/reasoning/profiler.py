@@ -83,14 +83,13 @@ class ProfileManager:
 
         # Check cache
         if not request.force_refresh:
-            cached = self._get_cached_profile(
-                request.commander_id, intent_hash
-            )
+            cached = self._get_cached_profile(request.commander_id, intent_hash)
             if cached is not None:
                 elapsed = time.time() - start_time
                 logger.info(
                     "Cache hit for commander %s (%.1fms)",
-                    request.commander_id, elapsed * 1000,
+                    request.commander_id,
+                    elapsed * 1000,
                 )
                 return ProfileResult(
                     profile=cached,
@@ -111,13 +110,9 @@ class ProfileManager:
             profile, cost = self._generate_via_llm(evidence, request)
         except Exception as e:
             # Try returning cached profile on LLM failure
-            cached = self._get_cached_profile(
-                request.commander_id, intent_hash
-            )
+            cached = self._get_cached_profile(request.commander_id, intent_hash)
             if cached is not None:
-                logger.warning(
-                    "LLM failed, returning stale cache: %s", e
-                )
+                logger.warning("LLM failed, returning stale cache: %s", e)
                 elapsed = time.time() - start_time
                 return ProfileResult(
                     profile=cached,
@@ -135,7 +130,9 @@ class ProfileManager:
         elapsed = time.time() - start_time
         logger.info(
             "Profile generated for %s in %.1fs ($%.4f)",
-            evidence.commander.name, elapsed, cost,
+            evidence.commander.name,
+            elapsed,
+            cost,
         )
 
         return ProfileResult(
@@ -202,9 +199,10 @@ class ProfileManager:
             for c in evidence.reference_chunks
         )
 
-        rulings_text = "\n".join(
-            f"- {r.ruling_text}" for r in evidence.rulings
-        ) or "No specific rulings found."
+        rulings_text = (
+            "\n".join(f"- {r.ruling_text}" for r in evidence.rulings)
+            or "No specific rulings found."
+        )
 
         # EDHREC data formatting
         edhrec = evidence.edhrec_data or {}
@@ -215,11 +213,14 @@ class ProfileManager:
         if isinstance(top_cards, str):
             top_cards = json.loads(top_cards)
 
-        top_cards_text = "\n".join(
-            f"- {tc.get('card_name', tc.get('name', '?'))}: "
-            f"{tc.get('inclusion_pct', '?')}%"
-            for tc in top_cards[:30]
-        ) or "No EDHREC data available."
+        top_cards_text = (
+            "\n".join(
+                f"- {tc.get('card_name', tc.get('name', '?'))}: "
+                f"{tc.get('inclusion_pct', '?')}%"
+                for tc in top_cards[:30]
+            )
+            or "No EDHREC data available."
+        )
 
         # Tournament data
         tourney = evidence.tournament_data or {}
@@ -228,10 +229,13 @@ class ProfileManager:
         tourney_sample = tourney.get("tournament_count", 0)
 
         # Reddit topics
-        reddit_topics = "\n".join(
-            f"- {t.title} ({t.upvotes} upvotes)"
-            for t in evidence.reddit_threads[:10]
-        ) or "No Reddit discussions found."
+        reddit_topics = (
+            "\n".join(
+                f"- {t.title} ({t.upvotes} upvotes)"
+                for t in evidence.reddit_threads[:10]
+            )
+            or "No Reddit discussions found."
+        )
 
         # User intent section
         user_intent_section = ""
@@ -245,67 +249,134 @@ class ProfileManager:
             )
 
         # Profile schema (simplified for the LLM)
-        profile_schema = json.dumps({
-            "commander_id": "string (Scryfall ID)",
-            "commander_name": "string",
-            "generated_at": "ISO datetime",
-            "set_version": "string (latest set code)",
-            "card_analysis": {
-                "mana_cost": "string", "color_identity": ["string"],
-                "core_mechanic": "string",
-                "triggered_abilities": ["string"],
-                "activated_abilities": ["string"],
-                "static_abilities": ["string"],
-                "evasion_or_protection": "string or null",
-            },
-            "behavioral_signals": {
-                "total_decks_tracked": "int",
-                "edhrec_themes": ["string"],
-                "most_included_cards": [{"card_name": "str", "inclusion_pct": 0.0}],
-                "average_deck_price_usd": 0.0,
-                "average_cmc": 0.0,
-                "tournament_win_rate": "float or null",
-                "tournament_sample_size": 0,
-            },
-            "community_signals": {
-                "reddit_thread_count": "int",
-                "named_archetypes": ["string"],
-                "primer_articles_referenced": ["string"],
-                "emerging_strategies": ["string"],
-            },
-            "strategic_profile": {
-                "primary_archetype": "string",
-                "game_plan_summary": "string",
-                "win_conditions": [{"description": "str", "key_cards": ["str"], "reliability": "primary|secondary|backup"}],
-                "build_paths": [{"name": "str", "description": "str", "consensus_status": "mainstream|emerging|underexplored", "key_card_categories": ["str"]}],
-                "synergy_priorities": {"high": ["str"], "medium": ["str"], "low": ["str"]},
-                "anti_synergies": [{"description": "str", "cards_to_avoid": ["str"], "reasoning": "str"}],
-                "strategic_constraints": {"mana_base_requirements": "str", "interaction_density": "high|medium|low", "speed_tier": "fast|midrange|slow"},
-                "power_indicators": {"estimated_ceiling_bracket": "1-5", "estimated_floor_bracket": "1-5", "notes": "str"},
-                "value_inversions": [{"normal_heuristic": "str", "inverted_value": "str", "desired_characteristics": ["str"], "undesired_characteristics": ["str (traits that lose value)"], "evaluation_guidance": "str"}],
-                "engine_dependencies": [{"engine": "str (what the deck must build around)", "engine_card_traits": ["str (oracle text patterns / card types that feed the engine)"], "dependent_outputs": ["str (effects the engine produces)"], "false_synergy_warning": "str (why cards matching outputs but not engine are traps)"}],
-                "mispriced_card_examples": [{"card_name": "str (exact Scryfall name)", "why_undervalued": "str (one sentence)"}],
-            },
-            "user_intent": {
-                "provided": "bool",
-                "description": "string or null",
-                "divergence_from_consensus": "string or null",
-            },
-            "sources": {
-                "rules_chunks_referenced": ["string"],
-                "articles_referenced": ["string"],
-                "evidence_freshness": {
-                    "edhrec_last_updated": "datetime or null",
-                    "topdeck_last_updated": "datetime or null",
-                    "reddit_last_searched": "datetime or null",
+        profile_schema = json.dumps(
+            {
+                "commander_id": "string (Scryfall ID)",
+                "commander_name": "string",
+                "generated_at": "ISO datetime",
+                "set_version": "string (latest set code)",
+                "card_analysis": {
+                    "mana_cost": "string",
+                    "color_identity": ["string"],
+                    "core_mechanic": "string",
+                    "triggered_abilities": ["string"],
+                    "activated_abilities": ["string"],
+                    "static_abilities": ["string"],
+                    "evasion_or_protection": "string or null",
+                },
+                "behavioral_signals": {
+                    "total_decks_tracked": "int",
+                    "edhrec_themes": ["string"],
+                    "most_included_cards": [{"card_name": "str", "inclusion_pct": 0.0}],
+                    "average_deck_price_usd": 0.0,
+                    "average_cmc": 0.0,
+                    "tournament_win_rate": "float or null",
+                    "tournament_sample_size": 0,
+                },
+                "community_signals": {
+                    "reddit_thread_count": "int",
+                    "named_archetypes": ["string"],
+                    "primer_articles_referenced": ["string"],
+                    "emerging_strategies": ["string"],
+                },
+                "strategic_profile": {
+                    "primary_archetype": "string",
+                    "game_plan_summary": "string",
+                    "win_conditions": [
+                        {
+                            "description": "str",
+                            "key_cards": ["str"],
+                            "reliability": "primary|secondary|backup",
+                        }
+                    ],
+                    "build_paths": [
+                        {
+                            "name": "str",
+                            "description": "str",
+                            "consensus_status": "mainstream|emerging|underexplored",
+                            "key_card_categories": ["str"],
+                        }
+                    ],
+                    "synergy_priorities": {
+                        "high": ["str"],
+                        "medium": ["str"],
+                        "low": ["str"],
+                    },
+                    "anti_synergies": [
+                        {
+                            "description": "str",
+                            "cards_to_avoid": ["str"],
+                            "reasoning": "str",
+                        }
+                    ],
+                    "strategic_constraints": {
+                        "mana_base_requirements": "str",
+                        "interaction_density": "high|medium|low",
+                        "speed_tier": "fast|midrange|slow",
+                    },
+                    "power_indicators": {
+                        "estimated_ceiling_bracket": "1-5",
+                        "estimated_floor_bracket": "1-5",
+                        "notes": "str",
+                    },
+                    "value_inversions": [
+                        {
+                            "normal_heuristic": "str",
+                            "inverted_value": "str",
+                            "desired_characteristics": ["str"],
+                            "undesired_characteristics": [
+                                "str (traits that lose value)"
+                            ],
+                            "evaluation_guidance": "str",
+                        }
+                    ],
+                    "engine_dependencies": [
+                        {
+                            "engine": "str (what the deck must build around)",
+                            "engine_card_traits": [
+                                "str (oracle text patterns / card types that feed the engine)"
+                            ],
+                            "dependent_outputs": ["str (effects the engine produces)"],
+                            "false_synergy_warning": "str (why cards matching outputs but not engine are traps)",
+                        }
+                    ],
+                    "mispriced_card_examples": [
+                        {
+                            "card_name": "str (exact Scryfall name)",
+                            "why_undervalued": "str (one sentence)",
+                        }
+                    ],
+                },
+                "user_intent": {
+                    "provided": "bool",
+                    "description": "string or null",
+                    "divergence_from_consensus": "string or null",
+                },
+                "sources": {
+                    "rules_chunks_referenced": ["string"],
+                    "articles_referenced": ["string"],
+                    "evidence_freshness": {
+                        "edhrec_last_updated": "datetime or null",
+                        "topdeck_last_updated": "datetime or null",
+                        "reddit_last_searched": "datetime or null",
+                    },
                 },
             },
-        }, indent=2)
+            indent=2,
+        )
 
         # Format prompt
         commander = evidence.commander
-        ref_kw_str = ", ".join(evidence.referenced_keywords) if evidence.referenced_keywords else "None"
-        ref_mech_str = ", ".join(evidence.referenced_mechanics) if evidence.referenced_mechanics else "None"
+        ref_kw_str = (
+            ", ".join(evidence.referenced_keywords)
+            if evidence.referenced_keywords
+            else "None"
+        )
+        ref_mech_str = (
+            ", ".join(evidence.referenced_mechanics)
+            if evidence.referenced_mechanics
+            else "None"
+        )
 
         prompt_text = template.format(
             reference_chunks=reference_text,
@@ -392,9 +463,9 @@ class ProfileManager:
                 "evidence_freshness": {
                     "edhrec_last_updated": None,
                     "topdeck_last_updated": None,
-                    "reddit_last_searched": datetime.now().isoformat()
-                    if evidence.reddit_threads
-                    else None,
+                    "reddit_last_searched": (
+                        datetime.now().isoformat() if evidence.reddit_threads else None
+                    ),
                 },
             }
 

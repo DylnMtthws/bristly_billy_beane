@@ -164,6 +164,7 @@ class TestGenerationTracer:
         conn.close()
 
         import json
+
         parsed = json.loads(row["score_components_json"])
         assert parsed["cvar"] == 0.4
         assert parsed["synergy"] == 0.3
@@ -178,9 +179,7 @@ class TestGenerationTracer:
         tracer2.flush(db_path)
 
         conn = sqlite3.connect(str(db_path))
-        total = conn.execute(
-            "SELECT COUNT(*) FROM generation_traces"
-        ).fetchone()[0]
+        total = conn.execute("SELECT COUNT(*) FROM generation_traces").fetchone()[0]
         conn.close()
         assert total == 2
 
@@ -190,7 +189,9 @@ class TestGetTrace:
 
     def _populate(self, db_path):
         """Helper to populate trace data for query tests."""
-        tracer = GenerationTracer("gen-abc", watchlist={"Sol Ring", "Mind Stone", "Bolt"})
+        tracer = GenerationTracer(
+            "gen-abc", watchlist={"Sol Ring", "Mind Stone", "Bolt"}
+        )
         tracer.record(
             card_name="Sol Ring",
             stage="pareto",
@@ -231,8 +232,14 @@ class TestGetTrace:
         df = get_trace(db_path, "gen-abc")
         assert len(df) == 4
         assert list(df.columns) == [
-            "card_name", "card_id", "stage", "action",
-            "score", "score_components_json", "reason", "timestamp",
+            "card_name",
+            "card_id",
+            "stage",
+            "action",
+            "score",
+            "score_components_json",
+            "reason",
+            "timestamp",
         ]
 
     def test_get_filtered_by_card_names(self, db_path):

@@ -16,8 +16,7 @@ def _make_db(tmp_path: Path) -> Path:
     """Create a DB with source_health and cards tables."""
     db_path = tmp_path / "t.db"
     conn = sqlite3.connect(str(db_path))
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE source_health (
             source TEXT PRIMARY KEY,
             last_successful_sync TIMESTAMP,
@@ -42,8 +41,7 @@ def _make_db(tmp_path: Path) -> Path:
             image_uri TEXT,
             last_updated TIMESTAMP
         );
-        """
-    )
+        """)
     conn.commit()
     conn.close()
     return db_path

@@ -143,8 +143,14 @@ def format_text(deck: GeneratedDeck) -> str:
 
     by_type = _group_by_card_type(deck)
     type_order = [
-        "Creature", "Instant", "Sorcery", "Artifact", "Enchantment",
-        "Planeswalker", "Battle", "Land",
+        "Creature",
+        "Instant",
+        "Sorcery",
+        "Artifact",
+        "Enchantment",
+        "Planeswalker",
+        "Battle",
+        "Land",
     ]
     for card_type in type_order:
         entries = by_type.get(card_type, [])
@@ -211,8 +217,14 @@ def format_archidekt(deck: GeneratedDeck) -> str:
     # Group by type for Archidekt
     by_type = _group_by_card_type(deck)
     type_order = [
-        "Creature", "Instant", "Sorcery", "Artifact", "Enchantment",
-        "Planeswalker", "Battle", "Land",
+        "Creature",
+        "Instant",
+        "Sorcery",
+        "Artifact",
+        "Enchantment",
+        "Planeswalker",
+        "Battle",
+        "Land",
     ]
     for card_type in type_order:
         entries = by_type.get(card_type, [])
@@ -252,8 +264,7 @@ def format_deck(
     formatter = formatters.get(output_format)
     if formatter is None:
         raise ValueError(
-            f"Unknown format '{output_format}'. "
-            f"Available: {', '.join(formatters)}"
+            f"Unknown format '{output_format}'. " f"Available: {', '.join(formatters)}"
         )
 
     return formatter(deck)

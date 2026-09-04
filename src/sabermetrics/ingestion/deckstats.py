@@ -74,8 +74,6 @@ class DeckstatsIngestion(DecklistIngestionBase):
                     if deck_url:
                         urls.append(deck_url)
             except Exception as e:
-                logger.debug(
-                    "deckstats search failed for '%s': %s", commander_name, e
-                )
+                logger.debug("deckstats search failed for '%s': %s", commander_name, e)
 
         return urls

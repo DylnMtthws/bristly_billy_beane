@@ -10,8 +10,14 @@ from sabermetrics.config import settings
 
 def _card():
     return {
-        "id": "x", "name": "Test", "type_line": "Creature", "oracle_text": "",
-        "color_identity": ["G"], "keywords": "[]", "cmc": 2.0, "rarity": "rare",
+        "id": "x",
+        "name": "Test",
+        "type_line": "Creature",
+        "oracle_text": "",
+        "color_identity": ["G"],
+        "keywords": "[]",
+        "cmc": 2.0,
+        "rarity": "rare",
         "price_usd": 1.0,
     }
 
@@ -30,7 +36,9 @@ def test_positive_cwe_with_enough_samples_boosts_score() -> None:
     )
     assert boosted.composite_score > base
     # boost == cwe_weight * min(1, cwe)
-    assert abs(boosted.composite_score - (base + settings.scoring.cwe_weight * 0.5)) < 1e-9
+    assert (
+        abs(boosted.composite_score - (base + settings.scoring.cwe_weight * 0.5)) < 1e-9
+    )
     assert boosted.card_win_equity == 0.5
 
 

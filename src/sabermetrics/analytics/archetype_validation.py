@@ -126,12 +126,14 @@ def build_labeled_corpus(
                 cards = _fetch_deck_cards(deck_id, headers, limiter)
                 if not cards:
                     continue
-                corpus.append({
-                    "deck_id": deck_id,
-                    "name": summary.get("name"),
-                    "tags": tags,
-                    "cards": cards,
-                })
+                corpus.append(
+                    {
+                        "deck_id": deck_id,
+                        "name": summary.get("name"),
+                        "tags": tags,
+                        "cards": cards,
+                    }
+                )
 
             logger.info(
                 "[%s] page %d: %d labeled decks collected", sort, page, len(corpus)
@@ -170,9 +172,7 @@ def _fetch_deck_cards(
 # ---------------------------------------------------------------------------
 
 
-def evaluate(
-    corpus: list[dict[str, Any]], library: ArchetypeLibrary
-) -> dict[str, Any]:
+def evaluate(corpus: list[dict[str, Any]], library: ArchetypeLibrary) -> dict[str, Any]:
     """Compute per-archetype precision/recall/F1 against creator tags.
 
     Only decks with at least one *recognized* creator tag contribute to
@@ -233,17 +233,16 @@ def evaluate(
         "precision": round(
             _safe_div(
                 sum(per_archetype[a]["precision"] for a in sup_arch), len(sup_arch)
-            ), 3,
+            ),
+            3,
         ),
         "recall": round(
-            _safe_div(
-                sum(per_archetype[a]["recall"] for a in sup_arch), len(sup_arch)
-            ), 3,
+            _safe_div(sum(per_archetype[a]["recall"] for a in sup_arch), len(sup_arch)),
+            3,
         ),
         "f1": round(
-            _safe_div(
-                sum(per_archetype[a]["f1"] for a in sup_arch), len(sup_arch)
-            ), 3,
+            _safe_div(sum(per_archetype[a]["f1"] for a in sup_arch), len(sup_arch)),
+            3,
         ),
     }
     tt, tfp, tfn = sum(tp.values()), sum(fp.values()), sum(fn.values())
@@ -273,17 +272,22 @@ def format_report(report: dict[str, Any]) -> str:
     """Render an evaluation report as a readable table."""
     lines = [
         "=== Macro-archetype signature validation ===",
-        f"labeled decks: {report['total_decks']}  "
-        f"(recognized gold: {report['decks_with_recognized_gold']}, "
-        f"tagged-but-unrecognized: {report['tagged_but_unrecognized']})",
+        (
+            f"labeled decks: {report['total_decks']}  "
+            f"(recognized gold: {report['decks_with_recognized_gold']}, "
+            f"tagged-but-unrecognized: {report['tagged_but_unrecognized']})"
+        ),
         "",
-        f"{'archetype':<14}{'support':>8}{'prec':>7}{'recall':>8}{'f1':>7}"
-        f"{'tp':>5}{'fp':>5}{'fn':>5}",
+        (
+            f"{'archetype':<14}{'support':>8}{'prec':>7}{'recall':>8}{'f1':>7}"
+            f"{'tp':>5}{'fp':>5}{'fn':>5}"
+        ),
         "-" * 63,
     ]
     for arch, m in sorted(
         report["per_archetype"].items(),
-        key=lambda kv: kv[1]["support"], reverse=True,
+        key=lambda kv: kv[1]["support"],
+        reverse=True,
     ):
         lines.append(
             f"{arch:<14}{m['support']:>8}{m['precision']:>7}{m['recall']:>8}"

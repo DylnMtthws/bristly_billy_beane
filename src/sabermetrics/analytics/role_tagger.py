@@ -21,8 +21,18 @@ from sabermetrics.models.tags import RoleTagResult, TaggingStats
 logger = logging.getLogger(__name__)
 
 ROLE_TAGS = [
-    "ramp", "fixing", "draw", "removal", "board_wipe", "tutor",
-    "recursion", "protection", "threat", "wincon", "utility", "land",
+    "ramp",
+    "fixing",
+    "draw",
+    "removal",
+    "board_wipe",
+    "tutor",
+    "recursion",
+    "protection",
+    "threat",
+    "wincon",
+    "utility",
+    "land",
 ]
 
 # --- Role detection patterns (oracle text) ---
@@ -32,7 +42,11 @@ _ROLE_PATTERNS: dict[str, list[re.Pattern]] = oracle_patterns.ROLE_PATTERNS
 
 def _load_functional_categories() -> dict[str, dict]:
     """Load functional category definitions from config YAML."""
-    config_path = Path(__file__).resolve().parent.parent.parent.parent / "config" / "functional_categories.yaml"
+    config_path = (
+        Path(__file__).resolve().parent.parent.parent.parent
+        / "config"
+        / "functional_categories.yaml"
+    )
     if not config_path.exists():
         logger.warning("functional_categories.yaml not found at %s", config_path)
         return {}
@@ -43,7 +57,11 @@ def _load_functional_categories() -> dict[str, dict]:
 
 def _load_overrides() -> dict[str, dict]:
     """Load manual role tag overrides from config YAML."""
-    config_path = Path(__file__).resolve().parent.parent.parent.parent / "config" / "role_tag_overrides.yaml"
+    config_path = (
+        Path(__file__).resolve().parent.parent.parent.parent
+        / "config"
+        / "role_tag_overrides.yaml"
+    )
     if not config_path.exists():
         return {}
     with open(config_path) as f:
@@ -224,7 +242,7 @@ def tag_all_cards(db_path: Path, version: str) -> TaggingStats:
         batch_size = 500
 
         for i in range(0, total, batch_size):
-            batch = cards[i:i + batch_size]
+            batch = cards[i : i + batch_size]
             updates: list[tuple] = []
 
             for card in batch:
@@ -234,12 +252,14 @@ def tag_all_cards(db_path: Path, version: str) -> TaggingStats:
                 for c in result.functional_categories:
                     cat_dist[c] = cat_dist.get(c, 0) + 1
 
-                updates.append((
-                    json.dumps(result.role_tags),
-                    json.dumps(result.functional_categories),
-                    version,
-                    card["id"],
-                ))
+                updates.append(
+                    (
+                        json.dumps(result.role_tags),
+                        json.dumps(result.functional_categories),
+                        version,
+                        card["id"],
+                    )
+                )
                 tagged += 1
 
             conn.executemany(
@@ -257,7 +277,9 @@ def tag_all_cards(db_path: Path, version: str) -> TaggingStats:
 
         duration = time.time() - start
         logger.info(
-            "Tagging complete: %d cards in %.1fs", tagged, duration,
+            "Tagging complete: %d cards in %.1fs",
+            tagged,
+            duration,
         )
 
         return TaggingStats(

@@ -52,9 +52,7 @@ def load_cwe_for_commander(
     return cwe_by_card, sample_by_card
 
 
-def wilson_lower_bound(
-    successes: int, total: int, z: float = 1.96
-) -> float:
+def wilson_lower_bound(successes: int, total: int, z: float = 1.96) -> float:
     """Wilson score confidence interval lower bound.
 
     Args:
@@ -76,9 +74,7 @@ def wilson_lower_bound(
     return (centre - spread) / denominator
 
 
-def compute_card_win_equity(
-    db_path: Path, min_sample_size: int = 5
-) -> int:
+def compute_card_win_equity(db_path: Path, min_sample_size: int = 5) -> int:
     """Compute Card Win Equity for all cards with sufficient data.
 
     CWE = win_rate_with_card - win_rate_without_card
@@ -160,12 +156,9 @@ def compute_card_win_equity(
                     continue
 
                 # Win rate when card is present
-                wins_with = sum(
-                    decks[d][0] for d in containing_decks if d in decks
-                )
+                wins_with = sum(decks[d][0] for d in containing_decks if d in decks)
                 games_with = sum(
-                    decks[d][0] + decks[d][1]
-                    for d in containing_decks if d in decks
+                    decks[d][0] + decks[d][1] for d in containing_decks if d in decks
                 )
                 if games_with == 0:
                     continue
@@ -176,25 +169,31 @@ def compute_card_win_equity(
                 if not absent_decks:
                     wr_without = overall_wr
                 else:
-                    wins_without = sum(
-                        decks[d][0] for d in absent_decks if d in decks
-                    )
+                    wins_without = sum(decks[d][0] for d in absent_decks if d in decks)
                     games_without = sum(
-                        decks[d][0] + decks[d][1]
-                        for d in absent_decks if d in decks
+                        decks[d][0] + decks[d][1] for d in absent_decks if d in decks
                     )
                     wr_without = (
-                        wins_without / games_without if games_without > 0
+                        wins_without / games_without
+                        if games_without > 0
                         else overall_wr
                     )
 
                 cwe = wr_with - wr_without
                 confidence = wilson_lower_bound(wins_with, games_with)
 
-                batch.append((
-                    card_id, cmdr_id, wr_with, wr_without,
-                    cwe, n_with, confidence, now,
-                ))
+                batch.append(
+                    (
+                        card_id,
+                        cmdr_id,
+                        wr_with,
+                        wr_without,
+                        cwe,
+                        n_with,
+                        confidence,
+                        now,
+                    )
+                )
 
             if batch:
                 conn.execute(
@@ -213,7 +212,9 @@ def compute_card_win_equity(
 
             logger.info(
                 "Commander %s: %d CWE entries from %d decks",
-                cmdr_id, len(batch), len(deck_ids),
+                cmdr_id,
+                len(batch),
+                len(deck_ids),
             )
 
         conn.commit()

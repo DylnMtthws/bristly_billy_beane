@@ -111,17 +111,15 @@ def build_synergy_matrix(
                 embedding_matrix[j, i] = 0.0
 
     # Hybrid combination (rules + embeddings; weights sum to 1.0)
-    hybrid = (
-        RULE_WEIGHT * rule_matrix
-        + EMBEDDING_WEIGHT * embedding_matrix
-    )
+    hybrid = RULE_WEIGHT * rule_matrix + EMBEDDING_WEIGHT * embedding_matrix
 
     # Which signals were live (for observable degradation).
     signals = {"rules": bool(rules), "embeddings": embeddings_ok}
 
     logger.info(
         "Synergy matrix built: %dx%d, rule_max=%.3f, emb_mean=%.3f, signals=%s",
-        n, n,
+        n,
+        n,
         float(rule_matrix.max()) if n > 0 else 0,
         float(embedding_matrix.mean()) if n > 0 else 0,
         signals,
@@ -139,7 +137,8 @@ def _load_synergy_rules() -> list[dict]:
     """Load and parse config/synergy_rules.yaml."""
     config_path = (
         Path(__file__).resolve().parent.parent.parent.parent
-        / "config" / "synergy_rules.yaml"
+        / "config"
+        / "synergy_rules.yaml"
     )
     if not config_path.exists():
         logger.warning("synergy_rules.yaml not found at %s", config_path)
@@ -150,7 +149,9 @@ def _load_synergy_rules() -> list[dict]:
 
 
 def _match_rules(
-    card_a: dict, card_b: dict, rules: list[dict],
+    card_a: dict,
+    card_b: dict,
+    rules: list[dict],
 ) -> float:
     """Check if card pair matches any synergy rules. Returns max strength."""
     max_strength = 0.0
@@ -164,7 +165,9 @@ def _match_rules(
 
 
 def _single_rule_match(
-    trigger_card: dict, payoff_card: dict, rule: dict,
+    trigger_card: dict,
+    payoff_card: dict,
+    rule: dict,
 ) -> float:
     """Check if trigger_card matches rule trigger and payoff_card matches payoff.
 
@@ -218,21 +221,18 @@ def _card_matches_clause(card: dict, clause: dict) -> bool:
     # text_contains_any: at least ONE must match (phrase alternatives, e.g.
     # the many wordings of counters-matter payoffs)
     text_any = clause.get("text_contains_any", [])
-    if text_any:
-        if not any(t.lower() in oracle for t in text_any):
-            return False
+    if text_any and not any(t.lower() in oracle for t in text_any):
+        return False
 
     # keywords: ANY must match
     rule_keywords = clause.get("keywords", [])
-    if rule_keywords:
-        if not any(kw.lower() in keywords for kw in rule_keywords):
-            return False
+    if rule_keywords and not any(kw.lower() in keywords for kw in rule_keywords):
+        return False
 
     # type_includes: ANY must match
     type_includes = clause.get("type_includes", [])
-    if type_includes:
-        if not any(t.lower() in type_line for t in type_includes):
-            return False
+    if type_includes and not any(t.lower() in type_line for t in type_includes):
+        return False
 
     # cmc_range: card CMC must be in range
     cmc_range = clause.get("cmc_range")
@@ -260,8 +260,7 @@ def _compute_embedding_matrix(candidates: list[dict]) -> tuple[np.ndarray, bool]
         return np.zeros((0, 0), dtype=np.float32), True
 
     texts = [
-        (c.get("oracle_text") or c.get("name") or "unknown card")
-        for c in candidates
+        (c.get("oracle_text") or c.get("name") or "unknown card") for c in candidates
     ]
 
     try:

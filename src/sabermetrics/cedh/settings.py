@@ -85,13 +85,14 @@ class EvidenceSettings(BaseModel):
 class SimulatorSettings(BaseModel):
     """How, or whether, to reach the simulator."""
 
-    #: ``fixture`` (default), ``subprocess``, or ``off``.
+    #: ``fixture`` (default), ``subprocess``, ``http``, or ``off``.
     mode: str = "fixture"
+    url: str = ""
     binary_path: str = ""
     fixture_dir: str = "fixtures/cedh/simulation"
     games: int = 20000
     objective_turn: int = 3
-    timeout_seconds: float = 120.0
+    timeout_seconds: float = 180.0
 
 
 class MetaSettings(BaseModel):
@@ -133,7 +134,7 @@ def _config_path() -> Path:
 def load_cedh_settings(path: Path | None = None) -> CedhSettings:
     """Load cEDH settings from YAML, with env overrides for the model.
 
-    Environment always wins over YAML for the three values an operator changes
+    Environment always wins over YAML for values an operator changes
     per deployment, so a staging box can be pointed at a different model
     without editing a file that is in git.
 
@@ -160,6 +161,20 @@ def load_cedh_settings(path: Path | None = None) -> CedhSettings:
     if applied:
         settings = settings.model_copy(
             update={"model": settings.model.model_copy(update=applied)}
+        )
+
+    simulator_updates: dict[str, Any] = {}
+    simulator_url = os.environ.get("CEDH_SIMULATOR_URL")
+    if simulator_url:
+        simulator_updates.update(mode="http", url=simulator_url)
+    simulator_timeout = os.environ.get("CEDH_SIMULATOR_TIMEOUT")
+    if simulator_timeout:
+        simulator_updates["timeout_seconds"] = float(simulator_timeout)
+    if simulator_updates:
+        settings = settings.model_copy(
+            update={
+                "simulator": settings.simulator.model_copy(update=simulator_updates)
+            }
         )
     return settings
 

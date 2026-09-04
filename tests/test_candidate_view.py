@@ -39,8 +39,19 @@ def _card(conn, cid, name, *, ci="[]", legal99=1, cmdr=0, type_line="Artifact"):
         "INSERT INTO cards (id, oracle_id, name, cmc, type_line, color_identity, "
         "keywords, is_legal_commander, is_legal_in_99, set_code, rarity) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (cid, f"o-{name}", name, 1.0, type_line, ci, "[]", cmdr, legal99,
-         "tst", "rare"),
+        (
+            cid,
+            f"o-{name}",
+            name,
+            1.0,
+            type_line,
+            ci,
+            "[]",
+            cmdr,
+            legal99,
+            "tst",
+            "rare",
+        ),
     )
 
 
@@ -146,9 +157,13 @@ def test_commander_excluded_even_when_view_keeps_a_different_printing(db) -> Non
     """
     conn = sqlite3.connect(str(db))
     # Requested commander printing (pricey) + a cheaper printing of same name.
-    _card(conn, "cmd-hi", "Dup Cmdr", ci='["U"]', cmdr=1, type_line="Legendary Creature")
+    _card(
+        conn, "cmd-hi", "Dup Cmdr", ci='["U"]', cmdr=1, type_line="Legendary Creature"
+    )
     _price(conn, "cmd-hi", 50.0)
-    _card(conn, "cmd-lo", "Dup Cmdr", ci='["U"]', cmdr=1, type_line="Legendary Creature")
+    _card(
+        conn, "cmd-lo", "Dup Cmdr", ci='["U"]', cmdr=1, type_line="Legendary Creature"
+    )
     _price(conn, "cmd-lo", 1.0)
     _card(conn, "blue-x", "Blue X", ci='["U"]', type_line="Creature")
     _price(conn, "blue-x", 2.0)

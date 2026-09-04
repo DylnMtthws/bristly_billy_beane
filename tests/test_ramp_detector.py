@@ -5,14 +5,13 @@ from sabermetrics.analytics.ramp_detector import (
     detect_ramp_card,
 )
 
-
 # --- Reminder text stripping ---
 
 
 def test_strip_removes_parentheticals() -> None:
     """Treasure reminder text should be stripped."""
     oracle = (
-        'Whenever Kitesail Larcenist enters, each opponent creates a Treasure token. '
+        "Whenever Kitesail Larcenist enters, each opponent creates a Treasure token. "
         '(It\'s an artifact with "{T}, Sacrifice this artifact: Add one mana of any color.")'
     )
     stripped = _strip_reminder_text(oracle)
@@ -54,7 +53,9 @@ def test_kitesail_larcenist_not_ramp() -> None:
         "cmc": 3,
     }
     result = detect_ramp_card(card)
-    assert result is None, f"Kitesail Larcenist should not be detected as ramp: {result}"
+    assert (
+        result is None
+    ), f"Kitesail Larcenist should not be detected as ramp: {result}"
 
 
 def test_treasure_only_in_reminder_not_ramp() -> None:
@@ -71,9 +72,9 @@ def test_treasure_only_in_reminder_not_ramp() -> None:
         "cmc": 2,
     }
     result = detect_ramp_card(card)
-    assert result is None, (
-        f"Card with Treasure only in reminder text should not be ramp: {result}"
-    )
+    assert (
+        result is None
+    ), f"Card with Treasure only in reminder text should not be ramp: {result}"
 
 
 def test_shell_shield_not_ramp() -> None:
@@ -180,9 +181,7 @@ def test_pit_automaton_restricted() -> None:
     card = {
         "name": "Pit Automaton",
         "type_line": "Artifact Creature",
-        "oracle_text": (
-            "{T}: Add {C}. Spend this mana only on colorless spells."
-        ),
+        "oracle_text": ("{T}: Add {C}. Spend this mana only on colorless spells."),
         "cmc": 2,
     }
     result = detect_ramp_card(card)

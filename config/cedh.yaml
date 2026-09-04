@@ -74,7 +74,7 @@ simulator:
   fixture_dir: "fixtures/cedh/simulation"
   games: 20000
   objective_turn: 3
-  timeout_seconds: 120.0
+  timeout_seconds: 180.0
 
 meta:
   window_days: 180

@@ -422,9 +422,7 @@ class UsersRepo:
     def set_status(self, user_id: str, status: str) -> None:
         """Set a user's status (``invited`` | ``active`` | ``disabled``)."""
         with connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE users SET status = ? WHERE id = ?", (status, user_id)
-            )
+            conn.execute("UPDATE users SET status = ? WHERE id = ?", (status, user_id))
             conn.commit()
 
     def set_quota(self, user_id: str, quota: int | None) -> None:
@@ -717,8 +715,15 @@ class FeedbackRepo:
                     card_name = excluded.card_name,
                     updated_at = excluded.updated_at""",
                 (
-                    new_id(), user_id, deck_id, card_id, card_name,
-                    self._norm(vote), self._norm(comment), now, now,
+                    new_id(),
+                    user_id,
+                    deck_id,
+                    card_id,
+                    card_name,
+                    self._norm(vote),
+                    self._norm(comment),
+                    now,
+                    now,
                 ),
             )
             conn.commit()
@@ -738,8 +743,13 @@ class FeedbackRepo:
                     comment = excluded.comment,
                     updated_at = excluded.updated_at""",
                 (
-                    new_id(), user_id, deck_id,
-                    self._norm(verdict), self._norm(comment), now, now,
+                    new_id(),
+                    user_id,
+                    deck_id,
+                    self._norm(verdict),
+                    self._norm(comment),
+                    now,
+                    now,
                 ),
             )
             conn.commit()
@@ -752,7 +762,9 @@ class FeedbackRepo:
                 "WHERE user_id = ? AND deck_id = ?",
                 (user_id, deck_id),
             ).fetchall()
-        return {r["card_id"]: {"vote": r["vote"], "comment": r["comment"]} for r in rows}
+        return {
+            r["card_id"]: {"vote": r["vote"], "comment": r["comment"]} for r in rows
+        }
 
     def deck(self, user_id: str, deck_id: str) -> dict | None:
         """Return this user's deck-level feedback ({verdict, comment}) or None."""
@@ -779,8 +791,9 @@ class AdminAnalyticsRepo:
     def overview(self) -> dict:
         """High-level KPIs for the admin landing page."""
         with connect(self.db_path) as conn:
+
             def scalar(sql: str) -> float:
-                return conn.execute(sql).fetchone()[0]
+                return float(conn.execute(sql).fetchone()[0])
 
             status_rows = conn.execute(
                 "SELECT status, COUNT(*) n FROM users GROUP BY status"

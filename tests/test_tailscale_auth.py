@@ -592,11 +592,11 @@ class TestWsgiServerProxyTrust:
         kwargs = self._serve_kwargs(monkeypatch, db_path)
         assert kwargs["host"] == "127.0.0.1"
 
-    def test_a_public_bind_is_overridden(self, monkeypatch, db_path):
-        """The only listener on a public interface should be Tailscale's."""
+    def test_configured_public_bind_is_respected(self, monkeypatch, db_path):
+        """A container may bind publicly behind its platform proxy."""
         captured = {}
         monkeypatch.setattr("waitress.serve", lambda app, **kw: captured.update(kw))
         from sabermetrics.ui.app import run_server
 
         run_server(host="0.0.0.0", port=5999, db_path=db_path)
-        assert captured["host"] == "127.0.0.1"
+        assert captured["host"] == "0.0.0.0"

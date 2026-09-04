@@ -123,7 +123,7 @@ class AuthUser(UserMixin):
 
     @property
     def role(self) -> str:
-        return self._row.get("role", "user")
+        return str(self._row.get("role", "user"))
 
     @property
     def is_admin(self) -> bool:
@@ -312,6 +312,7 @@ def login():
 
     form = LoginForm()
     if form.validate_on_submit():
+        assert form.password.data is not None
         users = _users()
         row = users.get_by_email(form.email.data.strip())
         locked_until = users.lock_expires_at(row) if row else None
@@ -411,6 +412,8 @@ def accept_invite(token: str):
         form.display_name.data = user.get("display_name") or ""
 
     if form.validate_on_submit():
+        assert form.password.data is not None
+        assert form.display_name.data is not None
         users = _users()
         users.activate_with_password(
             user["id"],
@@ -420,6 +423,7 @@ def accept_invite(token: str):
         )
         _invites().mark_used(token)
         row = users.get(user["id"])
+        assert row is not None
         login_user(AuthUser(row))
         logger.info("Invite accepted for %s", row.get("email"))
         return redirect(url_for("main.index"))

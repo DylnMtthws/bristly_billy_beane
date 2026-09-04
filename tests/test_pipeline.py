@@ -12,11 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from sabermetrics.pipeline.slot_assigner import (
-    AssemblyResult,
-    _classify_card_role,
-    fill_slots,
-    get_target_composition,
+from sabermetrics.pipeline.deck_builder import DeckBuildRequest
+from sabermetrics.pipeline.formatters import (
+    format_archidekt,
+    format_deck,
+    format_moxfield,
+    format_text,
 )
 from sabermetrics.pipeline.mana_base import (
     build_mana_base,
@@ -26,13 +27,12 @@ from sabermetrics.pipeline.mana_base import (
     parse_land_colors,
     target_land_count,
 )
-from sabermetrics.pipeline.formatters import (
-    format_archidekt,
-    format_deck,
-    format_moxfield,
-    format_text,
+from sabermetrics.pipeline.slot_assigner import (
+    AssemblyResult,
+    _classify_card_role,
+    fill_slots,
+    get_target_composition,
 )
-from sabermetrics.pipeline.deck_builder import DeckBuildRequest
 
 DB_PATH = Path("data/sabermetrics.db")
 HAS_DB = DB_PATH.exists()
@@ -234,8 +234,7 @@ def test_parse_land_etb_tapped() -> None:
     """ETB tapped lands are detected."""
     info = parse_land_colors(
         oracle_text=(
-            "Swiftwater Cliffs enters the battlefield tapped.\n"
-            "{T}: Add {U} or {R}."
+            "Swiftwater Cliffs enters the battlefield tapped.\n" "{T}: Add {U} or {R}."
         ),
         type_line="Land",
     )
@@ -275,7 +274,7 @@ def test_count_color_pips() -> None:
     ]
     result = count_color_pips(cards)
     assert result["W"]["total_pips"] == 3  # 1 + 2
-    assert result["W"]["max_pips"] == 2    # {W}{W}
+    assert result["W"]["max_pips"] == 2  # {W}{W}
     assert result["U"]["total_pips"] == 2  # 1 + 1
     assert result["B"]["total_pips"] == 1
 
@@ -298,9 +297,13 @@ def test_mana_base_includes_basics() -> None:
     """Mana base output includes basic lands."""
     land_candidates = [
         (
-            {"id": f"land-{i}", "name": f"Nonbasic {i}",
-             "type_line": "Land", "oracle_text": "{T}: Add {W} or {U}.",
-             "price_usd": 1.0},
+            {
+                "id": f"land-{i}",
+                "name": f"Nonbasic {i}",
+                "type_line": "Land",
+                "oracle_text": "{T}: Add {W} or {U}.",
+                "price_usd": 1.0,
+            },
             {"cvar_score": 0.5, "slot_role": "land"},
         )
         for i in range(10)
@@ -344,16 +347,23 @@ def test_mana_base_color_coverage() -> None:
 def test_mana_base_prefers_untapped() -> None:
     """Untapped lands should be preferred over ETB-tapped lands."""
     untapped = (
-        {"id": "untapped-1", "name": "Good Dual",
-         "type_line": "Land", "oracle_text": "{T}: Add {W} or {U}.",
-         "price_usd": 5.0},
+        {
+            "id": "untapped-1",
+            "name": "Good Dual",
+            "type_line": "Land",
+            "oracle_text": "{T}: Add {W} or {U}.",
+            "price_usd": 5.0,
+        },
         {"cvar_score": 0.5, "slot_role": "land"},
     )
     tapped = (
-        {"id": "tapped-1", "name": "Bad Dual",
-         "type_line": "Land",
-         "oracle_text": "Bad Dual enters the battlefield tapped.\n{T}: Add {W} or {U}.",
-         "price_usd": 0.5},
+        {
+            "id": "tapped-1",
+            "name": "Bad Dual",
+            "type_line": "Land",
+            "oracle_text": "Bad Dual enters the battlefield tapped.\n{T}: Add {W} or {U}.",
+            "price_usd": 0.5,
+        },
         {"cvar_score": 0.8, "slot_role": "land"},
     )
     spells = [
@@ -367,8 +377,7 @@ def test_mana_base_prefers_untapped() -> None:
     )
     # Both should be included, but untapped should come first (higher score)
     nonbasic_names = [
-        a.card["name"] for a in result
-        if a.card["name"] not in ("Plains", "Island")
+        a.card["name"] for a in result if a.card["name"] not in ("Plains", "Island")
     ]
     assert nonbasic_names[0] == "Good Dual"
 
@@ -400,12 +409,12 @@ def _make_mock_deck():
     from sabermetrics.models.deck import (
         CardSubScores,
         ComponentCounts,
+        CVARWeights,
         DeckCard,
         DeckClassification,
         DeckComposition,
         DeckNarrative,
         DeckParameters,
-        CVARWeights,
         GeneratedDeck,
         GenerationMeta,
         LLMFit,
@@ -441,17 +450,21 @@ def _make_mock_deck():
             last_updated=datetime.now(),
             current_price_usd=2.50,
         )
-        cards.append(DeckCard(
-            card=card,
-            slot_role="utility" if i < 3 else "removal",
-            cvar_score=0.7,
-            sub_scores=CardSubScores(
-                synergy=0.5, mana_efficiency=0.6,
-                replacement_value=0.4, price_efficiency=0.8,
-            ),
-            llm_fit=LLMFit(score=7, reasoning="Good fit."),
-            alternatives=[],
-        ))
+        cards.append(
+            DeckCard(
+                card=card,
+                slot_role="utility" if i < 3 else "removal",
+                cvar_score=0.7,
+                sub_scores=CardSubScores(
+                    synergy=0.5,
+                    mana_efficiency=0.6,
+                    replacement_value=0.4,
+                    price_efficiency=0.8,
+                ),
+                llm_fit=LLMFit(score=7, reasoning="Good fit."),
+                alternatives=[],
+            )
+        )
 
     return GeneratedDeck(
         id="deck-test-1",
@@ -470,8 +483,12 @@ def _make_mock_deck():
             type_distribution={"Creature": 3, "Instant": 2},
             mana_curve=[0, 1, 1, 1, 1, 1, 0, 0],
             component_counts=ComponentCounts(
-                ramp=2, draw=1, removal=2,
-                board_wipes=0, tutors=0, win_conditions=1,
+                ramp=2,
+                draw=1,
+                removal=2,
+                board_wipes=0,
+                tutors=0,
+                win_conditions=1,
             ),
             game_changers_present=[],
             detected_combos=[],
@@ -582,9 +599,7 @@ def test_deck_builder_loads_commander() -> None:
     from sabermetrics.pipeline.deck_builder import DeckBuilder
 
     conn = sqlite3.connect(str(DB_PATH))
-    cursor = conn.execute(
-        "SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1"
-    )
+    cursor = conn.execute("SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1")
     row = cursor.fetchone()
     conn.close()
 
@@ -605,9 +620,7 @@ def test_deck_builder_filters_candidates() -> None:
     from sabermetrics.pipeline.deck_builder import DeckBuilder
 
     conn = sqlite3.connect(str(DB_PATH))
-    cursor = conn.execute(
-        "SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1"
-    )
+    cursor = conn.execute("SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1")
     row = cursor.fetchone()
     conn.close()
 

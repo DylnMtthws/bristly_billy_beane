@@ -41,24 +41,20 @@ def analyze_category_coverage(
     category_priorities: dict[str, float] = {}
 
     # From synergy_priorities (e.g. {"sacrifice": ["sac outlet", "death trigger"]})
-    for priority_name, traits in sp.synergy_priorities.items():
+    for traits in sp.synergy_priorities.values():
         # Map priority name and traits to functional categories
         for trait in traits:
             cat = _trait_to_category(trait)
             if cat:
                 # Higher priority for categories explicitly named
-                category_priorities[cat] = max(
-                    category_priorities.get(cat, 0.0), 0.8
-                )
+                category_priorities[cat] = max(category_priorities.get(cat, 0.0), 0.8)
 
     # From engine_dependencies
     for dep in sp.engine_dependencies:
         for trait in dep.engine_card_traits:
             cat = _trait_to_category(trait)
             if cat:
-                category_priorities[cat] = max(
-                    category_priorities.get(cat, 0.0), 0.9
-                )
+                category_priorities[cat] = max(category_priorities.get(cat, 0.0), 0.9)
 
     # From win conditions
     for wc in sp.win_conditions:
@@ -105,18 +101,22 @@ def analyze_category_coverage(
 
         slots_needed = max(0, target - current)
         if slots_needed > 0 and total_allocated + slots_needed <= remaining_slots:
-            intents.append(SlotIntent(
-                category=cat,
-                priority=priority,
-                current_count=current,
-                target_count=target,
-                slots_to_fill=slots_needed,
-            ))
+            intents.append(
+                SlotIntent(
+                    category=cat,
+                    priority=priority,
+                    current_count=current,
+                    target_count=target,
+                    slots_to_fill=slots_needed,
+                )
+            )
             total_allocated += slots_needed
 
     logger.info(
         "Category coverage: %d intents, %d/%d slots allocated",
-        len(intents), total_allocated, remaining_slots,
+        len(intents),
+        total_allocated,
+        remaining_slots,
     )
 
     return intents
@@ -181,7 +181,11 @@ def _infer_from_archetype(archetype: str) -> dict[str, float]:
     priorities: dict[str, float] = {}
 
     if "aristocrat" in arch_lower or "sacrifice" in arch_lower:
-        priorities = {"sacrifice_outlet": 0.9, "death_trigger": 0.8, "token_generation": 0.6}
+        priorities = {
+            "sacrifice_outlet": 0.9,
+            "death_trigger": 0.8,
+            "token_generation": 0.6,
+        }
     elif "aura" in arch_lower or "enchantress" in arch_lower:
         priorities = {"aura": 0.9, "draw_trigger": 0.7}
     elif "voltron" in arch_lower or "equipment" in arch_lower:

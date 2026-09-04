@@ -29,8 +29,12 @@ _REMOVAL_BY_DENSITY: dict[str, int] = {"low": 4, "medium": 6, "high": 9}
 
 # Board wipe counts by archetype keywords
 _BOARD_WIPE_DEFAULTS: dict[str, int] = {
-    "aggro": 1, "voltron": 1, "combo": 2,
-    "control": 4, "stax": 3, "midrange": 2,
+    "aggro": 1,
+    "voltron": 1,
+    "combo": 2,
+    "control": 4,
+    "stax": 3,
+    "midrange": 2,
 }
 
 
@@ -114,7 +118,9 @@ def derive_deck_template(
     creature_density = _estimate_creature_density(sp)
 
     # --- Differentiator slots ---
-    infrastructure = land_count + ramp_count + draw_count + removal_count + board_wipe_count
+    infrastructure = (
+        land_count + ramp_count + draw_count + removal_count + board_wipe_count
+    )
     differentiator_slots = max(10, 99 - infrastructure)
 
     # --- Curve shape ---
@@ -130,9 +136,7 @@ def derive_deck_template(
         differentiator_slots=differentiator_slots,
         avg_cmc_target=avg_cmc,
         curve_shape=curve_shape,
-        land_budget_share=(
-            comp.land_budget_share if comp is not None else 0.0
-        ),
+        land_budget_share=(comp.land_budget_share if comp is not None else 0.0),
     )
     if comp is not None:
         targets, floors = _type_targets_with_engine_floor(comp)
@@ -142,8 +146,13 @@ def derive_deck_template(
     logger.info(
         "Template derived: %d lands, %d ramp, %d draw, %d removal, "
         "%d board wipes, %d differentiator slots (avg CMC %.1f)",
-        land_count, ramp_count, draw_count, removal_count,
-        board_wipe_count, differentiator_slots, avg_cmc,
+        land_count,
+        ramp_count,
+        draw_count,
+        removal_count,
+        board_wipe_count,
+        differentiator_slots,
+        avg_cmc,
     )
 
     return template
@@ -158,7 +167,7 @@ def _parse_commander_cmc(profile: CommanderProfile) -> int:
     while i < len(mana_cost):
         if mana_cost[i] == "{":
             end = mana_cost.index("}", i)
-            symbol = mana_cost[i + 1:end]
+            symbol = mana_cost[i + 1 : end]
             if symbol.isdigit():
                 cmc += int(symbol)
             elif symbol in "WUBRGC":

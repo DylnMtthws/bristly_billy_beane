@@ -1,6 +1,5 @@
 """Models for card role tagging and functional categories."""
 
-
 from pydantic import BaseModel, Field
 
 

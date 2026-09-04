@@ -91,7 +91,9 @@ def build_clusters_block(
                 )
         ranked = sorted(
             members.get(c.cluster_id, []),
-            key=lambda r: (r.popularity_rank if r.popularity_rank is not None else 10**9),
+            key=lambda r: (
+                r.popularity_rank if r.popularity_rank is not None else 10**9
+            ),
         )
         for i, deck in enumerate(ranked[:sample_decks]):
             lines.append(
@@ -180,7 +182,8 @@ def characterize_variants(
     response = ClusterVariantsResponse(**data)
     logger.info(
         "Variant characterization: %d variants, $%.4f",
-        len(response.variants), result.cost_usd,
+        len(response.variants),
+        result.cost_usd,
     )
     return response, result.cost_usd, valuation
 
@@ -191,8 +194,10 @@ def format_variants(
     """Render the characterization with an explicit hypothesis banner."""
     lines = [
         f"=== Cluster variant characterization (HYPOTHESIS): {valuation.commander} ===",
-        "These are LLM hypotheses over statistical clusters — sanity-check, "
-        "do not treat as fact.",
+        (
+            "These are LLM hypotheses over statistical clusters — sanity-check, "
+            "do not treat as fact."
+        ),
     ]
     size_by_id = {c.cluster_id: c.size for c in valuation.clusters}
     for v in response.variants:

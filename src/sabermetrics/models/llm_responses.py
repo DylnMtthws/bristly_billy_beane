@@ -1,7 +1,5 @@
 """LLM response models for structured output parsing."""
 
-from typing import List
-
 from pydantic import BaseModel, Field
 
 
@@ -33,8 +31,8 @@ class DeckSynthesisResponse(BaseModel):
     """Output from deck-level synthesis (Sonnet)."""
 
     game_plan: str
-    key_synergies: List[str]
-    weaknesses: List[str]
+    key_synergies: list[str]
+    weaknesses: list[str]
     suggested_play_pattern: str
 
 
@@ -44,7 +42,7 @@ class VariantCharacterization(BaseModel):
     cluster_id: int
     variant_name: str
     game_plan: str = ""
-    key_cards: List[str] = Field(default_factory=list)
+    key_cards: list[str] = Field(default_factory=list)
     differentiators: str = ""
     confidence: str = ""
 
@@ -52,5 +50,5 @@ class VariantCharacterization(BaseModel):
 class ClusterVariantsResponse(BaseModel):
     """Output from the Phase 4b LLM variant-characterization pass (Sonnet)."""
 
-    variants: List[VariantCharacterization] = Field(default_factory=list)
+    variants: list[VariantCharacterization] = Field(default_factory=list)
     overall_note: str = ""

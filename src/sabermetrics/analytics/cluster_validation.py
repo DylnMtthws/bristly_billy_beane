@@ -111,10 +111,17 @@ def holdout_validation(
 
     if n < 20:
         return HoldoutReport(
-            commander=commander, n_decks=n, n_train=0, n_test=0, n_splits=0,
-            k_used=0, assignment_agreement_mean=0.0,
-            assignment_agreement_p05_p95=(0.0, 0.0), staple_recall_mean=0.0,
-            staple_recall_p05_p95=(0.0, 0.0), verdict="insufficient data",
+            commander=commander,
+            n_decks=n,
+            n_train=0,
+            n_test=0,
+            n_splits=0,
+            k_used=0,
+            assignment_agreement_mean=0.0,
+            assignment_agreement_p05_p95=(0.0, 0.0),
+            staple_recall_mean=0.0,
+            staple_recall_p05_p95=(0.0, 0.0),
+            verdict="insufficient data",
             notes=[f"Only {n} decks — cannot validate."],
         )
 
@@ -149,8 +156,11 @@ def holdout_validation(
         train_labels = model.predict(train_feats)
         staples_by_cluster: dict[int, set[str]] = {}
         for cid in range(model.n_clusters):
-            members = [card_sets[train_idx[j]] for j in range(len(train_idx))
-                       if train_labels[j] == cid]
+            members = [
+                card_sets[train_idx[j]]
+                for j in range(len(train_idx))
+                if train_labels[j] == cid
+            ]
             staples_by_cluster[cid] = _train_staples(
                 [list(m) for m in members], staple_min_inclusion
             )
@@ -182,17 +192,23 @@ def holdout_validation(
         arr = np.array(xs)
         return (
             round(float(arr.mean()), 3),
-            (round(float(np.percentile(arr, 5)), 3),
-             round(float(np.percentile(arr, 95)), 3)),
+            (
+                round(float(np.percentile(arr, 5)), 3),
+                round(float(np.percentile(arr, 95)), 3),
+            ),
         )
 
     agree_mean, agree_ci = _summ(agreements)
     recall_mean, recall_ci = _summ(recalls)
 
     verdict = (
-        "generalizes" if agree_mean >= 0.7 and recall_mean >= 0.7
-        else "partial" if agree_mean >= 0.55 and recall_mean >= 0.55
-        else "does not generalize at this N"
+        "generalizes"
+        if agree_mean >= 0.7 and recall_mean >= 0.7
+        else (
+            "partial"
+            if agree_mean >= 0.55 and recall_mean >= 0.55
+            else "does not generalize at this N"
+        )
     )
     if n_test < 10:
         notes.append(
@@ -201,12 +217,18 @@ def holdout_validation(
         )
 
     return HoldoutReport(
-        commander=commander, n_decks=n, n_train=n - n_test, n_test=n_test,
-        n_splits=len(agreements), k_used=k,
+        commander=commander,
+        n_decks=n,
+        n_train=n - n_test,
+        n_test=n_test,
+        n_splits=len(agreements),
+        k_used=k,
         assignment_agreement_mean=agree_mean,
         assignment_agreement_p05_p95=agree_ci,
-        staple_recall_mean=recall_mean, staple_recall_p05_p95=recall_ci,
-        verdict=verdict, notes=notes,
+        staple_recall_mean=recall_mean,
+        staple_recall_p05_p95=recall_ci,
+        verdict=verdict,
+        notes=notes,
     )
 
 
@@ -251,15 +273,17 @@ def aggregate_decklist(
         size = len(members)
         counts = _presence_counts(members)
         ranked = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:top_n]
-        out.append(AggregateDecklist(
-            cluster_id=cid,
-            archetype=cluster_archetype.get(cid, "mixed"),
-            size=size,
-            cards=[
-                AggregateCard(card_name=name, inclusion_rate=round(c / size, 3))
-                for name, c in ranked
-            ],
-        ))
+        out.append(
+            AggregateDecklist(
+                cluster_id=cid,
+                archetype=cluster_archetype.get(cid, "mixed"),
+                size=size,
+                cards=[
+                    AggregateCard(card_name=name, inclusion_rate=round(c / size, 3))
+                    for name, c in ranked
+                ],
+            )
+        )
     out.sort(key=lambda a: a.size, reverse=True)
     return out
 
@@ -270,14 +294,20 @@ def format_holdout(report: HoldoutReport) -> str:
     rc = report.staple_recall_p05_p95
     lines = [
         f"=== Held-out validation: {report.commander} ===",
-        f"decks: {report.n_decks}  (train {report.n_train} / test {report.n_test})"
-        f"  k={report.k_used}  splits={report.n_splits}",
-        f"assignment agreement: {report.assignment_agreement_mean} "
-        f"(5-95% [{ag[0]}, {ag[1]}])  "
-        "— held-out deck's own archetype matches its assigned cluster",
-        f"staple recall:        {report.staple_recall_mean} "
-        f"(5-95% [{rc[0]}, {rc[1]}])  "
-        "— held-out decks contain the train-predicted staples",
+        (
+            f"decks: {report.n_decks}  (train {report.n_train} / test {report.n_test})"
+            f"  k={report.k_used}  splits={report.n_splits}"
+        ),
+        (
+            f"assignment agreement: {report.assignment_agreement_mean} "
+            f"(5-95% [{ag[0]}, {ag[1]}])  "
+            "— held-out deck's own archetype matches its assigned cluster"
+        ),
+        (
+            f"staple recall:        {report.staple_recall_mean} "
+            f"(5-95% [{rc[0]}, {rc[1]}])  "
+            "— held-out decks contain the train-predicted staples"
+        ),
         f"verdict: {report.verdict.upper()}",
     ]
     for note in report.notes:

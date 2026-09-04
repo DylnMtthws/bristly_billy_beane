@@ -88,9 +88,7 @@ class EDHRECIngestion(SourceHealthMixin):
                         elapsed = (datetime.now() - started_at).total_seconds()
                         rate = processed / elapsed
                         remaining = (
-                            (len(commanders) - processed) / rate
-                            if rate > 0
-                            else 0
+                            (len(commanders) - processed) / rate if rate > 0 else 0
                         )
                         logger.info(
                             "Processed %d / %d commanders "
@@ -107,9 +105,7 @@ class EDHRECIngestion(SourceHealthMixin):
                     )
                 except Exception as e:
                     items_failed += 1
-                    errors.append(
-                        f"Error processing '{commander_name}': {e}"
-                    )
+                    errors.append(f"Error processing '{commander_name}': {e}")
 
             elapsed_total = (datetime.now() - started_at).total_seconds()
             logger.info(
@@ -148,11 +144,9 @@ class EDHRECIngestion(SourceHealthMixin):
         """
         conn = sqlite3.connect(str(self.db_path))
         try:
-            cursor = conn.execute(
-                """SELECT id, name FROM cards
+            cursor = conn.execute("""SELECT id, name FROM cards
                 WHERE is_legal_commander = 1
-                ORDER BY name"""
-            )
+                ORDER BY name""")
             return cursor.fetchall()
         finally:
             conn.close()
@@ -233,9 +227,7 @@ class EDHRECIngestion(SourceHealthMixin):
 
         return resp.json()
 
-    def _store_commander_data(
-        self, commander_id: str, data: dict[str, Any]
-    ) -> None:
+    def _store_commander_data(self, commander_id: str, data: dict[str, Any]) -> None:
         """Parse EDHREC JSON and store in edhrec_commander_data table."""
         container = data.get("container", data)
         json_dict = container.get("json_dict", container)
@@ -243,8 +235,10 @@ class EDHRECIngestion(SourceHealthMixin):
         # Extract themes
         themes: list[str] = []
         if "themes" in json_dict:
-            themes = [t.get("value", t) if isinstance(t, dict) else str(t)
-                      for t in json_dict["themes"]]
+            themes = [
+                t.get("value", t) if isinstance(t, dict) else str(t)
+                for t in json_dict["themes"]
+            ]
 
         # Extract top cards with inclusion percentages
         top_cards: list[dict[str, Any]] = []
@@ -257,17 +251,14 @@ class EDHRECIngestion(SourceHealthMixin):
                 card_name = cv.get("name", "")
                 inclusion = cv.get("inclusion", 0)
                 potential_decks = cv.get("potential_decks", 0)
-                if potential_decks > deck_count:
-                    deck_count = potential_decks
-                pct = (
-                    (inclusion / potential_decks * 100)
-                    if potential_decks > 0
-                    else 0
+                deck_count = max(deck_count, potential_decks)
+                pct = (inclusion / potential_decks * 100) if potential_decks > 0 else 0
+                top_cards.append(
+                    {
+                        "card_name": card_name,
+                        "inclusion_pct": round(pct, 1),
+                    }
                 )
-                top_cards.append({
-                    "card_name": card_name,
-                    "inclusion_pct": round(pct, 1),
-                })
 
         # Sort by inclusion and keep top entries
         top_cards.sort(key=lambda x: x["inclusion_pct"], reverse=True)

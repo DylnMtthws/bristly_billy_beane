@@ -39,9 +39,7 @@ class EmbeddingIndexer:
             from sentence_transformers import SentenceTransformer
 
             logger.info("Loading embedding model: %s", self.model_name)
-            self._model = SentenceTransformer(
-                self.model_name, device=self.device
-            )
+            self._model = SentenceTransformer(self.model_name, device=self.device)
         return self._model
 
     def index_chunks(self, chunks: list[Chunk], batch_size: int = 64) -> int:

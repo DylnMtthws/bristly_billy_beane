@@ -9,18 +9,18 @@ from pathlib import Path
 
 import pytest
 
+from sabermetrics.models.llm_responses import (
+    CardFitResponse,
+    DeckSynthesisResponse,
+)
 from sabermetrics.reasoning.client import (
     ALLOWED_MODELS,
     MODEL_PRICING,
     AnthropicClient,
     CallResult,
 )
-from sabermetrics.reasoning.prompts import list_prompts, load_prompt
-from sabermetrics.models.llm_responses import (
-    CardFitResponse,
-    DeckSynthesisResponse,
-)
 from sabermetrics.reasoning.profiler import ProfileManager
+from sabermetrics.reasoning.prompts import list_prompts, load_prompt
 from sabermetrics.reference_layer.evidence import EvidenceAggregator
 
 HAS_API_KEY = bool(os.environ.get("ANTHROPIC_API_KEY"))
@@ -29,6 +29,7 @@ HAS_DB = DB_PATH.exists()
 
 
 # --- Prompt template tests ---
+
 
 def test_prompt_templates_exist() -> None:
     """All 4 prompt templates exist and are loadable."""
@@ -68,6 +69,7 @@ def test_relevance_screen_template() -> None:
 
 
 # --- Client tests ---
+
 
 def test_allowed_models() -> None:
     """Allowed models list includes expected models."""
@@ -130,6 +132,7 @@ def test_call_result_model() -> None:
 
 # --- Response model tests ---
 
+
 def test_card_fit_response_model() -> None:
     """CardFitResponse validates score range."""
     response = CardFitResponse(
@@ -156,13 +159,12 @@ def test_deck_synthesis_response_model() -> None:
 
 # --- Evidence aggregator tests ---
 
+
 @pytest.mark.skipif(not HAS_DB, reason="No database available")
 def test_evidence_aggregator_loads_commander() -> None:
     """Evidence aggregator can load a commander from DB."""
     conn = sqlite3.connect(str(DB_PATH))
-    cursor = conn.execute(
-        "SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1"
-    )
+    cursor = conn.execute("SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1")
     row = cursor.fetchone()
     conn.close()
 
@@ -197,6 +199,7 @@ def test_evidence_aggregator_gets_reference_chunks() -> None:
 
 # --- Profile cache test (A5.5) ---
 
+
 @pytest.mark.skipif(not HAS_DB, reason="No database available")
 def test_profile_manager_cache_miss_without_key() -> None:
     """ProfileManager returns None on cache miss (no generation without key)."""
@@ -204,9 +207,7 @@ def test_profile_manager_cache_miss_without_key() -> None:
     manager = ProfileManager(DB_PATH)
 
     conn = sqlite3.connect(str(DB_PATH))
-    cursor = conn.execute(
-        "SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1"
-    )
+    cursor = conn.execute("SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1")
     row = cursor.fetchone()
     conn.close()
 

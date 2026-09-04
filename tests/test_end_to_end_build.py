@@ -28,9 +28,9 @@ def test_end_to_end_build_is_legal_llm_free_and_observable(
     build_db, canned_profile
 ) -> None:
     from sabermetrics.pipeline.deck_builder import (
+        _BASIC_LAND_NAMES,
         DeckBuilder,
         DeckBuildRequest,
-        _BASIC_LAND_NAMES,
     )
 
     conn = sqlite3.connect(str(build_db))

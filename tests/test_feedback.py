@@ -10,10 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.setup_db import setup_database  # noqa: E402
-
-from sabermetrics import db  # noqa: E402
-from sabermetrics.ui.app import create_app  # noqa: E402
+from sabermetrics import db
+from sabermetrics.ui.app import create_app
+from scripts.setup_db import setup_database
 
 
 @pytest.fixture
@@ -37,8 +36,11 @@ def app(db_path):
 
 def _user(db_path, email, role="user"):
     return db.UsersRepo(db_path).create(
-        email=email, display_name=email.split("@")[0], role=role,
-        status="active", password_hash=db.hash_password("password123"),
+        email=email,
+        display_name=email.split("@")[0],
+        role=role,
+        status="active",
+        password_hash=db.hash_password("password123"),
     )
 
 
@@ -57,8 +59,15 @@ def _seed_deck(db_path, deck_id, owner_id):
             "VALUES ('cmd1','o1','Cmd', 3, 'Legendary Creature', '[\"R\"]', '[]', 1, 1)"
         )
         cards_json = json.dumps(
-            [{"card_id": "cx", "name": "CardX", "type_line": "Creature",
-              "slot_role": "utility", "cvar_score": 5.0}]
+            [
+                {
+                    "card_id": "cx",
+                    "name": "CardX",
+                    "type_line": "Creature",
+                    "slot_role": "utility",
+                    "cvar_score": 5.0,
+                }
+            ]
         )
         conn.execute(
             "INSERT INTO generated_decks (id, commander_id, owner_id, deck_name, "
@@ -118,7 +127,10 @@ def test_non_owner_card_feedback_forbidden(app, db_path) -> None:
     _seed_deck(db_path, "deckA", a)
     client = app.test_client()
     _login(client, b)
-    assert client.post("/deck/deckA/card/cx/feedback", data={"vote": "up"}).status_code == 403
+    assert (
+        client.post("/deck/deckA/card/cx/feedback", data={"vote": "up"}).status_code
+        == 403
+    )
 
 
 def test_invalid_vote_rejected(app, db_path) -> None:
@@ -126,7 +138,12 @@ def test_invalid_vote_rejected(app, db_path) -> None:
     _seed_deck(db_path, "deckA", a)
     client = app.test_client()
     _login(client, a)
-    assert client.post("/deck/deckA/card/cx/feedback", data={"vote": "sideways"}).status_code == 400
+    assert (
+        client.post(
+            "/deck/deckA/card/cx/feedback", data={"vote": "sideways"}
+        ).status_code
+        == 400
+    )
 
 
 def test_deck_feedback_endpoint(app, db_path) -> None:
@@ -134,9 +151,16 @@ def test_deck_feedback_endpoint(app, db_path) -> None:
     _seed_deck(db_path, "deckA", a)
     client = app.test_client()
     _login(client, a)
-    assert client.post("/deck/deckA/feedback", data={"verdict": "good", "comment": "gg"}).status_code == 200
+    assert (
+        client.post(
+            "/deck/deckA/feedback", data={"verdict": "good", "comment": "gg"}
+        ).status_code
+        == 200
+    )
     assert db.FeedbackRepo(db_path).deck(a, "deckA")["verdict"] == "good"
-    assert client.post("/deck/deckA/feedback", data={"verdict": "nope"}).status_code == 400
+    assert (
+        client.post("/deck/deckA/feedback", data={"verdict": "nope"}).status_code == 400
+    )
 
 
 # --- UI gating ---

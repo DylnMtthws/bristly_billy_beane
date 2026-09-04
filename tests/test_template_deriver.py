@@ -1,21 +1,22 @@
 """Tests for template derivation (6.5.3)."""
 
-
 from sabermetrics.models.template import DeckTemplate, SlotIntent
 from sabermetrics.reasoning.template_deriver import (
-    derive_deck_template,
     _estimate_creature_density,
     _parse_commander_cmc,
+    derive_deck_template,
 )
 
 
 def _make_mock_profile():
     """Create a minimal CommanderProfile for testing."""
+    from datetime import datetime
+
     from sabermetrics.models.profile import (
-        CardAnalysis,
         BehavioralSignals,
-        CommunitySignals,
+        CardAnalysis,
         CommanderProfile,
+        CommunitySignals,
         EvidenceFreshness,
         PowerIndicators,
         ProfileSources,
@@ -25,7 +26,6 @@ def _make_mock_profile():
         UserIntent,
         WinCondition,
     )
-    from datetime import datetime
 
     return CommanderProfile(
         commander_id="test-id",
@@ -95,8 +95,11 @@ def test_deck_template_sums_to_99() -> None:
         avg_cmc_target=3.0,
     )
     total = (
-        template.land_count + template.ramp_count + template.draw_count
-        + template.removal_count + template.board_wipe_count
+        template.land_count
+        + template.ramp_count
+        + template.draw_count
+        + template.removal_count
+        + template.board_wipe_count
         + template.differentiator_slots
     )
     assert total == 99
@@ -141,8 +144,11 @@ def test_derive_template_basic() -> None:
     assert template.differentiator_slots >= 10
 
     total = (
-        template.land_count + template.ramp_count + template.draw_count
-        + template.removal_count + template.board_wipe_count
+        template.land_count
+        + template.ramp_count
+        + template.draw_count
+        + template.removal_count
+        + template.board_wipe_count
         + template.differentiator_slots
     )
     assert total == 99
@@ -167,7 +173,9 @@ def test_parse_commander_cmc() -> None:
 def test_estimate_creature_density() -> None:
     """Creature density varies by archetype."""
     from sabermetrics.models.profile import (
-        PowerIndicators, StrategicConstraints, StrategicProfile,
+        PowerIndicators,
+        StrategicConstraints,
+        StrategicProfile,
     )
 
     sp_tribal = StrategicProfile(
@@ -178,10 +186,14 @@ def test_estimate_creature_density() -> None:
         synergy_priorities={},
         anti_synergies=[],
         strategic_constraints=StrategicConstraints(
-            mana_base_requirements="", interaction_density="low", speed_tier="fast",
+            mana_base_requirements="",
+            interaction_density="low",
+            speed_tier="fast",
         ),
         power_indicators=PowerIndicators(
-            estimated_ceiling_bracket=3, estimated_floor_bracket=1, notes="",
+            estimated_ceiling_bracket=3,
+            estimated_floor_bracket=1,
+            notes="",
         ),
     )
     sp_spells = StrategicProfile(
@@ -192,10 +204,14 @@ def test_estimate_creature_density() -> None:
         synergy_priorities={},
         anti_synergies=[],
         strategic_constraints=StrategicConstraints(
-            mana_base_requirements="", interaction_density="low", speed_tier="fast",
+            mana_base_requirements="",
+            interaction_density="low",
+            speed_tier="fast",
         ),
         power_indicators=PowerIndicators(
-            estimated_ceiling_bracket=3, estimated_floor_bracket=1, notes="",
+            estimated_ceiling_bracket=3,
+            estimated_floor_bracket=1,
+            notes="",
         ),
     )
     assert _estimate_creature_density(sp_tribal) > _estimate_creature_density(sp_spells)
@@ -207,10 +223,14 @@ def test_estimate_creature_density() -> None:
 def _make_composition(**overrides):
     from sabermetrics.analytics.empirical_valuation import EmpiricalComposition
 
-    defaults = dict(
-        lands=36, enchantments=36, creatures=18, artifacts=8,
-        auras=27, avg_cmc=2.5,
-    )
+    defaults = {
+        "lands": 36,
+        "enchantments": 36,
+        "creatures": 18,
+        "artifacts": 8,
+        "auras": 27,
+        "avg_cmc": 2.5,
+    }
     defaults.update(overrides)
     return EmpiricalComposition(**defaults)
 
@@ -233,7 +253,10 @@ def test_template_uses_corpus_composition() -> None:
     # Auras dominate the enchantment engine (27/36 >= 60%), so the ~30-card
     # engine rule adds an aura subtype target at max(median 27, 30) = 30.
     assert t.type_targets == {
-        "enchantment": 36, "creature": 18, "artifact": 8, "aura": 30,
+        "enchantment": 36,
+        "creature": 18,
+        "artifact": 8,
+        "aura": 30,
     }
     # The aura target above the corpus median is also a hard floor -- soft
     # scoring pressure equilibrates at the median, so the builder's repair
@@ -260,6 +283,7 @@ def test_corpus_land_count_is_clamped_to_karsten_band() -> None:
     t = derive_deck_template(profile, empirical_composition=comp)
 
     from sabermetrics.pipeline.mana_base import target_land_count
+
     assert t.land_count == min(42, target_land_count(2.5) + 3)
 
 

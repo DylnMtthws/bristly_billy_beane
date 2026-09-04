@@ -49,6 +49,20 @@ class TestSchemaBoundary:
         module_source = inspect.getsource(adapters_postgres)
         assert module_source.count("cur.execute(") == 1
 
+    def test_dsn_query_string_reaches_psycopg_untouched(self, monkeypatch):
+        from sabermetrics.cedh import adapters_postgres
+
+        captured = {}
+
+        def fake_connect(dsn, **kwargs):
+            captured["dsn"] = dsn
+            return object()
+
+        monkeypatch.setattr("psycopg.connect", fake_connect)
+        dsn = "postgresql://mtg_consumer@example/mtg?sslmode=require"
+        adapters_postgres._connect(dsn)
+        assert captured["dsn"] == dsn
+
 
 class TestFixtureCardRepository:
     def test_satisfies_the_protocol(self, cedh_cards):

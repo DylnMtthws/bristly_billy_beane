@@ -6,7 +6,6 @@ from sabermetrics.analytics.effective_cost import (
     parse_alternative_costs,
 )
 
-
 # ---------------------------------------------------------------------------
 # _parse_mana_cost_cmc tests
 # ---------------------------------------------------------------------------

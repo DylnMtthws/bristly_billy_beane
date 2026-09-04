@@ -108,7 +108,9 @@ def _like(value: str) -> str:
     return f'%"{value}"%'
 
 
-def build_explore_query(args: _Args, *, per_page: int = DEFAULT_PER_PAGE) -> ExploreQuery:
+def build_explore_query(
+    args: _Args, *, per_page: int = DEFAULT_PER_PAGE
+) -> ExploreQuery:
     """Translate request args into a parameterized Explore query.
 
     Args:

@@ -40,7 +40,8 @@ def test_builder_llm_use_is_confined_to_the_safety_vet() -> None:
         if not isinstance(node, ast.FunctionDef):
             continue
         calls = [
-            n for n in ast.walk(node)
+            n
+            for n in ast.walk(node)
             if isinstance(n, ast.Call)
             and isinstance(n.func, ast.Attribute)
             and n.func.attr == "score_cards_batch"

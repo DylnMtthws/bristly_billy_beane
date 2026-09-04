@@ -30,9 +30,15 @@ def test_detects_battalion_and_raid():
 
 
 def test_unconditional_text_is_not_flagged():
-    assert not is_combat_gated("Return all enchantment cards from your graveyard to the battlefield.")
-    assert not is_combat_gated("Whenever you attack, draw a card.")  # single attacker fine
-    assert not is_combat_gated("Whenever an enchantment you control enters, draw a card.")
+    assert not is_combat_gated(
+        "Return all enchantment cards from your graveyard to the battlefield."
+    )
+    assert not is_combat_gated(
+        "Whenever you attack, draw a card."
+    )  # single attacker fine
+    assert not is_combat_gated(
+        "Whenever an enchantment you control enters, draw a card."
+    )
     assert not is_combat_gated(None)
 
 

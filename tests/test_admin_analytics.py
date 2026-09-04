@@ -10,10 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.setup_db import setup_database  # noqa: E402
-
-from sabermetrics import db  # noqa: E402
-from sabermetrics.ui.app import create_app  # noqa: E402
+from sabermetrics import db
+from sabermetrics.ui.app import create_app
+from scripts.setup_db import setup_database
 
 
 @pytest.fixture
@@ -27,7 +26,9 @@ def db_path(tmp_path):
 def app(db_path):
     app = create_app(db_path)
     app.config.update(
-        TESTING=True, WTF_CSRF_ENABLED=False, RATELIMIT_ENABLED=False,
+        TESTING=True,
+        WTF_CSRF_ENABLED=False,
+        RATELIMIT_ENABLED=False,
         SESSION_COOKIE_SECURE=False,
     )
     return app
@@ -35,8 +36,11 @@ def app(db_path):
 
 def _user(db_path, email, role="user"):
     return db.UsersRepo(db_path).create(
-        email=email, display_name=email.split("@")[0], role=role,
-        status="active", password_hash=db.hash_password("password123"),
+        email=email,
+        display_name=email.split("@")[0],
+        role=role,
+        status="active",
+        password_hash=db.hash_password("password123"),
     )
 
 
@@ -85,7 +89,10 @@ def _seed(db_path):
 
 def test_card_aggregate(db_path) -> None:
     _seed(db_path)
-    agg = {r["card_name"]: r for r in db.AdminAnalyticsRepo(db_path).card_feedback_aggregate()}
+    agg = {
+        r["card_name"]: r
+        for r in db.AdminAnalyticsRepo(db_path).card_feedback_aggregate()
+    }
     assert agg["CardUp"]["up"] == 2 and agg["CardUp"]["net"] == 2
     assert agg["CardDown"]["down"] == 2 and agg["CardDown"]["net"] == -2
     assert agg["CardUp"]["comments"] == 1  # only one had a comment
@@ -117,7 +124,9 @@ def test_export_rows(db_path) -> None:
     repo = db.AdminAnalyticsRepo(db_path)
     card_rows = repo.export_card_rows()
     assert len(card_rows) == 4
-    assert any(r["card_name"] == "CardUp" and r["commander"] == "Cmdr" for r in card_rows)
+    assert any(
+        r["card_name"] == "CardUp" and r["commander"] == "Cmdr" for r in card_rows
+    )
     assert len(repo.export_deck_rows()) == 1
 
 

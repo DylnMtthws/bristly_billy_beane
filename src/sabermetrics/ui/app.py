@@ -1,24 +1,15 @@
-"""Flask application factory.
-
-Creates the Flask app bound to 127.0.0.1 only. Access comes through
-``tailscale serve``, which terminates TLS on the tailnet and proxies to that
-local port (ADR-026), so the app trusts one hop of forwarded headers via
-ProxyFix and keeps the rest of the hardening: CSRF on POSTs, hardened session
-cookies, and login rate-limiting.
-
-The app is never bound to a public interface and never exposed by a port
-forward. On a tailnet there is no public surface to attack at all, which is a
-stronger position than the Cloudflare Tunnel this replaced — and one command
-instead of a tunnel daemon, a config file and a DNS record.
-"""
+"""Flask application factory and waitress server configuration."""
 
 import logging
 import os
 import secrets
+from importlib.metadata import version
 from pathlib import Path
 
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+from sabermetrics.config import resolve_db_path
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +36,7 @@ def create_app(db_path: Path | None = None) -> Flask:
         static_folder=str(Path(__file__).parent / "static"),
     )
 
-    if db_path is None:
-        db_path = Path("data/sabermetrics.db")
+    db_path = resolve_db_path(db_path)
     app.config["DB_PATH"] = db_path
 
     # --- Auth mode ---
@@ -124,6 +114,11 @@ def create_app(db_path: Path | None = None) -> Flask:
     app.register_blueprint(cedh_bp)
     app.register_blueprint(main_bp)
 
+    @app.get("/healthz")
+    def healthz() -> dict[str, str]:
+        """Return process health without touching external services."""
+        return {"status": "ok", "version": version("sabermetrics")}
+
     @app.after_request
     def _security_headers(response):
         """Baseline response hardening.
@@ -152,26 +147,27 @@ def create_app(db_path: Path | None = None) -> Flask:
 
 
 def run_server(
-    host: str = "127.0.0.1", port: int = 5000, db_path: Path | None = None
+    host: str | None = None, port: int | None = None, db_path: Path | None = None
 ) -> None:
-    """Start the UI server via waitress (production WSGI, macOS-friendly).
-
-    The app always binds to 127.0.0.1; public access is via the Cloudflare
-    Tunnel (ADR-016), never a direct 0.0.0.0 bind.
+    """Start the UI server via waitress.
 
     Args:
-        host: Bind address (forced to 127.0.0.1 for security).
-        port: Server port.
+        host: Bind address; defaults to ``SABER_BIND_HOST`` or localhost.
+        port: Server port; defaults to ``SABER_PORT`` or 5000.
         db_path: Optional database path override.
     """
-    if host != "127.0.0.1":
-        logger.warning(
-            "Security: overriding host to 127.0.0.1 (local-only bind; expose "
-            "via Cloudflare Tunnel, not a direct port)"
+    host = host or os.environ.get("SABER_BIND_HOST", "127.0.0.1")
+    port = port if port is not None else int(os.environ.get("SABER_PORT", "5000"))
+    trusted_proxy = os.environ.get("SABER_TRUSTED_PROXY", "127.0.0.1")
+    mode = os.environ.get("SABER_AUTH_MODE", "password").strip().lower()
+    if _env_bool("SABER_PUBLIC", False) and host == "0.0.0.0" and mode == "tailscale":
+        raise ValueError(
+            "SABER_AUTH_MODE=tailscale is unsafe with SABER_PUBLIC=1 and "
+            "SABER_BIND_HOST=0.0.0.0; use hybrid auth"
         )
-        host = "127.0.0.1"
 
     app = create_app(db_path)
+    logger.info("Effective bind: %s:%s (trusted proxy: %s)", host, port, trusted_proxy)
     print(f"Sabermetrics UI running at http://{host}:{port}")
 
     try:
@@ -196,7 +192,7 @@ def run_server(
             host=host,
             port=port,
             threads=8,
-            trusted_proxy="127.0.0.1",
+            trusted_proxy=trusted_proxy,
             trusted_proxy_headers={"x-forwarded-for", "x-forwarded-host"},
         )
     except ImportError:

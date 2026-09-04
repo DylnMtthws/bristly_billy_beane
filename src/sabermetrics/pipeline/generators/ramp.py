@@ -17,8 +17,8 @@ from sabermetrics.analytics.empirical_valuation import (
     empirical_bonus,
 )
 from sabermetrics.config import settings
-from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,11 @@ def _load_auto_includes() -> tuple[dict, set[str]]:
     Returns:
         Tuple of (auto_includes_dict, protected_names_set).
     """
-    config_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "auto_include_cards.yaml"
+    config_path = (
+        Path(__file__).resolve().parent.parent.parent.parent.parent
+        / "config"
+        / "auto_include_cards.yaml"
+    )
     if not config_path.exists():
         return {}, set()
     with open(config_path) as f:
@@ -157,7 +161,9 @@ def _score_ramp(
     mana_output, produces_colored = _estimate_mana_output(oracle)
     # Avoid division by zero; CMC 0 cards (e.g. Mox) get max rate
     effective_cmc = max(cmc, 0.5)
-    net_rate = mana_output / effective_cmc  # e.g. Sol Ring: 2/1=2.0, Cultivate: 1/3=0.33
+    net_rate = (
+        mana_output / effective_cmc
+    )  # e.g. Sol Ring: 2/1=2.0, Cultivate: 1/3=0.33
 
     # Scale to 0-3 range (Sol Ring ~2.0 is excellent, 0.33 is mediocre)
     role_score = min(net_rate * 1.5, 3.0)
@@ -181,10 +187,10 @@ def _score_ramp(
     # --- Resilience tier ---
     ramp_type = _classify_ramp_type(card)
     resilience_bonus = {
-        "land_ramp": 0.3,   # Survives board wipes
-        "other": 0.15,      # Enchantment ramp, sorceries
-        "rock": 0.0,        # Artifacts — common, removable
-        "dork": -0.1,       # Creatures — most fragile
+        "land_ramp": 0.3,  # Survives board wipes
+        "other": 0.15,  # Enchantment ramp, sorceries
+        "rock": 0.0,  # Artifacts — common, removable
+        "dork": -0.1,  # Creatures — most fragile
     }
     role_score += resilience_bonus.get(ramp_type, 0.0)
 
@@ -346,7 +352,8 @@ class RampPackageGenerator:
         if len(auto_ramp_names) > target_count:
             logger.info(
                 "Capping ramp auto-includes from %d to %d (target_count)",
-                len(auto_ramp_names), target_count,
+                len(auto_ramp_names),
+                target_count,
             )
             auto_ramp_names = auto_ramp_names[:target_count]
         auto_ramp_set = set(auto_ramp_names)
@@ -371,7 +378,8 @@ class RampPackageGenerator:
         # of a +2 land overshoot), and the land pool already offers such lands
         # on their own merit.
         pool = [
-            c for c in pool
+            c
+            for c in pool
             if not is_playable_as_land(c.get("type_line") or "")
             and not c.get("_anti_engine")
         ]
@@ -388,9 +396,16 @@ class RampPackageGenerator:
                 # with no price snapshot -- it then costs $0 in build-time
                 # budget sums and renders at the $0.05 floor in the UI. The
                 # pool's printing (cheapest priced) is canonical.
-                for k in ("_anti_engine", "_cvar_score",
-                          "_empirical_inclusion", "_empirical_reliable",
-                          "id", "oracle_id", "set_code", "price_usd"):
+                for k in (
+                    "_anti_engine",
+                    "_cvar_score",
+                    "_empirical_inclusion",
+                    "_empirical_reliable",
+                    "id",
+                    "oracle_id",
+                    "set_code",
+                    "price_usd",
+                ):
                     if k in src:
                         c[k] = src[k]
                 if c.get("_anti_engine"):
@@ -398,11 +413,12 @@ class RampPackageGenerator:
                 gated.append(c)
             pool = gated
 
-
         # Place auto-includes from pool (or role_tag_pool as backup)
         search_pools = [pool] if use_candidates_table else [role_tag_pool]
         if use_candidates_table:
-            search_pools.append(role_tag_pool)  # Fallback for auto-includes not in table
+            search_pools.append(
+                role_tag_pool
+            )  # Fallback for auto-includes not in table
 
         for search_pool in search_pools:
             for card in search_pool:
@@ -418,16 +434,24 @@ class RampPackageGenerator:
                     and float(card.get("cmc", 0) or 0) >= commander_cmc
                 ):
                     continue
-                if name in auto_ramp_set and name not in used_names \
-                        and not card.get("_anti_engine"):
+                if (
+                    name in auto_ramp_set
+                    and name not in used_names
+                    and not card.get("_anti_engine")
+                ):
                     price = float(card.get("price_usd", 0) or 0)
-                    if budget_remaining <= 0 or running_price + price <= budget_remaining:
-                        assignments.append(SlotAssignment(
-                            card=card,
-                            slot_role="ramp",
-                            score=0.95,
-                            alternatives=[],
-                        ))
+                    if (
+                        budget_remaining <= 0
+                        or running_price + price <= budget_remaining
+                    ):
+                        assignments.append(
+                            SlotAssignment(
+                                card=card,
+                                slot_role="ramp",
+                                score=0.95,
+                                alternatives=[],
+                            )
+                        )
                         used_names.add(name)
                         running_price += price
                         auto_ramp_set.discard(name)
@@ -471,9 +495,8 @@ class RampPackageGenerator:
                     from sabermetrics.analytics.ramp_detector import (
                         _produced_colors,
                     )
-                    produced = _produced_colors(
-                        (card.get("oracle_text") or "").lower()
-                    )
+
+                    produced = _produced_colors((card.get("oracle_text") or "").lower())
                 overlap = len(set(produced or "") & identity_set)
                 score += settings.scoring.ramp_color_fit_weight * (
                     overlap / len(identity_set)
@@ -513,19 +536,24 @@ class RampPackageGenerator:
             if type_counts.get(ramp_type, 0) >= cap:
                 continue
 
-            assignments.append(SlotAssignment(
-                card=card,
-                slot_role="ramp",
-                score=round(score, 4),
-                alternatives=[],
-            ))
+            assignments.append(
+                SlotAssignment(
+                    card=card,
+                    slot_role="ramp",
+                    score=round(score, 4),
+                    alternatives=[],
+                )
+            )
             used_names.add(name)
             running_price += price
             type_counts[ramp_type] = type_counts.get(ramp_type, 0) + 1
 
         logger.info(
             "Ramp generator: %d ramp cards (target %d), types: %s, protected: %s",
-            len(assignments), target_count, type_counts, self.protected_names,
+            len(assignments),
+            target_count,
+            type_counts,
+            self.protected_names,
         )
         return assignments
 

@@ -46,19 +46,19 @@ def _parse_json_col(value, default="[]"):
 
 def _can_access_deck(owner_id: str | None) -> bool:
     """A deck is visible to its owner or any admin."""
-    return bool(
-        owner_id == current_user.id or getattr(current_user, "is_admin", False)
-    )
+    return bool(owner_id == current_user.id or getattr(current_user, "is_admin", False))
 
 
 def _monthly_spend(db_path: Path) -> float:
     """Total LLM spend across all users in the trailing 30 days."""
     conn = sqlite3.connect(str(db_path))
     try:
-        return conn.execute(
-            "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_log "
-            "WHERE timestamp >= datetime('now', '-30 days')"
-        ).fetchone()[0]
+        return float(
+            conn.execute(
+                "SELECT COALESCE(SUM(cost_usd), 0) FROM cost_log "
+                "WHERE timestamp >= datetime('now', '-30 days')"
+            ).fetchone()[0]
+        )
     finally:
         conn.close()
 
@@ -68,7 +68,9 @@ def _quota_reset_label() -> str:
     from datetime import date
 
     today = date.today()
-    year, month = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
+    year, month = (
+        (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
+    )
     return date(year, month, 1).strftime("%B 1")
 
 
@@ -96,7 +98,7 @@ def _require_login():
 
 
 def _db_path() -> Path:
-    return current_app.config["DB_PATH"]
+    return Path(current_app.config["DB_PATH"])
 
 
 @bp.route("/")
@@ -302,7 +304,9 @@ def commander_profile(name: str):
         )
         row = cursor.fetchone()
         if row is None:
-            return render_template("profile_view.html", error=f"Commander not found: {name}")
+            return render_template(
+                "profile_view.html", error=f"Commander not found: {name}"
+            )
 
         commander_id = row["id"]
         commander_name = row["name"]
@@ -335,9 +339,7 @@ def commander_profile(name: str):
                     edhrec[field] = json.loads(val)
 
         # Get card data
-        card_cursor = conn.execute(
-            "SELECT * FROM cards WHERE id = ?", (commander_id,)
-        )
+        card_cursor = conn.execute("SELECT * FROM cards WHERE id = ?", (commander_id,))
         card_row = card_cursor.fetchone()
         card = dict(card_row) if card_row else {}
         for field in ("color_identity", "keywords"):
@@ -570,8 +572,9 @@ def view_deck(deck_id: str):
                 )
                 basic_images = {r["name"]: r["image_uri"] for r in basic_cursor}
                 for card_entry in deck_data["cards"]:
-                    if (card_entry.get("card_id", "").startswith("basic-")
-                            and not card_entry.get("image_uri")):
+                    if card_entry.get("card_id", "").startswith(
+                        "basic-"
+                    ) and not card_entry.get("image_uri"):
                         name = card_entry.get("name", "")
                         img = basic_images.get(name)
                         if img:
@@ -631,9 +634,7 @@ def view_deck(deck_id: str):
                 if cid in price_lookup:
                     card_entry["price_usd"] = price_lookup[cid]
                 elif card_entry.get("name", "") in name_price_lookup:
-                    card_entry["price_usd"] = name_price_lookup[
-                        card_entry["name"]
-                    ]
+                    card_entry["price_usd"] = name_price_lookup[card_entry["name"]]
                 else:
                     card_entry["price_usd"] = PRICE_FLOOR_USD
 
@@ -657,6 +658,7 @@ def view_deck(deck_id: str):
 
         # Group cards by card type (default view), aggregating duplicates
         from collections import Counter
+
         name_counts: Counter[str] = Counter()
         name_info: dict[str, dict] = {}
         for card in deck_data["cards"]:
@@ -713,9 +715,7 @@ def view_deck(deck_id: str):
         for c in deck_data["cards"]
         if c.get("cvar_score") is not None
     ]
-    avg_cvar = round(
-        sum(cvar_values) / len(cvar_values), 2
-    ) if cvar_values else 0.0
+    avg_cvar = round(sum(cvar_values) / len(cvar_values), 2) if cvar_values else 0.0
 
     # Radar chart: actual component counts vs targets
     target_comp = get_target_composition(power_target)
@@ -758,10 +758,7 @@ def view_deck(deck_id: str):
 
     chart_pip_vs_sources = {
         "colors": commander_colors,
-        "pips": [
-            pip_counts.get(c, {}).get("total_pips", 0)
-            for c in commander_colors
-        ],
+        "pips": [pip_counts.get(c, {}).get("total_pips", 0) for c in commander_colors],
         "sources": [source_counts.get(c, 0) for c in commander_colors],
     }
 
@@ -771,19 +768,25 @@ def view_deck(deck_id: str):
         tl = (card.get("type_line") or "").lower()
         if "land" in tl:
             continue
-        chart_value_scatter.append({
-            "name": card.get("name", "Unknown"),
-            "cvar": round(card.get("cvar_score", 0), 2),
-            "price": round(card.get("price_usd", 0) or 0, 2),
-            "role": card.get("slot_role", "other"),
-        })
+        chart_value_scatter.append(
+            {
+                "name": card.get("name", "Unknown"),
+                "cvar": round(card.get("cvar_score", 0), 2),
+                "price": round(card.get("price_usd", 0) or 0, 2),
+                "role": card.get("slot_role", "other"),
+            }
+        )
 
     # Feedback: only the deck's owner rates it (admins viewing get read-only).
     owner_id = deck_data.get("owner_id")
     can_feedback = owner_id is not None and owner_id == current_user.id
     feedback_repo = db.FeedbackRepo(db_path)
-    card_feedback = feedback_repo.card_map(current_user.id, deck_id) if can_feedback else {}
-    deck_feedback = feedback_repo.deck(current_user.id, deck_id) if can_feedback else None
+    card_feedback = (
+        feedback_repo.card_map(current_user.id, deck_id) if can_feedback else {}
+    )
+    deck_feedback = (
+        feedback_repo.deck(current_user.id, deck_id) if can_feedback else None
+    )
 
     return render_template(
         "deck_view.html",
@@ -835,6 +838,7 @@ def cost_report():
 
         # Monthly ceiling
         from sabermetrics.config import settings
+
         ceiling = settings.llm.monthly_cost_ceiling_usd
 
         # Recent calls
@@ -847,9 +851,7 @@ def cost_report():
         recent_calls = [dict(row) for row in recent_cursor]
 
         # Generated deck count
-        deck_cursor = conn.execute(
-            "SELECT COUNT(*) as count FROM generated_decks"
-        )
+        deck_cursor = conn.execute("SELECT COUNT(*) as count FROM generated_decks")
         deck_count = deck_cursor.fetchone()["count"]
 
         # Profile count

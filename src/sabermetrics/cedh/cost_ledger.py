@@ -19,11 +19,10 @@ from pathlib import Path
 
 from sabermetrics.cedh.model_gateway import UsageRecord
 from sabermetrics.cedh.settings import ModelPricing
+from sabermetrics.config import resolve_db_path
 from sabermetrics.errors import LLMCostCeilingExceeded
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_DB_PATH = Path("data/sabermetrics.db")
 
 
 def estimate_cost(
@@ -61,7 +60,7 @@ class CostLedger:
     """Reads the shared ceiling and records every gateway call."""
 
     def __init__(self, db_path: Path | str | None = None) -> None:
-        self.db_path = Path(db_path or DEFAULT_DB_PATH)
+        self.db_path = resolve_db_path(db_path)
 
     # -- ceiling ----------------------------------------------------------
 

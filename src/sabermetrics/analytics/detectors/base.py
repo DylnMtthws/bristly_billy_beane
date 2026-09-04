@@ -121,8 +121,7 @@ def populate_candidates(detector: Detector, db_path: Path) -> dict:
         # Skip if already populated at the current detection version.
         try:
             row = conn.execute(
-                f"SELECT COUNT(*) FROM {detector.table} "
-                "WHERE detection_version = ?",
+                f"SELECT COUNT(*) FROM {detector.table} " "WHERE detection_version = ?",
                 (detector.detection_version,),
             ).fetchone()
             if row and row[0] > 0:

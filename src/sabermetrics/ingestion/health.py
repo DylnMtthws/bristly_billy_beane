@@ -42,7 +42,9 @@ class SourceHealthMonitor:
             try:
                 available = source.is_available()
                 results[name] = available
-                logger.info("Source '%s': %s", name, "available" if available else "unavailable")
+                logger.info(
+                    "Source '%s': %s", name, "available" if available else "unavailable"
+                )
             except Exception as e:
                 results[name] = False
                 logger.warning("Source '%s' health check failed: %s", name, e)

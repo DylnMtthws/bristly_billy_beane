@@ -38,14 +38,10 @@ class TestArcadesInversions:
     def test_has_value_inversions(self, profile: CommanderProfile) -> None:
         assert len(profile.strategic_profile.value_inversions) >= 1
 
-    def test_toughness_or_defender_in_desired(
-        self, profile: CommanderProfile
-    ) -> None:
+    def test_toughness_or_defender_in_desired(self, profile: CommanderProfile) -> None:
         all_desired = []
         for inv in profile.strategic_profile.value_inversions:
-            all_desired.extend(
-                trait.lower() for trait in inv.desired_characteristics
-            )
+            all_desired.extend(trait.lower() for trait in inv.desired_characteristics)
         has_toughness = any("toughness" in d for d in all_desired)
         has_defender = any("defender" in d for d in all_desired)
         assert has_toughness or has_defender
@@ -88,9 +84,7 @@ class TestErietteInversions:
     def test_engine_has_aura_traits(self, profile: CommanderProfile) -> None:
         all_traits = []
         for dep in profile.strategic_profile.engine_dependencies:
-            all_traits.extend(
-                trait.lower() for trait in dep.engine_card_traits
-            )
+            all_traits.extend(trait.lower() for trait in dep.engine_card_traits)
         assert any("aura" in t for t in all_traits)
 
     def test_has_value_inversions(self, profile: CommanderProfile) -> None:
@@ -102,7 +96,9 @@ class TestErietteInversions:
             inv.evaluation_guidance.lower()
             for inv in profile.strategic_profile.value_inversions
         )
-        assert "mana" in all_guidance or "cost" in all_guidance or "cheap" in all_guidance
+        assert (
+            "mana" in all_guidance or "cost" in all_guidance or "cheap" in all_guidance
+        )
 
     def test_has_mispriced_cards(self, profile: CommanderProfile) -> None:
         assert len(profile.strategic_profile.mispriced_card_examples) >= 3
@@ -121,14 +117,10 @@ class TestKrenkoInversions:
     def test_has_value_inversions(self, profile: CommanderProfile) -> None:
         assert len(profile.strategic_profile.value_inversions) >= 1
 
-    def test_token_or_goblin_in_desired(
-        self, profile: CommanderProfile
-    ) -> None:
+    def test_token_or_goblin_in_desired(self, profile: CommanderProfile) -> None:
         all_desired = []
         for inv in profile.strategic_profile.value_inversions:
-            all_desired.extend(
-                trait.lower() for trait in inv.desired_characteristics
-            )
+            all_desired.extend(trait.lower() for trait in inv.desired_characteristics)
         has_token = any("token" in d for d in all_desired)
         has_goblin = any("goblin" in d for d in all_desired)
         assert has_token or has_goblin
@@ -159,14 +151,10 @@ class TestUrDragonConventional:
     def test_no_value_inversions(self, profile: CommanderProfile) -> None:
         assert len(profile.strategic_profile.value_inversions) == 0
 
-    def test_no_or_minimal_mispriced_cards(
-        self, profile: CommanderProfile
-    ) -> None:
+    def test_no_or_minimal_mispriced_cards(self, profile: CommanderProfile) -> None:
         assert len(profile.strategic_profile.mispriced_card_examples) <= 1
 
-    def test_game_plan_mentions_standard_eval(
-        self, profile: CommanderProfile
-    ) -> None:
+    def test_game_plan_mentions_standard_eval(self, profile: CommanderProfile) -> None:
         """Conventional commander should note standard evaluation applies."""
         summary = profile.strategic_profile.game_plan_summary.lower()
         assert (
@@ -225,10 +213,7 @@ class TestValueInversionModel:
         ):
             assert orig.normal_heuristic == rest.normal_heuristic
             assert orig.desired_characteristics == rest.desired_characteristics
-            assert (
-                orig.undesired_characteristics
-                == rest.undesired_characteristics
-            )
+            assert orig.undesired_characteristics == rest.undesired_characteristics
             assert orig.evaluation_guidance == rest.evaluation_guidance
 
     def test_profile_round_trip_empty_inversions(self) -> None:

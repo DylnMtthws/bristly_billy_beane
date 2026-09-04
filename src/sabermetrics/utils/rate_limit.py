@@ -5,8 +5,9 @@ Default: 1 request per second (self-imposed for all external APIs).
 """
 
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 F = TypeVar("F", bound=Callable)
 

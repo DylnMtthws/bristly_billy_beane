@@ -25,14 +25,14 @@ OPENING_HAND = 7
 
 # Default role timing — when you need to see >=1 of this role
 ROLE_TIMING: dict[str, dict] = {
-    "ramp":       {"need_by_turn": 3, "reliability": 0.80},
-    "draw":       {"need_by_turn": 4, "reliability": 0.80},
-    "removal":    {"need_by_turn": 5, "reliability": 0.75},
+    "ramp": {"need_by_turn": 3, "reliability": 0.80},
+    "draw": {"need_by_turn": 4, "reliability": 0.80},
+    "removal": {"need_by_turn": 5, "reliability": 0.75},
     "board_wipe": {"need_by_turn": 7, "reliability": 0.60},
-    "wincon":     {"need_by_turn": 9, "reliability": 0.70},
-    "tutor":      {"need_by_turn": 6, "reliability": 0.50},
+    "wincon": {"need_by_turn": 9, "reliability": 0.70},
+    "tutor": {"need_by_turn": 6, "reliability": 0.50},
     "protection": {"need_by_turn": 5, "reliability": 0.60},
-    "recursion":  {"need_by_turn": 7, "reliability": 0.50},
+    "recursion": {"need_by_turn": 7, "reliability": 0.50},
 }
 
 
@@ -121,9 +121,12 @@ def compute_role_targets(
     commander_provides: set[str] = set()
     commander_text = (
         " ".join(profile.card_analysis.triggered_abilities)
-        + " " + " ".join(profile.card_analysis.activated_abilities)
-        + " " + " ".join(profile.card_analysis.static_abilities)
-        + " " + oracle_text
+        + " "
+        + " ".join(profile.card_analysis.activated_abilities)
+        + " "
+        + " ".join(profile.card_analysis.static_abilities)
+        + " "
+        + oracle_text
     ).lower()
 
     if "draw" in commander_text and "card" in commander_text:
@@ -205,13 +208,13 @@ def role_need_multiplier(current_count: int, target_count: int) -> float:
 
     ratio = current_count / target_count
     if ratio < 0.5:
-        return 1.8   # Critically underserved
+        return 1.8  # Critically underserved
     if ratio < 0.75:
-        return 1.4   # Underserved
+        return 1.4  # Underserved
     if ratio < 1.0:
         return 1.15  # Almost there
     if ratio < 1.25:
         return 0.85  # Slightly over
     if ratio < 1.5:
-        return 0.6   # Redundant
-    return 0.3        # Heavily over-committed
+        return 0.6  # Redundant
+    return 0.3  # Heavily over-committed

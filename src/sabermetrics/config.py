@@ -3,11 +3,19 @@
 Loads settings from config/settings.yaml and exposes typed access.
 """
 
+import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
+
+
+def resolve_db_path(path: Path | str | None = None) -> Path:
+    """Resolve the shared SQLite path from an override or the environment."""
+    if path is not None:
+        return Path(path)
+    return Path(os.environ.get("SABER_DB_PATH", "data/sabermetrics.db"))
 
 
 class UserSettings(BaseModel):
@@ -244,8 +252,6 @@ def load_env_file(path: Path | None = None, *, override: bool = False) -> int:
         loader that silently half-understands a richer syntax is worse than one
         with a stated limit.
     """
-    import os
-
     # Set by the test suite. Several tests invoke the CLI, and on a deployed
     # machine `.env` holds that deployment's real configuration — loading it
     # would silently change what those tests exercise.

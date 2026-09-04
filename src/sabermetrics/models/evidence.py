@@ -1,7 +1,5 @@
 """Evidence package models for profile generation."""
 
-from typing import List, Optional
-
 from pydantic import BaseModel
 
 from .card import Card, CardRuling
@@ -14,7 +12,7 @@ class RedditThread(BaseModel):
     url: str
     upvotes: int
     created_utc: int
-    summary: Optional[str] = None
+    summary: str | None = None
 
 
 class PrimerArticle(BaseModel):
@@ -23,7 +21,7 @@ class PrimerArticle(BaseModel):
     title: str
     url: str
     source: str
-    summary: Optional[str] = None
+    summary: str | None = None
 
 
 class ReferenceChunk(BaseModel):
@@ -31,7 +29,7 @@ class ReferenceChunk(BaseModel):
 
     id: str
     document: str
-    section: Optional[str]
+    section: str | None
     tier: int
     content: str
 
@@ -40,12 +38,12 @@ class EvidencePackage(BaseModel):
     """Composed by EvidenceAggregator for profile generation."""
 
     commander: Card
-    rulings: List[CardRuling]
-    edhrec_data: Optional[dict] = None
-    tournament_data: Optional[dict] = None
-    reddit_threads: List[RedditThread]
-    primer_articles: List[PrimerArticle]
-    reference_chunks: List[ReferenceChunk]
-    user_intent: Optional[str] = None
-    referenced_keywords: List[str] = []
-    referenced_mechanics: List[str] = []
+    rulings: list[CardRuling]
+    edhrec_data: dict | None = None
+    tournament_data: dict | None = None
+    reddit_threads: list[RedditThread]
+    primer_articles: list[PrimerArticle]
+    reference_chunks: list[ReferenceChunk]
+    user_intent: str | None = None
+    referenced_keywords: list[str] = []
+    referenced_mechanics: list[str] = []

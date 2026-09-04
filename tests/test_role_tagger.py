@@ -8,20 +8,22 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-
 from sabermetrics.analytics.role_tagger import (
     tag_all_cards,
     tag_card_roles,
 )
 from sabermetrics.models.tags import RoleTagResult, TaggingStats
 
-
 # --- Known-card assertions ---
 
 
 def test_sol_ring_is_ramp() -> None:
     """Sol Ring should be tagged as ramp."""
-    card = {"name": "Sol Ring", "type_line": "Artifact", "oracle_text": "{T}: Add {C}{C}."}
+    card = {
+        "name": "Sol Ring",
+        "type_line": "Artifact",
+        "oracle_text": "{T}: Add {C}{C}.",
+    }
     result = tag_card_roles(card)
     assert "ramp" in result.role_tags
 
@@ -188,7 +190,7 @@ def test_animate_dead_is_recursion() -> None:
     card = {
         "name": "Animate Dead",
         "type_line": "Enchantment — Aura",
-        "oracle_text": "Enchant creature card in a graveyard\nWhen Animate Dead enters the battlefield, if it's on the battlefield, it loses \"enchant creature card in a graveyard\" and gains \"enchant creature put onto the battlefield with Animate Dead.\" Return enchanted creature card to the battlefield under your control.",
+        "oracle_text": 'Enchant creature card in a graveyard\nWhen Animate Dead enters the battlefield, if it\'s on the battlefield, it loses "enchant creature card in a graveyard" and gains "enchant creature put onto the battlefield with Animate Dead." Return enchanted creature card to the battlefield under your control.',
     }
     result = tag_card_roles(card)
     assert "recursion" in result.role_tags
@@ -317,8 +319,23 @@ def test_tag_all_cards_creates_columns() -> None:
     )
     conn.execute(
         "INSERT INTO cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("sol-ring", "Sol Ring", "{T}: Add {C}{C}.", "Artifact",
-         "or-1", "{1}", 1.0, '[]', '[]', 0, 1, "TST", "uncommon", None, None),
+        (
+            "sol-ring",
+            "Sol Ring",
+            "{T}: Add {C}{C}.",
+            "Artifact",
+            "or-1",
+            "{1}",
+            1.0,
+            "[]",
+            "[]",
+            0,
+            1,
+            "TST",
+            "uncommon",
+            None,
+            None,
+        ),
     )
     conn.commit()
     conn.close()
@@ -329,7 +346,9 @@ def test_tag_all_cards_creates_columns() -> None:
 
     # Verify column data
     conn = sqlite3.connect(str(db_path))
-    cursor = conn.execute("SELECT role_tags, functional_categories FROM cards WHERE id = 'sol-ring'")
+    cursor = conn.execute(
+        "SELECT role_tags, functional_categories FROM cards WHERE id = 'sol-ring'"
+    )
     row = cursor.fetchone()
     conn.close()
 
@@ -359,9 +378,27 @@ def test_tag_all_cards_skips_already_tagged() -> None:
     )
     conn.execute(
         "INSERT INTO cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("sol-ring", "Sol Ring", "{T}: Add {C}{C}.", "Artifact",
-         "or-1", "{1}", 1.0, '[]', '[]', 0, 1, "TST", "uncommon", None, None,
-         '["ramp"]', '[]', "2024-01-01", "1.0.0"),
+        (
+            "sol-ring",
+            "Sol Ring",
+            "{T}: Add {C}{C}.",
+            "Artifact",
+            "or-1",
+            "{1}",
+            1.0,
+            "[]",
+            "[]",
+            0,
+            1,
+            "TST",
+            "uncommon",
+            None,
+            None,
+            '["ramp"]',
+            "[]",
+            "2024-01-01",
+            "1.0.0",
+        ),
     )
     conn.commit()
     conn.close()

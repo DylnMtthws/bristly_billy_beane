@@ -17,8 +17,8 @@ from sabermetrics.analytics.empirical_valuation import (
     empirical_bonus,
 )
 from sabermetrics.config import settings
-from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,9 @@ def _flexibility_score(oracle: str) -> float:
     if types_hit == 1:
         return 1.0
     # "Destroy target" without specific type — treat as flexible
-    if "target" in oracle_lower and ("destroy" in oracle_lower or "exile" in oracle_lower):
+    if "target" in oracle_lower and (
+        "destroy" in oracle_lower or "exile" in oracle_lower
+    ):
         return 2.0
     return 1.0
 
@@ -215,7 +217,11 @@ def _load_removal_auto_includes() -> tuple[dict, set[str]]:
     Returns:
         Tuple of (auto_includes_dict, protected_names_set).
     """
-    config_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "auto_include_cards.yaml"
+    config_path = (
+        Path(__file__).resolve().parent.parent.parent.parent.parent
+        / "config"
+        / "auto_include_cards.yaml"
+    )
     if not config_path.exists():
         return {}, set()
     with open(config_path) as f:
@@ -359,7 +365,10 @@ class RemovalPackageGenerator:
         for color, section in color_sections:
             if color in color_identity:
                 for entry in auto_includes.get(section, []):
-                    if entry.get("role") == "removal" and entry["name"] not in seen_names:
+                    if (
+                        entry.get("role") == "removal"
+                        and entry["name"] not in seen_names
+                    ):
                         is_protected = entry.get("protect_from_swap", False)
                         priority = 0 if is_protected else len(single_entries) + 1
                         single_entries.append((entry["name"], priority))
@@ -373,7 +382,10 @@ class RemovalPackageGenerator:
         for color, section in wipe_sections:
             if color in color_identity:
                 for entry in auto_includes.get(section, []):
-                    if entry.get("role") == "removal" and entry["name"] not in seen_names:
+                    if (
+                        entry.get("role") == "removal"
+                        and entry["name"] not in seen_names
+                    ):
                         is_protected = entry.get("protect_from_swap", False)
                         priority = 0 if is_protected else len(wipe_entries) + 1
                         wipe_entries.append((entry["name"], priority))
@@ -390,8 +402,10 @@ class RemovalPackageGenerator:
         if len(single_entries) > target_count or len(wipe_entries) > board_wipe_target:
             logger.info(
                 "Capping removal auto-includes: single %d→%d, wipes %d→%d",
-                len(single_entries), len(single_names),
-                len(wipe_entries), len(wipe_names),
+                len(single_entries),
+                len(single_names),
+                len(wipe_entries),
+                len(wipe_names),
             )
         auto_removal_set = set(single_names) | set(wipe_names)
         auto_wipe_set = set(wipe_names)
@@ -413,7 +427,8 @@ class RemovalPackageGenerator:
         # Lands are the land package's domain; placing one here inflates the
         # deck's land total past the template target.
         pool = [
-            c for c in pool
+            c
+            for c in pool
             if not is_playable_as_land(c.get("type_line") or "")
             and not c.get("_anti_engine")
         ]
@@ -430,16 +445,22 @@ class RemovalPackageGenerator:
                 # with no price snapshot -- it then costs $0 in build-time
                 # budget sums and renders at the $0.05 floor in the UI. The
                 # pool's printing (cheapest priced) is canonical.
-                for k in ("_anti_engine", "_cvar_score",
-                          "_empirical_inclusion", "_empirical_reliable",
-                          "id", "oracle_id", "set_code", "price_usd"):
+                for k in (
+                    "_anti_engine",
+                    "_cvar_score",
+                    "_empirical_inclusion",
+                    "_empirical_reliable",
+                    "id",
+                    "oracle_id",
+                    "set_code",
+                    "price_usd",
+                ):
                     if k in src:
                         c[k] = src[k]
                 if c.get("_anti_engine"):
                     continue
                 gated.append(c)
             pool = gated
-
 
         # Place auto-includes from pool (or role_tag_pool as backup)
         search_pools = [pool] if use_candidates_table else [role_tag_pool]
@@ -449,16 +470,24 @@ class RemovalPackageGenerator:
         for search_pool in search_pools:
             for card in search_pool:
                 name = card.get("name", "")
-                if name in auto_removal_set and name not in used_names \
-                        and not card.get("_anti_engine"):
+                if (
+                    name in auto_removal_set
+                    and name not in used_names
+                    and not card.get("_anti_engine")
+                ):
                     price = float(card.get("price_usd", 0) or 0)
-                    if budget_remaining <= 0 or running_price + price <= budget_remaining:
-                        assignments.append(SlotAssignment(
-                            card=card,
-                            slot_role="removal",
-                            score=0.95,
-                            alternatives=[],
-                        ))
+                    if (
+                        budget_remaining <= 0
+                        or running_price + price <= budget_remaining
+                    ):
+                        assignments.append(
+                            SlotAssignment(
+                                card=card,
+                                slot_role="removal",
+                                score=0.95,
+                                alternatives=[],
+                            )
+                        )
                         used_names.add(name)
                         running_price += price
                         auto_removal_set.discard(name)
@@ -518,13 +547,13 @@ class RemovalPackageGenerator:
                 score += 0.01
 
             if is_board_wipe:
-                low_creature_deck = (
-                    (template.type_targets or {}).get("creature", 99) < 25
-                )
+                low_creature_deck = (template.type_targets or {}).get(
+                    "creature", 99
+                ) < 25
                 if _CONDITIONAL_WIPE.search(card.get("oracle_text") or ""):
-                    score += 0.20   # asymmetric: spares our small board
+                    score += 0.20  # asymmetric: spares our small board
                 elif low_creature_deck:
-                    score -= 0.25   # uniform wipe hurts us more than them
+                    score -= 0.25  # uniform wipe hurts us more than them
                 board_wipe_candidates.append((card, score))
             else:
                 single_removal_candidates.append((card, score))
@@ -554,19 +583,26 @@ class RemovalPackageGenerator:
             if budget_remaining > 0 and running_price + price > budget_remaining:
                 continue
 
-            assignments.append(SlotAssignment(
-                card=card,
-                slot_role="removal",
-                score=round(score, 4),
-                alternatives=[],
-            ))
+            assignments.append(
+                SlotAssignment(
+                    card=card,
+                    slot_role="removal",
+                    score=round(score, 4),
+                    alternatives=[],
+                )
+            )
             used_names.add(name)
             running_price += price
             wipes_placed += 1
 
         # Fill single-target removal
-        target_types = {"creature": 0, "artifact": 0, "enchantment": 0,
-                        "planeswalker": 0, "any": 0}
+        target_types = {
+            "creature": 0,
+            "artifact": 0,
+            "enchantment": 0,
+            "planeswalker": 0,
+            "any": 0,
+        }
 
         for card, score in single_removal_candidates:
             if len(assignments) >= combined_target:
@@ -589,19 +625,24 @@ class RemovalPackageGenerator:
             if target != "any" and target_types.get(target, 0) >= cap:
                 continue
 
-            assignments.append(SlotAssignment(
-                card=card,
-                slot_role="removal",
-                score=round(score, 4),
-                alternatives=[],
-            ))
+            assignments.append(
+                SlotAssignment(
+                    card=card,
+                    slot_role="removal",
+                    score=round(score, 4),
+                    alternatives=[],
+                )
+            )
             used_names.add(name)
             running_price += price
             target_types[target] = target_types.get(target, 0) + 1
 
         logger.info(
             "Removal generator: %d cards (target %d removal + %d wipes), targets: %s, protected: %s",
-            len(assignments), target_count, board_wipe_target, target_types,
+            len(assignments),
+            target_count,
+            board_wipe_target,
+            target_types,
             self.protected_names,
         )
         return assignments

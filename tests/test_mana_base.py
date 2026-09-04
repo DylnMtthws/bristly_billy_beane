@@ -1,13 +1,11 @@
 """Tests for mana base land parsing and scoring."""
 
-
 from sabermetrics.pipeline.mana_base import (
     LandInfo,
     _score_land,
     build_mana_base,
     parse_land_colors,
 )
-
 
 # --- Restricted mana detection ---
 
@@ -177,7 +175,12 @@ def test_min_basics_3_color():
         commander_colors=["W", "U", "G"],
         total_lands=36,
     )
-    basics = [a for a in result if a.card.get("rarity") == "common" and "Basic" in (a.card.get("type_line") or "")]
+    basics = [
+        a
+        for a in result
+        if a.card.get("rarity") == "common"
+        and "Basic" in (a.card.get("type_line") or "")
+    ]
     assert len(basics) >= 10
 
 
@@ -189,7 +192,12 @@ def test_min_basics_5_color():
         commander_colors=["W", "U", "B", "R", "G"],
         total_lands=36,
     )
-    basics = [a for a in result if a.card.get("rarity") == "common" and "Basic" in (a.card.get("type_line") or "")]
+    basics = [
+        a
+        for a in result
+        if a.card.get("rarity") == "common"
+        and "Basic" in (a.card.get("type_line") or "")
+    ]
     assert len(basics) >= 5
 
 
@@ -201,7 +209,12 @@ def test_min_basics_1_color():
         commander_colors=["R"],
         total_lands=36,
     )
-    basics = [a for a in result if a.card.get("rarity") == "common" and "Basic" in (a.card.get("type_line") or "")]
+    basics = [
+        a
+        for a in result
+        if a.card.get("rarity") == "common"
+        and "Basic" in (a.card.get("type_line") or "")
+    ]
     assert len(basics) >= 10
 
 
@@ -214,7 +227,9 @@ def test_checkland_gets_bonus():
     deficit = {"W": 10.0, "U": 10.0}
 
     checkland = LandInfo(
-        card={"oracle_text": "Glacial Fortress enters tapped unless you control a Plains or an Island.\n{T}: Add {W} or {U}."},
+        card={
+            "oracle_text": "Glacial Fortress enters tapped unless you control a Plains or an Island.\n{T}: Add {W} or {U}."
+        },
         colors_produced=["U", "W"],
         is_conditional_tapped=True,
         check_basic_types=["Plains", "Island"],
@@ -249,10 +264,14 @@ def test_corpus_staple_land_outranks_equal_trap_land():
     """
     colors = ["W", "B"]
     deficit = {"W": 8.0, "B": 8.0}
-    staple = _land("{T}: Add {W} or {B}. This land deals 1 damage to you.",
-                   _empirical_inclusion=0.75)
-    trap = _land("{T}: Add one mana of any color. This land deals 3 damage to you.",
-                 _empirical_inclusion=0.0)
+    staple = _land(
+        "{T}: Add {W} or {B}. This land deals 1 damage to you.",
+        _empirical_inclusion=0.75,
+    )
+    trap = _land(
+        "{T}: Add one mana of any color. This land deals 3 damage to you.",
+        _empirical_inclusion=0.0,
+    )
     assert _score_land(staple, deficit, colors) > _score_land(trap, deficit, colors)
 
 
@@ -270,7 +289,9 @@ def test_drawback_penalties_rank_below_clean_duals():
         "opponent-choice": "When it enters, an opponent chooses a color.",
     }
     for label, oracle in drawbacks.items():
-        trapped = _score_land(_land(f"{{T}}: Add {{W}} or {{B}}. {oracle}"), deficit, colors)
+        trapped = _score_land(
+            _land(f"{{T}}: Add {{W}} or {{B}}. {oracle}"), deficit, colors
+        )
         assert trapped < clean, f"{label} drawback not penalized"
 
 
@@ -279,7 +300,9 @@ def test_empirical_bonus_neutral_without_corpus():
     colors = ["W", "B"]
     deficit = {"W": 8.0, "B": 8.0}
     a = _score_land(_land("{T}: Add {W} or {B}."), deficit, colors)
-    b = _score_land(_land("{T}: Add {W} or {B}.", _empirical_inclusion=0.0), deficit, colors)
+    b = _score_land(
+        _land("{T}: Add {W} or {B}.", _empirical_inclusion=0.0), deficit, colors
+    )
     assert a == b
 
 
@@ -291,21 +314,39 @@ def test_single_land_cannot_eat_the_allotment():
     """
     lands = []
     for i in range(15):
-        lands.append((
-            {"id": f"d{i}", "name": f"Dual {i}", "type_line": "Land",
-             "oracle_text": "{T}: Add {W} or {B}.", "price_usd": 1.0},
+        lands.append(
+            (
+                {
+                    "id": f"d{i}",
+                    "name": f"Dual {i}",
+                    "type_line": "Land",
+                    "oracle_text": "{T}: Add {W} or {B}.",
+                    "price_usd": 1.0,
+                },
+                {"cvar_score": 0.5},
+            )
+        )
+    lands.append(
+        (
+            {
+                "id": "bomb",
+                "name": "Budget Bomb",
+                "type_line": "Land",
+                "oracle_text": "{T}: Add one mana of any color.",
+                "price_usd": 45.0,
+            },
             {"cvar_score": 0.5},
-        ))
-    lands.append((
-        {"id": "bomb", "name": "Budget Bomb", "type_line": "Land",
-         "oracle_text": "{T}: Add one mana of any color.", "price_usd": 45.0},
-        {"cvar_score": 0.5},
-    ))
+        )
+    )
     spells = [{"mana_cost": "{1}{W}{B}", "cmc": 3, "type_line": "Creature"}] * 20
 
     result = build_mana_base(
-        land_candidates=lands, spells=spells, commander_colors=["W", "B"],
-        total_lands=30, max_budget=50.0, running_price=0.0,
+        land_candidates=lands,
+        spells=spells,
+        commander_colors=["W", "B"],
+        total_lands=30,
+        max_budget=50.0,
+        running_price=0.0,
     )
     names = [a.card["name"] for a in result]
     assert "Budget Bomb" not in names

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from sabermetrics.models.template import DeckTemplate
-from sabermetrics.pipeline.deck_builder import DeckBuildRequest, DeckBuilder
+from sabermetrics.pipeline.deck_builder import DeckBuilder, DeckBuildRequest
 from sabermetrics.pipeline.trace import GenerationTracer
 
 
@@ -27,8 +27,12 @@ def _card(name, inclusion, reliable=True, type_line="Creature", price=1.0):
 
 def _template(differentiator_slots=37):
     return DeckTemplate(
-        land_count=36, ramp_count=10, draw_count=8, removal_count=6,
-        board_wipe_count=2, differentiator_slots=differentiator_slots,
+        land_count=36,
+        ramp_count=10,
+        draw_count=8,
+        removal_count=6,
+        board_wipe_count=2,
+        differentiator_slots=differentiator_slots,
         avg_cmc_target=3.0,
     )
 
@@ -126,11 +130,13 @@ def test_generator_placed_cards_are_excluded(builder):
     engine payoff the generator rejected instead.
     """
     cards = [
-        _card("Birds of Paradise", 0.70),   # placed by ramp generator
+        _card("Birds of Paradise", 0.70),  # placed by ramp generator
         _card("Pitiless Plunderer", 0.65),  # rejected as ramp, needs reserving
     ]
     out = builder._reserve_empirical_staples(
-        cards, _request(), _template(),
+        cards,
+        _request(),
+        _template(),
         exclude_names={"Birds of Paradise"},
     )
     assert [a.card["name"] for a in out] == ["Pitiless Plunderer"]

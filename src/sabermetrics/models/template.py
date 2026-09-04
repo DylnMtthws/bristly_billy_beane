@@ -67,8 +67,10 @@ class DeckTemplate(BaseModel):
         # Protection slots carved from differentiator pool
         protection_count = min(4, max(2, self.differentiator_slots // 10))
         infra = (
-            self.ramp_count + self.draw_count
-            + self.removal_count + self.board_wipe_count
+            self.ramp_count
+            + self.draw_count
+            + self.removal_count
+            + self.board_wipe_count
             + protection_count
         )
         diff_remaining = self.differentiator_slots - protection_count

@@ -30,11 +30,25 @@ def test_sync_result_model() -> None:
 
 def test_edhrec_name_to_slug() -> None:
     """EDHREC slug generation works for various name formats."""
-    assert EDHRECIngestion._name_to_slug("Korvold, Fae-Cursed King") == "korvold-fae-cursed-king"
-    assert EDHRECIngestion._name_to_slug("Atraxa, Praetors' Voice") == "atraxa-praetors-voice"
-    assert EDHRECIngestion._name_to_slug("Thalia, Guardian of Thraben") == "thalia-guardian-of-thraben"
+    assert (
+        EDHRECIngestion._name_to_slug("Korvold, Fae-Cursed King")
+        == "korvold-fae-cursed-king"
+    )
+    assert (
+        EDHRECIngestion._name_to_slug("Atraxa, Praetors' Voice")
+        == "atraxa-praetors-voice"
+    )
+    assert (
+        EDHRECIngestion._name_to_slug("Thalia, Guardian of Thraben")
+        == "thalia-guardian-of-thraben"
+    )
     # DFC: only front face
-    assert EDHRECIngestion._name_to_slug("Fable of the Mirror-Breaker // Reflection of Kiki-Jiki") == "fable-of-the-mirror-breaker"
+    assert (
+        EDHRECIngestion._name_to_slug(
+            "Fable of the Mirror-Breaker // Reflection of Kiki-Jiki"
+        )
+        == "fable-of-the-mirror-breaker"
+    )
 
 
 def test_reddit_search_init() -> None:
@@ -117,11 +131,9 @@ def test_filter_stale_commanders(tmp_path: Path) -> None:
         "INSERT INTO cards (id, name, is_legal_commander) VALUES ('b', 'Beta', 1)"
     )
     # Alpha has recent data, Beta does not
-    conn.execute(
-        """INSERT INTO edhrec_commander_data
+    conn.execute("""INSERT INTO edhrec_commander_data
         (commander_id, themes, deck_count, top_cards, last_updated)
-        VALUES ('a', '[]', 100, '[]', CURRENT_TIMESTAMP)"""
-    )
+        VALUES ('a', '[]', 100, '[]', CURRENT_TIMESTAMP)""")
     conn.commit()
     conn.close()
 
@@ -140,11 +152,9 @@ def test_filter_stale_commanders_old_data(tmp_path: Path) -> None:
         "INSERT INTO cards (id, name, is_legal_commander) VALUES ('a', 'Alpha', 1)"
     )
     # Data is 10 days old
-    conn.execute(
-        """INSERT INTO edhrec_commander_data
+    conn.execute("""INSERT INTO edhrec_commander_data
         (commander_id, themes, deck_count, top_cards, last_updated)
-        VALUES ('a', '[]', 100, '[]', datetime('now', '-10 days'))"""
-    )
+        VALUES ('a', '[]', 100, '[]', datetime('now', '-10 days'))""")
     conn.commit()
     conn.close()
 
@@ -314,17 +324,32 @@ def test_parse_deck_detail_excludes_maybeboard() -> None:
             {"name": "Consider Adding", "includedInDeck": False},
         ],
         "cards": [
-            {"quantity": 1, "categories": ["Commander"],
-             "card": {"oracleCard": {"name": "Korvold, Fae-Cursed King"}}},
-            {"quantity": 1, "categories": ["Ramp"],
-             "card": {"oracleCard": {"name": "Sol Ring"}}},
-            {"quantity": 1, "categories": ["Maybeboard"],
-             "card": {"oracleCard": {"name": "Dockside Extortionist"}}},
-            {"quantity": 1, "categories": ["Consider Adding", "Maybeboard"],
-             "card": {"oracleCard": {"name": "Mana Crypt"}}},
+            {
+                "quantity": 1,
+                "categories": ["Commander"],
+                "card": {"oracleCard": {"name": "Korvold, Fae-Cursed King"}},
+            },
+            {
+                "quantity": 1,
+                "categories": ["Ramp"],
+                "card": {"oracleCard": {"name": "Sol Ring"}},
+            },
+            {
+                "quantity": 1,
+                "categories": ["Maybeboard"],
+                "card": {"oracleCard": {"name": "Dockside Extortionist"}},
+            },
+            {
+                "quantity": 1,
+                "categories": ["Consider Adding", "Maybeboard"],
+                "card": {"oracleCard": {"name": "Mana Crypt"}},
+            },
             # In both an excluded and an included category -> kept.
-            {"quantity": 1, "categories": ["Maybeboard", "Ramp"],
-             "card": {"oracleCard": {"name": "Arcane Signet"}}},
+            {
+                "quantity": 1,
+                "categories": ["Maybeboard", "Ramp"],
+                "card": {"oracleCard": {"name": "Arcane Signet"}},
+            },
         ],
     }
     commanders, cards = parse_deck_detail(data)
@@ -332,4 +357,4 @@ def test_parse_deck_detail_excludes_maybeboard() -> None:
     assert commanders == ["Korvold, Fae-Cursed King"]
     assert "Sol Ring" in names and "Arcane Signet" in names
     assert "Dockside Extortionist" not in names  # maybeboard only
-    assert "Mana Crypt" not in names             # excluded categories only
+    assert "Mana Crypt" not in names  # excluded categories only

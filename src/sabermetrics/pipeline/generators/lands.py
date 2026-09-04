@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 
 def _load_auto_includes() -> dict:
     """Load auto-include cards from config."""
-    config_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "auto_include_cards.yaml"
+    config_path = (
+        Path(__file__).resolve().parent.parent.parent.parent.parent
+        / "config"
+        / "auto_include_cards.yaml"
+    )
     if not config_path.exists():
         return {}
     with open(config_path) as f:
@@ -59,14 +63,15 @@ class LandPackageGenerator:
         # land-typed card (a "ramp" Krosan Verge once caused a +2 overshoot),
         # this package fills that many fewer.
         lands_already = sum(
-            1 for c in already_placed
-            if is_playable_as_land(c.get("type_line") or "")
+            1 for c in already_placed if is_playable_as_land(c.get("type_line") or "")
         )
         if lands_already:
             logger.info(
                 "Land generator: %d land-typed cards already placed, "
                 "reducing target %d -> %d",
-                lands_already, target_count, target_count - lands_already,
+                lands_already,
+                target_count,
+                target_count - lands_already,
             )
             target_count = max(0, target_count - lands_already)
 
@@ -103,12 +108,14 @@ class LandPackageGenerator:
             if name in used_names:
                 continue
             if name in auto_land_names:
-                auto_assignments.append(SlotAssignment(
-                    card=card,
-                    slot_role="land",
-                    score=0.9,
-                    alternatives=[],
-                ))
+                auto_assignments.append(
+                    SlotAssignment(
+                        card=card,
+                        slot_role="land",
+                        score=0.9,
+                        alternatives=[],
+                    )
+                )
                 used_names.add(name)
                 auto_land_names.discard(name)
             else:
@@ -122,12 +129,10 @@ class LandPackageGenerator:
         spells = already_placed
         remaining_land_target = target_count - len(auto_assignments)
 
-        if remaining_land_target > 0 and (remaining_pool or True):
+        if remaining_land_target > 0 and (True):
             running_price = sum(
                 float(c.get("price_usd", 0) or 0) for c in already_placed
-            ) + sum(
-                float(a.card.get("price_usd", 0) or 0) for a in auto_assignments
-            )
+            ) + sum(float(a.card.get("price_usd", 0) or 0) for a in auto_assignments)
 
             # build_mana_base's max_budget is a WHOLE-DECK budget it compares
             # against running_price + land spend; budget_remaining here is the

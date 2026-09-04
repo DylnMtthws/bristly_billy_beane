@@ -10,7 +10,6 @@ import os
 import tempfile
 from pathlib import Path
 
-
 from sabermetrics.utils.logging import JSONFormatter, setup_job_logging
 
 DB_PATH = Path("data/sabermetrics.db")
@@ -47,6 +46,7 @@ def test_json_formatter_with_exception() -> None:
         raise ValueError("test error")
     except ValueError:
         import sys
+
         exc_info = sys.exc_info()
 
     record = logging.LogRecord(
@@ -68,9 +68,7 @@ def test_setup_job_logging() -> None:
     """setup_job_logging creates log file and returns logger."""
     with tempfile.TemporaryDirectory() as tmpdir:
         log_dir = Path(tmpdir)
-        logger = setup_job_logging(
-            "test_job", log_dir=log_dir, also_stdout=False
-        )
+        logger = setup_job_logging("test_job", log_dir=log_dir, also_stdout=False)
         logger.info("Test log entry")
 
         log_file = log_dir / "test_job.log"
@@ -96,10 +94,7 @@ def test_log_rotation_config() -> None:
         setup_job_logging("rotation_test", log_dir=log_dir, also_stdout=False)
 
         root = logging.getLogger()
-        file_handlers = [
-            h for h in root.handlers
-            if hasattr(h, "maxBytes")
-        ]
+        file_handlers = [h for h in root.handlers if hasattr(h, "maxBytes")]
         assert len(file_handlers) == 1
         assert file_handlers[0].maxBytes == 10 * 1024 * 1024  # 10MB
         assert file_handlers[0].backupCount == 5
@@ -136,6 +131,7 @@ def test_quarterly_script_exists() -> None:
 def test_nightly_script_importable() -> None:
     """Nightly script can be imported without error."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
         "nightly_refresh",
         PROJECT_ROOT / "scripts" / "nightly_refresh.py",
@@ -148,6 +144,7 @@ def test_nightly_script_importable() -> None:
 def test_weekly_script_importable() -> None:
     """Weekly script can be imported without error."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
         "weekly_refresh",
         PROJECT_ROOT / "scripts" / "weekly_refresh.py",
@@ -160,6 +157,7 @@ def test_weekly_script_importable() -> None:
 def test_monthly_script_importable() -> None:
     """Monthly script can be imported without error."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
         "monthly_rulings_refresh",
         PROJECT_ROOT / "scripts" / "monthly_rulings_refresh.py",
@@ -172,6 +170,7 @@ def test_monthly_script_importable() -> None:
 def test_quarterly_script_importable() -> None:
     """Quarterly script can be imported without error."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
         "quarterly_set_refresh",
         PROJECT_ROOT / "scripts" / "quarterly_set_refresh.py",
@@ -248,8 +247,9 @@ def test_installer_script_content() -> None:
 
 def test_refresh_set_command_registered() -> None:
     """refresh-set command is registered in CLI."""
-    from sabermetrics.main import cli
     from click.testing import CliRunner
+
+    from sabermetrics.main import cli
 
     runner = CliRunner()
     result = runner.invoke(cli, ["refresh-set", "--help"])

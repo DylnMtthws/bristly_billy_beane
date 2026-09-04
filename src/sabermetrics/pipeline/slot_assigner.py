@@ -15,7 +15,9 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-SlotRole = Literal["ramp", "draw", "removal", "protection", "wincon", "utility", "land", "other"]
+SlotRole = Literal[
+    "ramp", "draw", "removal", "protection", "wincon", "utility", "land", "other"
+]
 
 # Basic land names mapped to their color identity
 BASIC_LANDS: dict[str, str] = {
@@ -102,7 +104,15 @@ def _classify_card_role(card: dict, llm_role: str | None = None) -> SlotRole:
     Uses LLM-assigned role if available, otherwise heuristic detection.
     """
     # Trust LLM classification if provided
-    if llm_role and llm_role in ("ramp", "draw", "removal", "wincon", "utility", "land", "other"):
+    if llm_role and llm_role in (
+        "ramp",
+        "draw",
+        "removal",
+        "wincon",
+        "utility",
+        "land",
+        "other",
+    ):
         return llm_role
 
     type_line = (card.get("type_line") or "").lower()
@@ -115,12 +125,15 @@ def _classify_card_role(card: dict, llm_role: str | None = None) -> SlotRole:
     # Ramp detection — strip reminder text to avoid Treasure reminder false positives
     oracle_stripped = re.sub(r"\([^)]*\)", "", oracle_text)
     ramp_indicators = [
-        "add" in oracle_stripped and (
+        "add" in oracle_stripped
+        and (
             "mana" in oracle_stripped
             or bool(re.search(r"\{[WUBRGC]\}", oracle_stripped))
         ),
         "search your library for a" in oracle_stripped and "land" in oracle_stripped,
-        "put" in oracle_stripped and "land" in oracle_stripped and "battlefield" in oracle_stripped,
+        "put" in oracle_stripped
+        and "land" in oracle_stripped
+        and "battlefield" in oracle_stripped,
     ]
     if any(ramp_indicators):
         return "ramp"
@@ -240,7 +253,9 @@ def fill_slots(
     for card, scoring in scored_candidates:
         role = scoring.get("slot_role", "other")
         type_line = (card.get("type_line") or "").lower()
-        is_land = role == "land" or ("land" in type_line and "creature" not in type_line)
+        is_land = role == "land" or (
+            "land" in type_line and "creature" not in type_line
+        )
         if is_land:
             land_scored.append((card, scoring))
         else:
@@ -301,12 +316,14 @@ def fill_slots(
                 if alt_name != name and alt_name not in used_names:
                     alts.append(alt_id)
 
-            assignments.append(SlotAssignment(
-                card=card,
-                slot_role=role,
-                score=round(score, 4),
-                alternatives=alts[:alternatives_per_slot],
-            ))
+            assignments.append(
+                SlotAssignment(
+                    card=card,
+                    slot_role=role,
+                    score=round(score, 4),
+                    alternatives=alts[:alternatives_per_slot],
+                )
+            )
             used_names.add(name)
             running_price += price
             filled += 1
@@ -337,12 +354,14 @@ def fill_slots(
             if max_budget and running_price + price > max_budget:
                 continue
 
-            assignments.append(SlotAssignment(
-                card=card,
-                slot_role="other",
-                score=round(score, 4),
-                alternatives=[],
-            ))
+            assignments.append(
+                SlotAssignment(
+                    card=card,
+                    slot_role="other",
+                    score=round(score, 4),
+                    alternatives=[],
+                )
+            )
             used_names.add(name)
             running_price += price
             actual_composition["other"] = actual_composition.get("other", 0) + 1
@@ -353,7 +372,8 @@ def fill_slots(
 
     # Filter out land candidates whose names are already used
     available_lands = [
-        (card, scoring) for card, scoring in land_scored
+        (card, scoring)
+        for card, scoring in land_scored
         if card.get("name", "") not in used_names
     ]
 
@@ -382,9 +402,7 @@ def fill_slots(
     for role, target in target_composition.items():
         actual = actual_composition.get(role, 0)
         if actual < target * 0.5 and role != "other":
-            warnings.append(
-                f"Low {role} count: {actual}/{target} target"
-            )
+            warnings.append(f"Low {role} count: {actual}/{target} target")
 
     return AssemblyResult(
         assignments=assignments,
@@ -393,5 +411,3 @@ def fill_slots(
         total_price=round(running_price, 2),
         warnings=warnings,
     )
-
-

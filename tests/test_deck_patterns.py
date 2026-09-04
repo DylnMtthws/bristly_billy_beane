@@ -18,7 +18,6 @@ from sabermetrics.analytics.deck_patterns import (
 from sabermetrics.config import KnowledgeBaseSettings, Settings, load_settings
 from sabermetrics.ingestion.game_knights import GameKnightsIngestion
 
-
 # --- ComponentStats tests ---
 
 
@@ -56,8 +55,7 @@ def test_compute_stats_multiple_values() -> None:
 def _create_test_db(db_path: Path) -> None:
     """Create a minimal test database with decks and cards."""
     conn = sqlite3.connect(str(db_path))
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE IF NOT EXISTS cards (
             id TEXT PRIMARY KEY,
             oracle_id TEXT NOT NULL,
@@ -111,41 +109,140 @@ def _create_test_db(db_path: Path) -> None:
             embedding BLOB,
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-    """
-    )
+    """)
 
     # Insert test cards
     cards = [
-        ("cmd1", "orc1", "Korvold, Fae-Cursed King", "{2}{B}{R}{G}", 5.0,
-         "Legendary Creature — Dragon Noble", "Flying. Whenever you sacrifice a permanent, draw a card.",
-         '["B","R","G"]', '["Flying"]', True, True),
-        ("land1", "orc2", "Forest", "", 0.0,
-         "Basic Land — Forest", "{T}: Add {G}.",
-         "[]", "[]", False, True),
-        ("land2", "orc3", "Swamp", "", 0.0,
-         "Basic Land — Swamp", "{T}: Add {B}.",
-         "[]", "[]", False, True),
-        ("land3", "orc4", "Mountain", "", 0.0,
-         "Basic Land — Mountain", "{T}: Add {R}.",
-         "[]", "[]", False, True),
-        ("ramp1", "orc5", "Sol Ring", "{1}", 1.0,
-         "Artifact", "{T}: Add {C}{C}.",
-         "[]", "[]", False, True),
-        ("draw1", "orc6", "Phyrexian Arena", "{1}{B}{B}", 3.0,
-         "Enchantment", "At the beginning of your upkeep, you draw a card and you lose 1 life.",
-         '["B"]', "[]", False, True),
-        ("removal1", "orc7", "Beast Within", "{2}{G}", 3.0,
-         "Instant", "Destroy target permanent. Its controller creates a 3/3 green Beast creature token.",
-         '["G"]', "[]", False, True),
-        ("wipe1", "orc8", "Damnation", "{2}{B}{B}", 4.0,
-         "Sorcery", "Destroy all creatures. They can't be regenerated.",
-         '["B"]', "[]", False, True),
-        ("tutor1", "orc9", "Demonic Tutor", "{1}{B}", 2.0,
-         "Sorcery", "Search your library for a card, put that card into your hand, then shuffle.",
-         '["B"]', "[]", False, True),
-        ("filler1", "orc10", "Grizzly Bears", "{1}{G}", 2.0,
-         "Creature — Bear", "Vanilla 2/2",
-         '["G"]', "[]", False, True),
+        (
+            "cmd1",
+            "orc1",
+            "Korvold, Fae-Cursed King",
+            "{2}{B}{R}{G}",
+            5.0,
+            "Legendary Creature — Dragon Noble",
+            "Flying. Whenever you sacrifice a permanent, draw a card.",
+            '["B","R","G"]',
+            '["Flying"]',
+            True,
+            True,
+        ),
+        (
+            "land1",
+            "orc2",
+            "Forest",
+            "",
+            0.0,
+            "Basic Land — Forest",
+            "{T}: Add {G}.",
+            "[]",
+            "[]",
+            False,
+            True,
+        ),
+        (
+            "land2",
+            "orc3",
+            "Swamp",
+            "",
+            0.0,
+            "Basic Land — Swamp",
+            "{T}: Add {B}.",
+            "[]",
+            "[]",
+            False,
+            True,
+        ),
+        (
+            "land3",
+            "orc4",
+            "Mountain",
+            "",
+            0.0,
+            "Basic Land — Mountain",
+            "{T}: Add {R}.",
+            "[]",
+            "[]",
+            False,
+            True,
+        ),
+        (
+            "ramp1",
+            "orc5",
+            "Sol Ring",
+            "{1}",
+            1.0,
+            "Artifact",
+            "{T}: Add {C}{C}.",
+            "[]",
+            "[]",
+            False,
+            True,
+        ),
+        (
+            "draw1",
+            "orc6",
+            "Phyrexian Arena",
+            "{1}{B}{B}",
+            3.0,
+            "Enchantment",
+            "At the beginning of your upkeep, you draw a card and you lose 1 life.",
+            '["B"]',
+            "[]",
+            False,
+            True,
+        ),
+        (
+            "removal1",
+            "orc7",
+            "Beast Within",
+            "{2}{G}",
+            3.0,
+            "Instant",
+            "Destroy target permanent. Its controller creates a 3/3 green Beast creature token.",
+            '["G"]',
+            "[]",
+            False,
+            True,
+        ),
+        (
+            "wipe1",
+            "orc8",
+            "Damnation",
+            "{2}{B}{B}",
+            4.0,
+            "Sorcery",
+            "Destroy all creatures. They can't be regenerated.",
+            '["B"]',
+            "[]",
+            False,
+            True,
+        ),
+        (
+            "tutor1",
+            "orc9",
+            "Demonic Tutor",
+            "{1}{B}",
+            2.0,
+            "Sorcery",
+            "Search your library for a card, put that card into your hand, then shuffle.",
+            '["B"]',
+            "[]",
+            False,
+            True,
+        ),
+        (
+            "filler1",
+            "orc10",
+            "Grizzly Bears",
+            "{1}{G}",
+            2.0,
+            "Creature — Bear",
+            "Vanilla 2/2",
+            '["G"]',
+            "[]",
+            False,
+            True,
+        ),
     ]
 
     for card in cards:
@@ -309,12 +406,22 @@ def test_builder_produces_markdown() -> None:
     """Builder produces a non-empty markdown string with expected sections."""
     patterns = DeckbuildingPatterns(
         deck_count=10,
-        land_counts=ComponentStats(mean=36.0, median=36.0, min=33.0, max=39.0, std_dev=1.5),
-        ramp_counts=ComponentStats(mean=11.0, median=11.0, min=8.0, max=14.0, std_dev=1.8),
-        draw_counts=ComponentStats(mean=10.0, median=10.0, min=7.0, max=13.0, std_dev=1.7),
-        removal_counts=ComponentStats(mean=9.0, median=9.0, min=6.0, max=12.0, std_dev=1.6),
+        land_counts=ComponentStats(
+            mean=36.0, median=36.0, min=33.0, max=39.0, std_dev=1.5
+        ),
+        ramp_counts=ComponentStats(
+            mean=11.0, median=11.0, min=8.0, max=14.0, std_dev=1.8
+        ),
+        draw_counts=ComponentStats(
+            mean=10.0, median=10.0, min=7.0, max=13.0, std_dev=1.7
+        ),
+        removal_counts=ComponentStats(
+            mean=9.0, median=9.0, min=6.0, max=12.0, std_dev=1.6
+        ),
         wipe_counts=ComponentStats(mean=3.0, median=3.0, min=2.0, max=5.0, std_dev=0.9),
-        tutor_counts=ComponentStats(mean=2.0, median=2.0, min=0.0, max=5.0, std_dev=1.2),
+        tutor_counts=ComponentStats(
+            mean=2.0, median=2.0, min=0.0, max=5.0, std_dev=1.2
+        ),
         avg_cmc=ComponentStats(mean=3.1, median=3.0, min=2.5, max=3.8, std_dev=0.4),
         mana_curve={0: 2.0, 1: 8.0, 2: 14.0, 3: 12.0, 4: 8.0, 5: 5.0, 6: 3.0, 7: 2.0},
         color_distribution={"W": 3, "U": 4, "B": 7, "R": 5, "G": 6},
@@ -344,8 +451,10 @@ def test_builder_with_edhrec_articles() -> None:
     """Builder incorporates EDHREC article text into sections."""
     patterns = DeckbuildingPatterns(deck_count=5)
     articles = [
-        "When building your mana base, the land count should be around 36-38 "
-        "for most Commander decks. Ramp is equally critical."
+        (
+            "When building your mana base, the land count should be around 36-38 "
+            "for most Commander decks. Ramp is equally critical."
+        )
     ]
 
     builder = KnowledgeBaseBuilder()
@@ -633,12 +742,20 @@ def test_archetype_profiles_empty_for_small_data() -> None:
 def test_builder_contains_card_type_section() -> None:
     """KB output includes Card Type Distribution section."""
     ctd = CardTypeDistribution(
-        creatures=ComponentStats(mean=25.0, median=25.0, min=18.0, max=32.0, std_dev=3.0),
+        creatures=ComponentStats(
+            mean=25.0, median=25.0, min=18.0, max=32.0, std_dev=3.0
+        ),
         instants=ComponentStats(mean=8.0, median=8.0, min=4.0, max=12.0, std_dev=2.0),
         sorceries=ComponentStats(mean=7.0, median=7.0, min=3.0, max=11.0, std_dev=2.0),
-        enchantments=ComponentStats(mean=6.0, median=6.0, min=2.0, max=10.0, std_dev=2.0),
-        artifacts=ComponentStats(mean=10.0, median=10.0, min=5.0, max=15.0, std_dev=2.5),
-        planeswalkers=ComponentStats(mean=1.0, median=1.0, min=0.0, max=3.0, std_dev=0.8),
+        enchantments=ComponentStats(
+            mean=6.0, median=6.0, min=2.0, max=10.0, std_dev=2.0
+        ),
+        artifacts=ComponentStats(
+            mean=10.0, median=10.0, min=5.0, max=15.0, std_dev=2.5
+        ),
+        planeswalkers=ComponentStats(
+            mean=1.0, median=1.0, min=0.0, max=3.0, std_dev=0.8
+        ),
     )
     patterns = DeckbuildingPatterns(deck_count=10, card_type_distribution=ctd)
     builder = KnowledgeBaseBuilder()

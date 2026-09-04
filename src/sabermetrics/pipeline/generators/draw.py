@@ -9,8 +9,8 @@ from pathlib import Path
 
 from sabermetrics.analytics.empirical_valuation import empirical_bonus
 from sabermetrics.config import settings
-from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
 logger = logging.getLogger(__name__)
@@ -68,10 +68,11 @@ class DrawPackageGenerator:
 
             # Prefer repeatable draw (permanents with draw triggers)
             is_repeatable = (
-                ("creature" in type_line or "enchantment" in type_line
-                 or "artifact" in type_line)
-                and ("whenever" in oracle or "at the beginning" in oracle
-                     or "each" in oracle)
+                "creature" in type_line
+                or "enchantment" in type_line
+                or "artifact" in type_line
+            ) and (
+                "whenever" in oracle or "at the beginning" in oracle or "each" in oracle
             )
             if is_repeatable:
                 cvar += 0.15
@@ -111,17 +112,20 @@ class DrawPackageGenerator:
             if budget_remaining > 0 and running_price + price > budget_remaining:
                 continue
 
-            assignments.append(SlotAssignment(
-                card=card,
-                slot_role="draw",
-                score=round(score, 4),
-                alternatives=[],
-            ))
+            assignments.append(
+                SlotAssignment(
+                    card=card,
+                    slot_role="draw",
+                    score=round(score, 4),
+                    alternatives=[],
+                )
+            )
             used_names.add(name)
             running_price += price
 
         logger.info(
             "Draw generator: %d draw cards (target %d)",
-            len(assignments), target_count,
+            len(assignments),
+            target_count,
         )
         return assignments

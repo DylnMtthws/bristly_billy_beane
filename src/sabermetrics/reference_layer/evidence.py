@@ -19,8 +19,8 @@ from sabermetrics.errors import CommanderNotFoundError
 from sabermetrics.models.card import Card, CardRuling
 from sabermetrics.models.evidence import (
     EvidencePackage,
-    ReferenceChunk,
     RedditThread,
+    ReferenceChunk,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,18 +100,12 @@ class EvidenceAggregator:
         finally:
             conn.close()
 
-    def _get_commander(
-        self, conn: sqlite3.Connection, commander_id: str
-    ) -> Card:
+    def _get_commander(self, conn: sqlite3.Connection, commander_id: str) -> Card:
         """Load commander card from database."""
-        cursor = conn.execute(
-            "SELECT * FROM cards WHERE id = ?", (commander_id,)
-        )
+        cursor = conn.execute("SELECT * FROM cards WHERE id = ?", (commander_id,))
         row = cursor.fetchone()
         if row is None:
-            raise CommanderNotFoundError(
-                f"Commander not found in DB: {commander_id}"
-            )
+            raise CommanderNotFoundError(f"Commander not found in DB: {commander_id}")
 
         price_row = conn.execute(
             "SELECT price_usd FROM card_prices "
@@ -206,12 +200,8 @@ class EvidenceAggregator:
             from sabermetrics.ingestion.reddit import RedditSearch
 
             search = RedditSearch()
-            threads = search.search_commander(
-                commander_name, top_k=10, min_upvotes=10
-            )
-            logger.info(
-                "Found %d Reddit threads for %s", len(threads), commander_name
-            )
+            threads = search.search_commander(commander_name, top_k=10, min_upvotes=10)
+            logger.info("Found %d Reddit threads for %s", len(threads), commander_name)
             return threads
         except Exception as e:
             logger.warning("Reddit search failed for %s: %s", commander_name, e)
@@ -292,7 +282,8 @@ class EvidenceAggregator:
 
             logger.info(
                 "Retrieved %d reference chunks for %s",
-                len(all_chunks), commander.name,
+                len(all_chunks),
+                commander.name,
             )
             return all_chunks[:15]  # Cap at 15 chunks
 

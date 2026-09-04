@@ -289,7 +289,7 @@ class PostgresMetaRepository:
                     "tournament half of the mtg_v1 contract yet"
                 ),
             )
-        except Exception as exc:  # noqa: BLE001 - availability must never raise
+        except Exception as exc:
             self._availability = MetaAvailability(
                 available=False,
                 missing_views=tuple(f"mtg_v1.{v}" for v in META_VIEWS),

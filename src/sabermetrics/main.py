@@ -1,13 +1,16 @@
 """CLI interface for Sabermetrics."""
 
 from pathlib import Path
+from typing import Any
 
 import click
 
 
 def _default_db_path() -> Path:
     """Resolve the default database path."""
-    return Path("data/sabermetrics.db")
+    from sabermetrics.config import resolve_db_path
+
+    return resolve_db_path()
 
 
 @click.group()
@@ -67,8 +70,10 @@ def profile(commander_name: str, user_intent: str | None, force_refresh: bool) -
         click.echo(f"Time: {result.generation_time_seconds:.1f}s")
         click.echo(f"\nArchetype: {result.profile.strategic_profile.primary_archetype}")
         click.echo(f"Game plan: {result.profile.strategic_profile.game_plan_summary}")
-        click.echo(f"Power range: {result.profile.strategic_profile.power_indicators.estimated_floor_bracket}"
-                    f"-{result.profile.strategic_profile.power_indicators.estimated_ceiling_bracket}")
+        click.echo(
+            f"Power range: {result.profile.strategic_profile.power_indicators.estimated_floor_bracket}"
+            f"-{result.profile.strategic_profile.power_indicators.estimated_ceiling_bracket}"
+        )
     except Exception as e:
         click.echo(f"Profile generation failed: {e}")
 
@@ -118,7 +123,7 @@ def build(
     commander_id, full_name = row
     click.echo(f"Building deck for {full_name}...")
 
-    from sabermetrics.pipeline.deck_builder import DeckBuildRequest, DeckBuilder
+    from sabermetrics.pipeline.deck_builder import DeckBuilder, DeckBuildRequest
     from sabermetrics.pipeline.formatters import format_deck
 
     builder = DeckBuilder(db_path)
@@ -169,6 +174,7 @@ def refresh_set(set_code: str) -> None:
     result = subprocess.run(
         [sys.executable, str(script), set_code],
         env={**__import__("os").environ, "PYTHONPATH": str(scripts_dir.parent / "src")},
+        check=False,
     )
     if result.returncode != 0:
         click.echo("Refresh completed with errors (check data/logs/)")
@@ -181,7 +187,10 @@ def refresh_set(set_code: str) -> None:
 @click.option("--top-k", type=int, default=5, help="Number of results.")
 def search_rules(query: str, top_k: int) -> None:
     """Search reference material (rules, etc.)."""
-    from sabermetrics.reference_layer.retriever import ReferenceQuery, ReferenceRetriever
+    from sabermetrics.reference_layer.retriever import (
+        ReferenceQuery,
+        ReferenceRetriever,
+    )
 
     db_path = _default_db_path()
     retriever = ReferenceRetriever(db_path)
@@ -199,8 +208,10 @@ def search_rules(query: str, top_k: int) -> None:
 
 
 @cli.command()
-@click.option("--port", type=int, default=5000, help="Server port.")
-@click.option("--host", default="127.0.0.1", help="Server host.")
+@click.option("--port", type=int, envvar="SABER_PORT", default=5000, show_default=True)
+@click.option(
+    "--host", envvar="SABER_BIND_HOST", default="127.0.0.1", show_default=True
+)
 def serve(port: int, host: str) -> None:
     """Start the Flask UI server."""
     from sabermetrics.ui.app import run_server
@@ -289,7 +300,9 @@ def invite_user(
     )
     token = invites.create(user_id, ttl_days=ttl_days)
     link = f"{base_url.rstrip('/')}/invite/{token}"
-    click.echo(f"Invited {email}. Send them this one-time link (expires in {ttl_days}d):")
+    click.echo(
+        f"Invited {email}. Send them this one-time link (expires in {ttl_days}d):"
+    )
     click.echo(f"  {link}")
 
 
@@ -349,14 +362,16 @@ def health() -> None:
         click.echo("No source health data recorded yet.")
         return
 
-    click.echo(f"{'Source':<15} {'Last Success':<22} {'Last Failure':<22} {'Failures':>8}")
+    click.echo(
+        f"{'Source':<15} {'Last Success':<22} {'Last Failure':<22} {'Failures':>8}"
+    )
     click.echo("-" * 70)
     for rec in records:
         source = rec.get("source", "?")
         last_ok = rec.get("last_successful_sync", "-") or "-"
         last_fail = rec.get("last_failed_sync", "-") or "-"
         failures = rec.get("consecutive_failures", 0)
-        click.echo(f"{source:<15} {str(last_ok):<22} {str(last_fail):<22} {failures:>8}")
+        click.echo(f"{source:<15} {last_ok!s:<22} {last_fail!s:<22} {failures:>8}")
 
 
 @cli.command(name="build-kb")
@@ -385,6 +400,7 @@ def build_kb(skip_ingest: bool, skip_fetch: bool) -> None:
     result = subprocess.run(
         cmd,
         env={**__import__("os").environ, "PYTHONPATH": str(scripts_dir.parent / "src")},
+        check=False,
     )
     if result.returncode != 0:
         click.echo("Knowledge base build completed with errors (check logs)")
@@ -411,9 +427,12 @@ def index_mechanics(skip_download: bool, force_reindex: bool) -> None:
     data_dir = db_path.parent
 
     cmd = [
-        sys.executable, str(script),
-        "--db-path", str(db_path),
-        "--data-dir", str(data_dir),
+        sys.executable,
+        str(script),
+        "--db-path",
+        str(db_path),
+        "--data-dir",
+        str(data_dir),
     ]
     if skip_download:
         cmd.append("--skip-download")
@@ -424,6 +443,7 @@ def index_mechanics(skip_download: bool, force_reindex: bool) -> None:
     result = subprocess.run(
         cmd,
         env={**__import__("os").environ, "PYTHONPATH": str(scripts_dir.parent / "src")},
+        check=False,
     )
     if result.returncode != 0:
         click.echo("Mechanics indexing completed with errors (check logs)")
@@ -494,7 +514,9 @@ def _report_pulled_corpus(db_path: Path, commander_query: str) -> None:
     help="Popularity sort (a proxy, not power).",
 )
 @click.option(
-    "--max-candidates", type=int, default=600,
+    "--max-candidates",
+    type=int,
+    default=600,
     help="Cost cap: candidate decks examined per commander.",
 )
 @click.option("--full", is_flag=True, help="Re-fetch decks already stored.")
@@ -531,10 +553,13 @@ def pull_decks(
         click.echo(f"\n=== {name} ===")
         try:
             result = ingestion.ingest_commander(
-                name, target=target, sort=sort, full=full,
+                name,
+                target=target,
+                sort=sort,
+                full=full,
                 max_candidates=max_candidates,
             )
-        except Exception as e:  # noqa: BLE001 — one bad commander shouldn't halt a batch
+        except Exception as e:
             click.echo(f"  FAILED: {e}")
             continue
 
@@ -556,10 +581,21 @@ def pull_decks(
 
 @cli.command(name="cluster-decks")
 @click.argument("commander_name")
-@click.option("--k", type=int, default=None, help="Cluster count (default: data-driven).")
-@click.option("--bootstrap", type=int, default=100, help="Bootstrap resamples for ARI stability.")
-@click.option("--floor", type=int, default=20, help="Min decks/cluster for validity (plan: 20-40).")
-@click.option("--no-normalize", is_flag=True, help="Cluster on raw scores, not archetype profile.")
+@click.option(
+    "--k", type=int, default=None, help="Cluster count (default: data-driven)."
+)
+@click.option(
+    "--bootstrap", type=int, default=100, help="Bootstrap resamples for ARI stability."
+)
+@click.option(
+    "--floor",
+    type=int,
+    default=20,
+    help="Min decks/cluster for validity (plan: 20-40).",
+)
+@click.option(
+    "--no-normalize", is_flag=True, help="Cluster on raw scores, not archetype profile."
+)
 def cluster_decks_cmd(
     commander_name: str,
     k: int | None,
@@ -577,20 +613,24 @@ def cluster_decks_cmd(
 
     db_path = _default_db_path()
     report = run_clustering(
-        db_path, commander_name, k=k, n_bootstrap=bootstrap,
-        floor=floor, normalize=not no_normalize,
+        db_path,
+        commander_name,
+        k=k,
+        n_bootstrap=bootstrap,
+        floor=floor,
+        normalize=not no_normalize,
     )
     click.echo(format_report(report))
 
 
 @cli.command(name="value-cards")
 @click.argument("commander_name")
-@click.option("--k", type=int, default=None, help="Cluster count (default: floor-aware auto).")
+@click.option(
+    "--k", type=int, default=None, help="Cluster count (default: floor-aware auto)."
+)
 @click.option("--floor", type=int, default=20, help="Min decks/cluster for validity.")
 @click.option("--top", type=int, default=12, help="Cards shown per list.")
-def value_cards_cmd(
-    commander_name: str, k: int | None, floor: int, top: int
-) -> None:
+def value_cards_cmd(commander_name: str, k: int | None, floor: int, top: int) -> None:
     """Per-cluster card valuation with confidence bands (Phase 4).
 
     Reports each sub-archetype cluster's confident staples (tight CI) and the
@@ -610,7 +650,12 @@ def value_cards_cmd(
 
 @cli.command(name="characterize-variants")
 @click.argument("commander_name")
-@click.option("--sample-decks", type=int, default=1, help="Sample decklists per cluster sent to the LLM.")
+@click.option(
+    "--sample-decks",
+    type=int,
+    default=1,
+    help="Sample decklists per cluster sent to the LLM.",
+)
 def characterize_variants_cmd(commander_name: str, sample_decks: int) -> None:
     """LLM variant characterization over a commander's clusters (Phase 4b).
 
@@ -628,7 +673,7 @@ def characterize_variants_cmd(commander_name: str, sample_decks: int) -> None:
         response, cost, valuation = characterize_variants(
             db_path, commander_name, sample_decks=sample_decks
         )
-    except Exception as e:  # noqa: BLE001 — surface API/key errors cleanly
+    except Exception as e:
         click.echo(f"Variant characterization failed: {e}")
         return
     click.echo(format_variants(response, valuation))
@@ -639,7 +684,9 @@ def characterize_variants_cmd(commander_name: str, sample_decks: int) -> None:
 @click.argument("commander_name")
 @click.option("--test-frac", type=float, default=0.2, help="Held-out fraction.")
 @click.option("--splits", type=int, default=25, help="Random splits to average.")
-@click.option("--top", type=int, default=45, help="Consensus-decklist cards per cluster.")
+@click.option(
+    "--top", type=int, default=45, help="Consensus-decklist cards per cluster."
+)
 def validate_clusters_cmd(
     commander_name: str, test_frac: float, splits: int, top: int
 ) -> None:
@@ -670,18 +717,18 @@ def validate_clusters_cmd(
 @click.option("--full", is_flag=True, help="Full refresh instead of incremental.")
 def sync(source: str | None, full: bool) -> None:
     """Sync data from external sources."""
-    from sabermetrics.ingestion.scryfall import ScryfallIngestion
-    from sabermetrics.ingestion.topdeck import TopDeckIngestion
-    from sabermetrics.ingestion.edhrec import EDHRECIngestion
-    from sabermetrics.ingestion.spellbook import SpellbookIngestion
-    from sabermetrics.ingestion.mtgapi import MtgApiIngestion
-    from sabermetrics.ingestion.moxfield import MoxfieldIngestion
     from sabermetrics.ingestion.archidekt import ArchidektIngestion
     from sabermetrics.ingestion.deckstats import DeckstatsIngestion
+    from sabermetrics.ingestion.edhrec import EDHRECIngestion
+    from sabermetrics.ingestion.moxfield import MoxfieldIngestion
+    from sabermetrics.ingestion.mtgapi import MtgApiIngestion
+    from sabermetrics.ingestion.scryfall import ScryfallIngestion
+    from sabermetrics.ingestion.spellbook import SpellbookIngestion
+    from sabermetrics.ingestion.topdeck import TopDeckIngestion
 
     db_path = _default_db_path()
 
-    all_sources = {
+    all_sources: dict[str, Any] = {
         "scryfall": ScryfallIngestion(db_path),
         "topdeck": TopDeckIngestion(db_path),
         "edhrec": EDHRECIngestion(db_path),
@@ -694,7 +741,9 @@ def sync(source: str | None, full: bool) -> None:
 
     if source:
         if source not in all_sources:
-            click.echo(f"Unknown source '{source}'. Available: {', '.join(all_sources)}")
+            click.echo(
+                f"Unknown source '{source}'. Available: {', '.join(all_sources)}"
+            )
             return
         sources_to_sync = {source: all_sources[source]}
     else:
