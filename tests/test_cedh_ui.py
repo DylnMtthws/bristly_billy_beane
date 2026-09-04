@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -66,8 +67,17 @@ def _build(client, **form):
     payload = {"pack_id": "kinnan_basalt"}
     payload.update(form)
     response = client.post("/lab/build", data=payload)
-    assert response.status_code == 302, response.data[:400]
-    return response.headers["Location"]
+    assert response.status_code == 303, response.data[:400]
+    job_url = response.headers["Location"]
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        job = client.get(f"{job_url}.json").get_json()
+        if job["status"] == "done":
+            return job["candidate_url"]
+        if job["status"] == "failed":
+            pytest.fail(f"build failed: {job}")
+        time.sleep(0.01)
+    pytest.fail(f"build did not finish: {job}")
 
 
 class TestAuth:

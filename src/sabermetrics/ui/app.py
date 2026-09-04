@@ -114,6 +114,16 @@ def create_app(db_path: Path | None = None) -> Flask:
     app.register_blueprint(cedh_bp)
     app.register_blueprint(main_bp)
 
+    # A thread-pool job cannot survive a process restart. Make that state
+    # explicit on boot instead of leaving a status page polling forever.
+    from sabermetrics import db
+
+    interrupted = (
+        db.BuildJobsRepo(db_path).fail_interrupted() if db_path.exists() else 0
+    )
+    if interrupted:
+        logger.warning("Marked %s interrupted cEDH build jobs failed", interrupted)
+
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         """Return process health without touching external services."""

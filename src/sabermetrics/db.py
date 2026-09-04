@@ -1075,3 +1075,87 @@ class CedhCandidatesRepo:
                 (user_id,),
             ).fetchone()
             return int(row[0] or 0)
+
+
+class BuildJobsRepo:
+    """Persistence and state transitions for asynchronous cEDH builds."""
+
+    ACTIVE_STATUSES = ("queued", "running", "simulating", "explaining")
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = Path(db_path)
+
+    def create(
+        self, *, user_id: str, request_json: str, job_id: str | None = None
+    ) -> str:
+        """Queue one build job and return its opaque id."""
+        jid = job_id or new_id()
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO build_jobs (id, user_id, status, request_json) "
+                "VALUES (?, ?, 'queued', ?)",
+                (jid, user_id, request_json),
+            )
+            conn.commit()
+        return jid
+
+    def get(self, job_id: str) -> dict | None:
+        """Fetch one build job, or None."""
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM build_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def set_status(
+        self,
+        job_id: str,
+        status: str,
+        *,
+        candidate_id: str | None = None,
+        error_code: str | None = None,
+        error_detail: str | None = None,
+    ) -> None:
+        """Move a job to ``status`` and maintain lifecycle timestamps."""
+        started = "CURRENT_TIMESTAMP" if status == "running" else "started_at"
+        finished = (
+            "CURRENT_TIMESTAMP" if status in {"done", "failed"} else "finished_at"
+        )
+        with connect(self.db_path) as conn:
+            conn.execute(
+                f"UPDATE build_jobs SET status = ?, started_at = {started}, "
+                f"finished_at = {finished}, candidate_id = ?, "
+                "error_code = ?, error_detail = ? WHERE id = ?",
+                (
+                    status,
+                    candidate_id,
+                    error_code,
+                    error_detail,
+                    job_id,
+                ),
+            )
+            conn.commit()
+
+    def fail_interrupted(self) -> int:
+        """Fail jobs abandoned by a prior process, returning the row count.
+
+        A missing table is allowed during first-run app construction; the CLI
+        initializes the schema immediately before serving.
+        """
+        try:
+            with connect(self.db_path) as conn:
+                placeholders = ",".join("?" for _ in self.ACTIVE_STATUSES)
+                cursor = conn.execute(
+                    f"UPDATE build_jobs SET status = 'failed', "
+                    "error_code = 'interrupted', "
+                    "error_detail = 'Build interrupted by process restart', "
+                    "finished_at = CURRENT_TIMESTAMP "
+                    f"WHERE status IN ({placeholders})",
+                    self.ACTIVE_STATUSES,
+                )
+                conn.commit()
+                return cursor.rowcount
+        except sqlite3.OperationalError as exc:
+            if "no such table" not in str(exc):
+                raise
+            return 0

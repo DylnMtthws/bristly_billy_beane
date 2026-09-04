@@ -524,6 +524,29 @@ def ensure_cedh_schema(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_cedh_commander "
         "ON cedh_candidates(commander_key)"
     )
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS build_jobs (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            request_json TEXT NOT NULL,
+            candidate_id TEXT,
+            error_code TEXT,
+            error_detail TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            started_at TIMESTAMP,
+            finished_at TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (candidate_id) REFERENCES cedh_candidates(candidate_id)
+        )
+        """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_build_jobs_user_created "
+        "ON build_jobs(user_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_build_jobs_status ON build_jobs(status)"
+    )
     conn.commit()
 
 
