@@ -16,6 +16,7 @@ dependencies = [
     "flask-login",
     "flask-wtf",
     "httpx",
+    "jsonschema>=4.23",
     "mtg-parser",
     "mtgsdk",
     "numpy",
@@ -98,7 +99,7 @@ module = "flask_login.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["flask_wtf.*", "mtg_parser.*", "sklearn.*"]
+module = ["flask_wtf.*", "jsonschema.*", "mtg_parser.*", "sklearn.*"]
 ignore_missing_imports = true
 
 # The legacy generator carried these findings while mypy was report-only.

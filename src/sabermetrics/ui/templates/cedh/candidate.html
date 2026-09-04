@@ -56,6 +56,11 @@
         </dl>
         <p class="mt-3 text-xs text-muted">
             {{ "{:,}".format(simulation.games) }} games &middot; {{ simulation.simulator_version }}
+            {% if simulation.result_schema %}
+                &middot; {{ simulation.result_schema }}
+                &middot; cards {{ simulation.cards_sha256[:12] }}
+                {% if simulation.simulator_threads %}&middot; {{ simulation.simulator_threads }} threads{% endif %}
+            {% endif %}
         </p>
         {% if simulation.inert_cards or simulation.unauthored_cards %}
         <details class="mt-3 text-xs">

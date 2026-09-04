@@ -204,6 +204,19 @@ class CedhDeckLab:
         simulation = self.simulator.simulate(candidate)
         if isinstance(simulation, NotSimulated):
             warnings.append(f"Not simulated ({simulation.reason}): {simulation.detail}")
+        else:
+            candidate = candidate.model_copy(
+                update={
+                    "provenance": candidate.provenance.model_copy(
+                        update={
+                            "simulator_version": simulation.simulator_version,
+                            "simulator_result_schema": simulation.result_schema,
+                            "simulator_cards_sha256": simulation.cards_sha256,
+                            "simulator_threads": simulation.simulator_threads,
+                        }
+                    )
+                }
+            )
 
         summary = self._summarise_evidence(evidence, usages, warnings)
         explanation = self._explain(

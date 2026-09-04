@@ -1,4 +1,4 @@
-"""The simulator boundary: JSON in, JSON out, subprocess or fixture.
+"""The simulator boundary: JSON in, validated JSON out.
 
 This repository orchestrates simulation. It does not own simulation mechanics
 or strategy definitions, does not import the simulator's source, and does not
@@ -28,9 +28,15 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import time
+from collections.abc import Callable
+from functools import lru_cache
 from pathlib import Path
-from typing import Final, Literal, Protocol, runtime_checkable
+from typing import Any, Final, Literal, Protocol, cast, runtime_checkable
 
+import httpx
+from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import ValidationError
 from pydantic import BaseModel, ConfigDict, Field
 
 from sabermetrics.cedh.candidate import DeckCandidate
@@ -40,6 +46,7 @@ from sabermetrics.cedh.settings import SimulatorSettings
 logger = logging.getLogger(__name__)
 
 RESULT_SCHEMA_ID: Final = "cedh-simulation-result.v1"
+HTTP_RESULT_SCHEMA_ID: Final = "cedh-simulation-result.v2"
 
 #: Why a candidate was not simulated. A closed set: an unmodelled reason is a
 #: reason nobody chose to state.
@@ -50,6 +57,12 @@ NotSimulatedReason = Literal[
     "deck_mismatch",
     "simulator_failed",
     "contract_violation",
+    "invalid_request",
+    "unsupported",
+    "busy",
+    "card_data_unavailable",
+    "timeout",
+    "unsupported_schema",
 ]
 
 
@@ -85,7 +98,9 @@ class SimulationResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    schema_id: Literal["cedh-simulation-result.v1"] = RESULT_SCHEMA_ID
+    schema_id: Literal["cedh-simulation-result.v1", "cedh-simulation-result.v2"] = (
+        RESULT_SCHEMA_ID
+    )
     status: Literal["simulated"] = "simulated"
     candidate_id: str
     #: The simulator's hash of the list it actually ran.
@@ -104,6 +119,12 @@ class SimulationResult(BaseModel):
     #: left in place. Surfaced, never dropped.
     known_misclassifications: tuple[str, ...] = ()
     unauthored_cards: tuple[str, ...] = ()
+    inert_card_count: int = 0
+    unauthored_card_count: int = 0
+    cards_sha256: str = ""
+    result_schema: str = ""
+    simulator_threads: str = ""
+    raw_document: dict[str, Any] | None = None
 
     @property
     def headline(self) -> AssemblyPoint | None:
@@ -114,7 +135,9 @@ class SimulationResult(BaseModel):
 
     @property
     def unseen_card_count(self) -> int:
-        return len(self.inert_cards) + len(self.unauthored_cards)
+        return max(self.inert_card_count, len(self.inert_cards)) + max(
+            self.unauthored_card_count, len(self.unauthored_cards)
+        )
 
 
 class NotSimulated(BaseModel):
@@ -190,6 +213,91 @@ def parse_result(payload: dict, candidate: DeckCandidate) -> SimulationResult:
     return result
 
 
+def _request_document(
+    candidate: DeckCandidate, games: int, turn: int
+) -> dict[str, Any]:
+    """Build the frozen service request around the verbatim candidate document."""
+    return {
+        "candidate": candidate.to_document(),
+        "games": games,
+        "turn": turn,
+        "seed": int(candidate.deck_sha256[:16], 16),
+        "scenario": "goldfish_assembly.v1",
+        "sweep": False,
+        "ablate": [],
+    }
+
+
+@lru_cache(maxsize=1)
+def _http_result_validator() -> Draft202012Validator:
+    """Load the vendored v2 schema used for every successful HTTP response."""
+    path = (
+        Path(__file__).resolve().parents[3]
+        / "fixtures"
+        / "cedh"
+        / "contracts"
+        / "cedh-simulation-result.v2.schema.json"
+    )
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    return Draft202012Validator(schema, format_checker=FormatChecker())
+
+
+def _parse_http_result(
+    payload: dict[str, Any], candidate: DeckCandidate, headers: httpx.Headers
+) -> SimulationResult:
+    """Validate and adapt a v2 service document to the UI domain model."""
+    try:
+        _http_result_validator().validate(payload)
+    except ValidationError as exc:
+        raise SimulatorContractError(
+            f"simulator result failed vendored schema validation: {exc.message}"
+        ) from exc
+
+    candidate_hash = str(payload["candidate"]["candidate_hash"])
+    expected_hash = f"sha256:{candidate.deck_sha256}"
+    if candidate_hash != expected_hash:
+        raise SimulatorContractError(
+            "simulator result describes a different deck: it ran "
+            f"{candidate_hash[:19]}, we submitted {expected_hash[:19]}"
+        )
+
+    coverage = payload["coverage"]
+    simulation = payload["simulation"]
+    metric = payload["metric"]
+    assembly = tuple(
+        AssemblyPoint(
+            turn=point["turn"],
+            probability=point["probability"],
+            ci_low=point["wilson_95"]["low"],
+            ci_high=point["wilson_95"]["high"],
+        )
+        for point in payload["assembly_cdf"]
+    )
+    return SimulationResult(
+        schema_id=HTTP_RESULT_SCHEMA_ID,
+        candidate_id=str(payload["candidate"]["candidate_id"]),
+        deck_sha256=candidate.deck_sha256,
+        simulator_version=headers.get(
+            "X-Sim-Version", str(payload["simulator"]["version"])
+        ),
+        games=simulation["games"],
+        objective_turn=simulation["objective_turn"],
+        metric=metric["id"],
+        measures=metric["measures"],
+        does_not_measure=metric["does_not_measure"],
+        assembly=assembly,
+        censored_fraction=payload["censored"]["rate"],
+        modeled_cards=coverage["modeled_cards"],
+        inert_card_count=coverage["inert_cards"],
+        unauthored_card_count=coverage["unauthored_cards"],
+        known_misclassifications=tuple(payload["warnings"]),
+        cards_sha256=headers.get("X-Cards-Sha256", ""),
+        result_schema=headers.get("X-Sim-Result-Schema", ""),
+        simulator_threads=headers.get("X-Sim-Threads", ""),
+        raw_document=payload,
+    )
+
+
 class FixtureSimulatorClient:
     """Reads checked-in results instead of running the simulator.
 
@@ -256,21 +364,137 @@ class FixtureSimulatorClient:
         if not version.startswith("fixture:"):
             payload["simulator_version"] = f"fixture:{version}"
         try:
+            if payload.get("schema_version") == HTTP_RESULT_SCHEMA_ID:
+                headers = httpx.Headers(
+                    {
+                        "X-Sim-Version": str(payload["simulator"]["version"]),
+                        "X-Sim-Result-Schema": HTTP_RESULT_SCHEMA_ID,
+                        "X-Cards-Sha256": str(payload["card_data"]["cards_sha256"]),
+                    }
+                )
+                return _parse_http_result(payload, candidate, headers)
             return parse_result(payload, candidate)
         except SimulatorContractError as exc:
             return NotSimulated(reason="contract_violation", detail=str(exc))
 
 
+class HttpSimulatorClient:
+    """Call the frozen private-network simulation service contract."""
+
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        games: int = 20000,
+        objective_turn: int = 3,
+        timeout_seconds: float = 180.0,
+        transport: httpx.BaseTransport | None = None,
+        sleeper: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._url = f"{base_url.rstrip('/')}/simulate"
+        self._games = games
+        self._turn = objective_turn
+        self._timeout = timeout_seconds
+        self._transport = transport
+        self._sleep = sleeper
+
+    def supported_commander_keys(self) -> frozenset[str]:
+        """The HTTP contract discovers support by attempting the request."""
+        return frozenset()
+
+    @staticmethod
+    def _error(response: httpx.Response) -> NotSimulated:
+        try:
+            body = response.json()
+        except ValueError:
+            body = {}
+        fallback = {
+            400: "invalid_request",
+            422: "unsupported",
+            429: "busy",
+            503: "card_data_unavailable",
+            504: "timeout",
+            500: "simulator_failed",
+        }.get(response.status_code, "simulator_failed")
+        declared = body.get("error") if isinstance(body, dict) else None
+        allowed = {
+            "invalid_request",
+            "unsupported",
+            "busy",
+            "card_data_unavailable",
+            "timeout",
+            "simulator_failed",
+        }
+        reason = cast(NotSimulatedReason, declared if declared in allowed else fallback)
+        detail = body.get("detail", "") if isinstance(body, dict) else ""
+        stderr = body.get("stderr", "") if isinstance(body, dict) else ""
+        if stderr:
+            detail = f"{detail} (stderr: {stderr})".strip()
+        if not detail:
+            detail = f"simulation service returned HTTP {response.status_code}"
+        return NotSimulated(reason=reason, detail=detail)
+
+    @staticmethod
+    def _retry_after(response: httpx.Response) -> float:
+        try:
+            return min(max(float(response.headers.get("Retry-After", "1")), 0), 10)
+        except ValueError:
+            return 1.0
+
+    def simulate(self, candidate: DeckCandidate) -> SimulationOutcome:
+        request = _request_document(candidate, self._games, self._turn)
+        timeout = httpx.Timeout(self._timeout, connect=15.0)
+        with httpx.Client(timeout=timeout, transport=self._transport) as client:
+            response: httpx.Response | None = None
+            for attempt in range(2):
+                try:
+                    response = client.post(self._url, json=request)
+                except httpx.RequestError as exc:
+                    if attempt == 0:
+                        self._sleep(1.0)
+                        continue
+                    return NotSimulated(reason="simulator_unavailable", detail=str(exc))
+                if response.status_code == 429 and attempt == 0:
+                    self._sleep(self._retry_after(response))
+                    continue
+                break
+
+        assert response is not None
+        if response.status_code != 200:
+            return self._error(response)
+        result_schema = response.headers.get("X-Sim-Result-Schema", "")
+        if result_schema != HTTP_RESULT_SCHEMA_ID:
+            return NotSimulated(
+                reason="unsupported_schema",
+                detail=(
+                    f"simulation service returned schema {result_schema!r}; "
+                    f"supported: {HTTP_RESULT_SCHEMA_ID}"
+                ),
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            return NotSimulated(reason="contract_violation", detail=str(exc))
+        if not isinstance(payload, dict):
+            return NotSimulated(
+                reason="contract_violation", detail="simulator result is not an object"
+            )
+        try:
+            return _parse_http_result(payload, candidate, response.headers)
+        except SimulatorContractError as exc:
+            reason: NotSimulatedReason = (
+                "deck_mismatch"
+                if "different deck" in str(exc)
+                else "contract_violation"
+            )
+            return NotSimulated(reason=reason, detail=str(exc))
+
+
 class SubprocessSimulatorClient:
     """Runs the simulator binary and validates its JSON on stdout.
 
-    Written against the contract requested in ``docs/integration-handoff.md``:
-    the binary accepts ``--candidate <path>`` holding a
-    ``cedh-deck-candidate.v1`` document and writes a
-    ``cedh-simulation-result.v1`` document to stdout. That interface does not
-    exist yet — today's binary reads a hand-authored TOML deck and prints a
-    human report — so this class is unusable until it does, and says so rather
-    than parsing a report.
+    This legacy/local adapter uses the real binary flags. Production prefers
+    :class:`HttpSimulatorClient`, which keeps card data with the simulator.
     """
 
     def __init__(
@@ -279,13 +503,15 @@ class SubprocessSimulatorClient:
         *,
         games: int = 20000,
         objective_turn: int = 3,
-        timeout_seconds: float = 120.0,
+        timeout_seconds: float = 180.0,
+        cards_path: Path | str = "fixtures/cedh/cards.json",
         supported: frozenset[str] = frozenset(),
     ) -> None:
         self._binary = Path(binary_path)
         self._games = games
         self._turn = objective_turn
         self._timeout = timeout_seconds
+        self._cards = Path(cards_path)
         self._supported = supported
 
     def supported_commander_keys(self) -> frozenset[str]:
@@ -308,18 +534,19 @@ class SubprocessSimulatorClient:
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "candidate.json"
-            path.write_text(candidate.to_json(), encoding="utf-8")
+            path = Path(tmp) / "request.json"
+            path.write_text(
+                json.dumps(_request_document(candidate, self._games, self._turn)),
+                encoding="utf-8",
+            )
             cmd = [
                 str(self._binary),
-                "--candidate",
+                "--request",
                 str(path),
-                "--games",
-                str(self._games),
-                "--turn",
-                str(self._turn),
-                "--format",
-                "json",
+                "--cards",
+                str(self._cards),
+                "--output-json",
+                "-",
             ]
             try:
                 proc = subprocess.run(
@@ -352,11 +579,20 @@ class SubprocessSimulatorClient:
                 reason="contract_violation",
                 detail=(
                     f"simulator stdout was not JSON ({exc}). The binary must "
-                    "emit cedh-simulation-result.v1; a human report is not a "
+                    "emit a versioned JSON result; a human report is not a "
                     "contract and is not parsed."
                 ),
             )
         try:
+            if payload.get("schema_version") == HTTP_RESULT_SCHEMA_ID:
+                headers = httpx.Headers(
+                    {
+                        "X-Sim-Version": str(payload["simulator"]["version"]),
+                        "X-Sim-Result-Schema": HTTP_RESULT_SCHEMA_ID,
+                        "X-Cards-Sha256": str(payload["card_data"]["cards_sha256"]),
+                    }
+                )
+                return _parse_http_result(payload, candidate, headers)
             return parse_result(payload, candidate)
         except SimulatorContractError as exc:
             return NotSimulated(reason="contract_violation", detail=str(exc))
@@ -385,6 +621,16 @@ def build_simulator(
     if settings.mode == "subprocess":
         return SubprocessSimulatorClient(
             settings.binary_path,
+            games=settings.games,
+            objective_turn=settings.objective_turn,
+            timeout_seconds=settings.timeout_seconds,
+            cards_path=settings.cards_path,
+        )
+    if settings.mode == "http":
+        if not settings.url:
+            return DisabledSimulatorClient()
+        return HttpSimulatorClient(
+            settings.url,
             games=settings.games,
             objective_turn=settings.objective_turn,
             timeout_seconds=settings.timeout_seconds,

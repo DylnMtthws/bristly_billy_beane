@@ -89,6 +89,7 @@ class SimulatorSettings(BaseModel):
     mode: str = "fixture"
     url: str = ""
     binary_path: str = ""
+    cards_path: str = "fixtures/cedh/cards.json"
     fixture_dir: str = "fixtures/cedh/simulation"
     games: int = 20000
     objective_turn: int = 3

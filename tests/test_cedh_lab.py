@@ -83,6 +83,33 @@ class TestHappyPath:
             result.candidate.provenance.evidence_hash == result.evidence.evidence_hash
         )
 
+    def test_http_simulator_headers_travel_onto_candidate_provenance(
+        self, cedh_cards, cedh_meta_populated, cedh_simulator
+    ):
+        class HeaderSimulator:
+            def supported_commander_keys(self):
+                return cedh_simulator.supported_commander_keys()
+
+            def simulate(self, candidate):
+                result = cedh_simulator.simulate(candidate)
+                return result.model_copy(
+                    update={
+                        "simulator_version": "2.3.4",
+                        "result_schema": "cedh-simulation-result.v2",
+                        "cards_sha256": "a" * 64,
+                        "simulator_threads": "4",
+                    }
+                )
+
+        result = _lab(cedh_cards, cedh_meta_populated, HeaderSimulator()).run(
+            LabRequest(pack_id="kinnan_basalt")
+        )
+        provenance = result.candidate.provenance
+        assert provenance.simulator_version == "2.3.4"
+        assert provenance.simulator_result_schema == "cedh-simulation-result.v2"
+        assert provenance.simulator_cards_sha256 == "a" * 64
+        assert provenance.simulator_threads == "4"
+
 
 class TestModelIsNotOnTheCriticalPath:
     def test_the_deck_is_built_with_no_model_at_all(

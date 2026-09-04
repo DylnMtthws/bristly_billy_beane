@@ -71,6 +71,7 @@ simulator:
   # publishes the versioned JSON contract in docs/integration-handoff.md.
   mode: "fixture"
   binary_path: ""
+  cards_path: "fixtures/cedh/cards.json"
   fixture_dir: "fixtures/cedh/simulation"
   games: 20000
   objective_turn: 3

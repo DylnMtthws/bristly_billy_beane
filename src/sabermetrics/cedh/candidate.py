@@ -74,6 +74,10 @@ class CandidateProvenance(BaseModel):
     window_days: int = 0
     min_event_size: int = 0
     builder_version: str = "1"
+    simulator_version: str = ""
+    simulator_result_schema: str = ""
+    simulator_cards_sha256: str = ""
+    simulator_threads: str = ""
 
 
 class DeckCandidate(BaseModel):
