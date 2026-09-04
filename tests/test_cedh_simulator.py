@@ -345,6 +345,33 @@ class TestHttpClient:
         assert calls == 2
         assert sleeps == [10]
 
+    @pytest.mark.parametrize(
+        "body", [{"error": "not_found", "detail": "route not found"}, None]
+    )
+    def test_404_identifies_the_url_configuration(self, candidate, body):
+        calls = []
+
+        def handler(request):
+            calls.append(request)
+            return httpx.Response(404, json=body)
+
+        result = self._client(handler).simulate(candidate)
+        assert result.reason == "simulator_url_invalid"
+        assert "CEDH_SIMULATOR_URL" in result.detail
+        assert "HTTP 404" in result.detail
+        assert len(calls) == 1
+
+    @pytest.mark.parametrize("status", [500, 502, 503, 507, 599])
+    @pytest.mark.parametrize("body", [None, {"error": "proxy_unavailable"}])
+    def test_unmapped_server_errors_do_not_claim_a_card_data_failure(
+        self, candidate, status, body
+    ):
+        result = self._client(
+            lambda request: httpx.Response(status, json=body)
+        ).simulate(candidate)
+        assert result.reason == "simulator_failed"
+        assert f"HTTP {status}" in result.detail
+
     def test_cold_start_connection_error_retries_once(self, candidate):
         sleeps = []
         calls = 0
@@ -462,6 +489,7 @@ class TestNeverInventsAScore:
         assert set(get_args(NotSimulatedReason)) == {
             "simulator_disabled",
             "simulator_unavailable",
+            "simulator_url_invalid",
             "commander_unsupported",
             "deck_mismatch",
             "simulator_failed",

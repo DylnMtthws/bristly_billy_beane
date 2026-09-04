@@ -72,6 +72,7 @@ HTTP_RESULT_SCHEMA_ID: Final = RESULT_SCHEMA_ID
 NotSimulatedReason = Literal[
     "simulator_disabled",
     "simulator_unavailable",
+    "simulator_url_invalid",
     "commander_unsupported",
     #: The simulator ran a different list than we submitted. This is the ONLY
     #: reason that means the deck is not what we think it is. An unsupported
@@ -395,9 +396,9 @@ class HttpSimulatorClient:
             body = {}
         fallback = {
             400: "invalid_request",
+            404: "simulator_url_invalid",
             422: "unsupported",
             429: "busy",
-            503: "card_data_unavailable",
             504: "timeout",
             500: "simulator_failed",
         }.get(response.status_code, "simulator_failed")
@@ -427,6 +428,12 @@ class HttpSimulatorClient:
             detail = f"{detail} (stderr: {stderr})".strip()
         if not detail:
             detail = f"simulation service returned HTTP {response.status_code}"
+        if response.status_code == 404:
+            reason = "simulator_url_invalid"
+            detail = (
+                "Simulation endpoint not found (HTTP 404). Check CEDH_SIMULATOR_URL "
+                f"and any proxy path rewrite. {detail}"
+            )
         return NotSimulated(reason=reason, detail=detail)
 
     @staticmethod
