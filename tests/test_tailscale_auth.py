@@ -300,12 +300,33 @@ class TestModes:
         assert app.test_client().get("/invite/bogus").status_code == 400
 
     def test_logout_explains_itself_rather_than_pretending(self, tailnet_app, db_path):
-        """Clearing a session would change nothing when identity is per-request."""
+        """A tailnet user is signed straight back in by the next request.
+
+        Bouncing them to a login page that immediately redirects would look
+        like the button was broken, so the flash says what actually happened.
+        """
         _grant(db_path, TESTER_LOGIN)
         response = tailnet_app.test_client().get(
             "/logout", headers={LOGIN_HEADER: TESTER_LOGIN}, follow_redirects=True
         )
-        assert b"no session to sign out of" in response.data
+        assert b"still" in response.data and b"identifies you" in response.data
+
+    def test_logout_of_a_password_session_returns_to_the_login_page(
+        self, db_path, monkeypatch
+    ):
+        app = _app(db_path, "password", monkeypatch)
+        db.UsersRepo(db_path).create(
+            email="t@example.com",
+            status="active",
+            password_hash=db.hash_password("correct-horse-battery"),
+        )
+        client = app.test_client()
+        client.post(
+            "/login",
+            data={"email": "t@example.com", "password": "correct-horse-battery"},
+            follow_redirects=True,
+        )
+        assert b"Sign In" in client.get("/logout", follow_redirects=True).data
 
     def test_the_login_page_offers_no_password_field_on_a_tailnet(self, tailnet_app):
         response = _get(tailnet_app, "/login", follow_redirects=True)
@@ -338,3 +359,195 @@ def test_rate_limiting_keys_off_the_caller_not_a_dead_cloudflare_header():
         if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
     ]
     assert "CF-Connecting-IP" not in called_headers
+
+
+# --- Hybrid mode and public exposure --------------------------------------
+
+
+PASSWORD = "correct-horse-battery"
+
+
+@pytest.fixture
+def hybrid_app(db_path, monkeypatch):
+    monkeypatch.setenv("SABER_SECRET_KEY", "x" * 64)
+    return _app(db_path, "hybrid", monkeypatch)
+
+
+def _password_user(db_path, email="tester@example.com", status="active"):
+    return db.UsersRepo(db_path).create(
+        email=email,
+        display_name="Tester",
+        status=status,
+        password_hash=db.hash_password(PASSWORD),
+    )
+
+
+def _sign_in(client, email="tester@example.com", password=PASSWORD):
+    return client.post(
+        "/login", data={"email": email, "password": password}, follow_redirects=True
+    )
+
+
+class TestHybridMode:
+    """Funnel traffic is anonymous, so a public visitor needs a password.
+
+    The tailnet path must keep working unchanged alongside it, or the
+    passwordless access is lost the moment the app goes public.
+    """
+
+    def test_a_tailnet_identity_still_signs_in_with_no_password(
+        self, hybrid_app, db_path
+    ):
+        _grant(db_path, ADMIN_LOGIN, role="admin")
+        assert _get(hybrid_app, "/", ADMIN_LOGIN).status_code == 200
+
+    def test_a_public_visitor_is_offered_the_password_form(self, hybrid_app):
+        response = hybrid_app.test_client().get("/", follow_redirects=True)
+        assert b'type="password"' in response.data
+
+    def test_a_public_visitor_can_sign_in(self, hybrid_app, db_path):
+        _password_user(db_path)
+        assert b"Sign In" not in _sign_in(hybrid_app.test_client()).data
+
+    def test_invites_work_again_in_hybrid_mode(self, hybrid_app):
+        """They are how a public tester gets a password in the first place."""
+        assert hybrid_app.test_client().get("/invite/bogus").status_code == 400
+
+    def test_an_unprovisioned_tailnet_identity_is_offered_the_form(self, hybrid_app):
+        """On a tailnet but without an account, the form is the only way in."""
+        response = _get(hybrid_app, "/", "stranger@github", follow_redirects=True)
+        assert b'type="password"' in response.data
+        assert b"grant-access stranger@github" in response.data
+
+
+class TestFunnelTrafficIsNeverTrusted:
+    def test_identity_headers_on_a_funnel_request_are_refused(
+        self, hybrid_app, db_path
+    ):
+        """Tailscale sets no identity on Funnel, so their presence is a forgery."""
+        _grant(db_path, ADMIN_LOGIN, role="admin")
+        response = hybrid_app.test_client().get(
+            "/",
+            headers={LOGIN_HEADER: ADMIN_LOGIN, "Tailscale-Funnel-Request": "?1"},
+            follow_redirects=True,
+        )
+        assert b'type="password"' in response.data
+
+    def test_the_funnel_marker_is_detected(self):
+        from sabermetrics.ui.tailscale_auth import is_funnel_request
+
+        assert is_funnel_request({"Tailscale-Funnel-Request": "?1"})
+        assert not is_funnel_request({})
+
+    def test_refusal_holds_even_from_a_tailnet_source_address(self):
+        """Both checks are independent; neither is the only thing standing up."""
+        assert (
+            identity_from_headers(
+                {LOGIN_HEADER: ADMIN_LOGIN, "Tailscale-Funnel-Request": "?1"},
+                "100.86.61.75",
+            )
+            is None
+        )
+
+
+class TestAccountLockout:
+    """IP throttling alone is weak once /login faces the internet."""
+
+    def test_the_account_locks_after_repeated_failures(self, hybrid_app, db_path):
+        _password_user(db_path)
+        client = hybrid_app.test_client()
+        for _ in range(6):
+            response = _sign_in(client, password="wrong")
+        assert b"locked" in response.data
+
+    def test_a_locked_account_refuses_the_correct_password(self, hybrid_app, db_path):
+        """Otherwise the lock is decorative against an attacker who guesses."""
+        _password_user(db_path)
+        client = hybrid_app.test_client()
+        for _ in range(6):
+            _sign_in(client, password="wrong")
+        assert b"locked" in _sign_in(client).data
+
+    def test_a_successful_sign_in_resets_the_counter(self, hybrid_app, db_path):
+        user_id = _password_user(db_path)
+        client = hybrid_app.test_client()
+        for _ in range(3):
+            _sign_in(client, password="wrong")
+        _sign_in(client)
+        assert db.UsersRepo(db_path).get(user_id)["failed_login_count"] == 0
+
+    def test_an_expired_lock_stops_locking(self, db_path):
+        """A lock in the past is not a lock; nobody has to clear a flag.
+
+        A literal rather than a computed offset: the value is naive because
+        that is how db.py stores every timestamp, and a fixed date says so
+        without a clock call that would have to be explained.
+        """
+        users = db.UsersRepo(db_path)
+        user_id = _password_user(db_path)
+        past = "2020-01-01T00:00:00"
+        with db.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE users SET locked_until = ? WHERE id = ?", (past, user_id)
+            )
+            conn.commit()
+        assert users.lock_expires_at(users.get(user_id)) is None
+
+    def test_failures_against_an_unknown_email_do_not_error(self, hybrid_app):
+        """No account to count against; must not 500 or leak that fact."""
+        response = _sign_in(hybrid_app.test_client(), email="nobody@example.com")
+        assert response.status_code == 200
+        assert b"Invalid email or password" in response.data
+
+    def test_the_same_message_is_shown_for_unknown_and_wrong(self, hybrid_app, db_path):
+        """The form must not enumerate who has an account."""
+        _password_user(db_path)
+        unknown = _sign_in(hybrid_app.test_client(), email="nobody@example.com")
+        wrong = _sign_in(hybrid_app.test_client(), password="wrong")
+        assert b"Invalid email or password" in unknown.data
+        assert b"Invalid email or password" in wrong.data
+
+
+class TestPublicDeployment:
+    def test_a_public_deployment_requires_a_stable_secret_key(
+        self, db_path, monkeypatch
+    ):
+        """A per-process key breaks CSRF on every restart, and reads as flaky."""
+        monkeypatch.setenv("SABER_PUBLIC", "1")
+        monkeypatch.delenv("SABER_SECRET_KEY", raising=False)
+        with pytest.raises(ValueError, match="SABER_SECRET_KEY"):
+            create_app(db_path)
+
+    def test_a_private_deployment_still_starts_without_one(self, db_path, monkeypatch):
+        monkeypatch.delenv("SABER_PUBLIC", raising=False)
+        monkeypatch.delenv("SABER_SECRET_KEY", raising=False)
+        assert create_app(db_path).config["SECRET_KEY"]
+
+    @pytest.mark.parametrize(
+        ("header", "value"),
+        [
+            ("X-Content-Type-Options", "nosniff"),
+            ("X-Frame-Options", "DENY"),
+            ("Referrer-Policy", "strict-origin-when-cross-origin"),
+        ],
+    )
+    def test_baseline_security_headers_are_always_set(self, hybrid_app, header, value):
+        assert hybrid_app.test_client().get("/login").headers[header] == value
+
+    def test_hsts_is_set_only_when_public(self, db_path, monkeypatch):
+        """Meaningless over http, and it would pin a stale policy locally."""
+        monkeypatch.setenv("SABER_SECRET_KEY", "x" * 64)
+        monkeypatch.setenv("SABER_PUBLIC", "1")
+        public = _app(db_path, "hybrid", monkeypatch)
+        assert "Strict-Transport-Security" in public.test_client().get("/login").headers
+
+        monkeypatch.setenv("SABER_PUBLIC", "0")
+        private = _app(db_path, "hybrid", monkeypatch)
+        assert (
+            "Strict-Transport-Security"
+            not in private.test_client().get("/login").headers
+        )
+
+    def test_hybrid_is_a_recognised_mode(self, db_path, monkeypatch):
+        monkeypatch.setenv("SABER_AUTH_MODE", "hybrid")
+        assert create_app(db_path).config["AUTH_MODE"] == "hybrid"

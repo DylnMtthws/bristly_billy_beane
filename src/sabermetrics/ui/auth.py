@@ -54,6 +54,15 @@ logger = logging.getLogger(__name__)
 #: Auth mode values. Set on ``app.config["AUTH_MODE"]`` by the app factory.
 MODE_TAILSCALE = "tailscale"
 MODE_PASSWORD = "password"
+#: Both at once: tailnet identity when present, password login otherwise. This
+#: is what a Funnel deployment needs — Funnel traffic is anonymous, so public
+#: visitors have to be able to sign in, while you keep passwordless access.
+MODE_HYBRID = "hybrid"
+ALL_MODES = (MODE_TAILSCALE, MODE_PASSWORD, MODE_HYBRID)
+
+#: Failed sign-ins before an account is locked, and for how long.
+LOGIN_FAILURE_THRESHOLD = 5
+LOGIN_LOCK_MINUTES = 15
 
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
@@ -67,7 +76,13 @@ def auth_mode() -> str:
 
 
 def tailscale_mode() -> bool:
-    return auth_mode() == MODE_TAILSCALE
+    """True when tailnet identity is accepted at all."""
+    return auth_mode() in (MODE_TAILSCALE, MODE_HYBRID)
+
+
+def password_mode() -> bool:
+    """True when the password form is offered."""
+    return auth_mode() in (MODE_PASSWORD, MODE_HYBRID)
 
 
 bp = Blueprint("auth", __name__)
@@ -278,18 +293,17 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("main.index"))
 
-    if tailscale_mode():
-        identity = current_tailscale_identity()
-        if identity is None:
-            return (
-                render_template("login.html", tailscale=True, identity=None),
-                403,
-            )
-        row = _users().get_by_tailscale_login(identity.login)
+    identity = current_tailscale_identity() if tailscale_mode() else None
+
+    if not password_mode():
+        # Tailnet-only: there is nothing to submit, so explain which of the two
+        # things went wrong rather than showing a form that cannot help.
+        row = _users().get_by_tailscale_login(identity.login) if identity else None
         return (
             render_template(
                 "login.html",
                 tailscale=True,
+                password=False,
                 identity=identity,
                 disabled=bool(row and row.get("status") != "active"),
             ),
@@ -298,8 +312,21 @@ def login():
 
     form = LoginForm()
     if form.validate_on_submit():
-        row = _users().get_by_email(form.email.data.strip())
-        if row is not None and db.verify_password(
+        users = _users()
+        row = users.get_by_email(form.email.data.strip())
+        locked_until = users.lock_expires_at(row) if row else None
+
+        if locked_until is not None:
+            # Same answer whether or not the password was right. Telling an
+            # attacker they guessed correctly on a locked account hands them a
+            # working credential to retry in fifteen minutes.
+            flash(
+                "Too many failed attempts. This account is locked for a few "
+                "minutes.",
+                "error",
+            )
+            logger.warning("Login attempt on locked account %s", row.get("email"))
+        elif row is not None and db.verify_password(
             row.get("password_hash"), form.password.data
         ):
             if row.get("status") != "active":
@@ -307,15 +334,33 @@ def login():
                     "This account is not active. Ask the admin for an invite.", "error"
                 )
             else:
-                _users().touch_login(row["id"])
+                users.clear_failed_logins(row["id"])
+                users.touch_login(row["id"])
                 login_user(AuthUser(row))
                 logger.info("Login success for %s", row.get("email"))
                 return redirect(_safe_next(request.args.get("next")))
         else:
+            if row is not None and users.register_failed_login(
+                row["id"],
+                threshold=LOGIN_FAILURE_THRESHOLD,
+                lock_minutes=LOGIN_LOCK_MINUTES,
+            ):
+                logger.warning(
+                    "Locked account after repeated failures: %s",
+                    row.get("email"),
+                )
+            # One message for "no such account" and "wrong password", so the
+            # form cannot be used to enumerate who has an account here.
             flash("Invalid email or password.", "error")
             logger.info("Login failure for %s", form.email.data)
 
-    return render_template("login.html", form=form, tailscale=False)
+    return render_template(
+        "login.html",
+        form=form,
+        tailscale=bool(identity),
+        password=True,
+        identity=identity,
+    )
 
 
 @bp.route("/logout")
@@ -326,14 +371,17 @@ def logout():
     tailnet on every request, so clearing a session would change nothing and
     offering the button would imply otherwise.
     """
-    if tailscale_mode():
+    logout_user()
+    if tailscale_mode() and current_tailscale_identity() is not None:
+        # The session is gone, but the identity arrives with the next request,
+        # so they are about to be signed straight back in. Say so rather than
+        # bouncing them to a login page that will immediately redirect.
         flash(
-            "Your identity comes from Tailscale, so there is no session to "
-            "sign out of. Disconnect from the tailnet to end access.",
+            "Signed out of your session. Your Tailscale identity still "
+            "identifies you on the tailnet — disconnect from it to end access.",
             "info",
         )
         return redirect(url_for("main.index"))
-    logout_user()
     return redirect(url_for("auth.login"))
 
 
@@ -345,7 +393,7 @@ def accept_invite(token: str):
     grant — access is provisioned with ``sabermetrics grant-access`` and the
     identity arrives with the request.
     """
-    if tailscale_mode():
+    if not password_mode():
         abort(404)
     if current_user.is_authenticated:
         return redirect(url_for("main.index"))

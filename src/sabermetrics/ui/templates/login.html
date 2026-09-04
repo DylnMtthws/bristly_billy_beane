@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-sm">
-{% if tailscale %}
+{% if tailscale and not password %}
     {# Tailnet auth: there is nothing to submit. Say which of the two things
        went wrong, because "invalid login" would be false in both cases. #}
     <h1 class="text-2xl font-bold tracking-tight">No access</h1>
@@ -43,6 +43,22 @@
 {% else %}
     <h1 class="text-2xl font-bold tracking-tight">Sign In</h1>
     <p class="mt-1 text-sm text-muted">Accounts are invite-only. Ask the admin for a link.</p>
+
+    {% if identity %}
+    {# Hybrid: they are on the tailnet but that identity has no account, so the
+       password form is the one thing that can still help them. #}
+    <div class="mt-4 rounded-xl border border-line bg-panel p-4 text-sm">
+        <p class="text-body">
+            Tailscale knows you as <code class="text-brand">{{ identity.login }}</code>,
+            but that identity has no account here.
+        </p>
+        <p class="mt-1 text-muted">
+            Sign in below, or ask the admin to run
+            <code>sabermetrics grant-access {{ identity.login }}</code> so you
+            do not need a password on the tailnet.
+        </p>
+    </div>
+    {% endif %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}

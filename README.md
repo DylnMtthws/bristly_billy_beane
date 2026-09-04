@@ -59,8 +59,8 @@ configured monthly spend ceiling is reached.
 | **Data sources** | Casual: 11 ingestion modules — Scryfall, EDHREC, Moxfield, Archidekt, deckstats, TopDeck.gg, Commander Spellbook, magicthegathering.io, Reddit, Game Knights, WotC rules. cEDH: the `mtg_v1` Postgres contract only, plus curated strategy material |
 | **Retrieval** | `all-MiniLM-L6-v2` on CPU; cosine similarity in numpy over embeddings stored as SQLite blobs |
 | **Interfaces** | Flask web app (4 blueprints: portal, admin, auth, cEDH lab) and a 19-command Click CLI |
-| **Auth** | Tailnet identity from `tailscale serve` (no passwords, no invite links) or email + argon2id for local dev; CSRF on POST, admin-provisioned in both modes, no self-registration |
-| **Hosting** | `tailscale serve` on a private tailnet; app bound to 127.0.0.1, no port forward, no public surface |
+| **Auth** | Three modes: tailnet identity from `tailscale serve` (no passwords), `hybrid` for public deployments, or email + argon2id. CSRF on POST, per-account lockout, admin-provisioned in every mode, no self-registration |
+| **Hosting** | `tailscale serve` on a private tailnet, or `tailscale funnel` for a public URL; app bound to 127.0.0.1, no port forward either way |
 | **Scheduling** | 4 macOS launchd jobs — nightly, weekly, monthly, quarterly |
 | **Commits** | 157 on `main`, 2026-05-06 to 2026-08-26 |
 

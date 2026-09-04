@@ -292,6 +292,63 @@ class UsersRepo:
             ).fetchone()
             return dict(row) if row else None
 
+    def register_failed_login(
+        self, user_id: str, *, threshold: int, lock_minutes: int
+    ) -> bool:
+        """Count a failed sign-in and lock the account past ``threshold``.
+
+        Returns:
+            True if the account is now locked.
+
+        Locking the account rather than only the source address is what makes
+        this useful against a public login page: an attacker can rotate IPs,
+        and behind Tailscale Funnel legitimate traffic may share one.
+        """
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COALESCE(failed_login_count, 0) FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+            count = (row[0] if row else 0) + 1
+            locked_until = None
+            if count >= threshold:
+                locked_until = (
+                    datetime.now() + timedelta(minutes=lock_minutes)
+                ).isoformat(timespec="seconds")
+            conn.execute(
+                "UPDATE users SET failed_login_count = ?, locked_until = ? "
+                "WHERE id = ?",
+                (count, locked_until, user_id),
+            )
+            conn.commit()
+        return locked_until is not None
+
+    def clear_failed_logins(self, user_id: str) -> None:
+        """Reset the failure counter after a successful sign-in."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE users SET failed_login_count = 0, locked_until = NULL "
+                "WHERE id = ?",
+                (user_id,),
+            )
+            conn.commit()
+
+    @staticmethod
+    def lock_expires_at(row: dict) -> datetime | None:
+        """Return when ``row``'s lock expires, or None if it is not locked.
+
+        A lock in the past is not a lock: this returns None once it has
+        elapsed, so the account recovers without anyone clearing a flag.
+        """
+        raw = row.get("locked_until")
+        if not raw:
+            return None
+        try:
+            expires = datetime.fromisoformat(str(raw))
+        except ValueError:
+            return None
+        return expires if expires > datetime.now() else None
+
     def set_tailscale_login(self, user_id: str, login: str | None) -> None:
         """Attach (or clear) a tailnet identity on an existing account."""
         with connect(self.db_path) as conn:

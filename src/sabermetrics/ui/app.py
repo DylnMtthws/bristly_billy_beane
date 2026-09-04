@@ -52,20 +52,34 @@ def create_app(db_path: Path | None = None) -> Flask:
     # --- Auth mode ---
     # `tailscale`: identity comes from the tailscale serve proxy headers.
     # `password`:  email + argon2id with invite links (default; local dev).
-    from sabermetrics.ui.auth import MODE_PASSWORD, MODE_TAILSCALE
+    from sabermetrics.ui.auth import ALL_MODES, MODE_PASSWORD
 
     mode = os.environ.get("SABER_AUTH_MODE", MODE_PASSWORD).strip().lower()
-    if mode not in {MODE_TAILSCALE, MODE_PASSWORD}:
-        raise ValueError(
-            f"SABER_AUTH_MODE must be {MODE_TAILSCALE!r} or {MODE_PASSWORD!r}, "
-            f"got {mode!r}"
-        )
+    if mode not in ALL_MODES:
+        raise ValueError(f"SABER_AUTH_MODE must be one of {ALL_MODES}, got {mode!r}")
     app.config["AUTH_MODE"] = mode
-    logger.info("Auth mode: %s", mode)
+
+    # `public` means the app is reachable from the internet (Tailscale Funnel).
+    # It does not change routing; it tightens the posture, and it is opt-in so
+    # that a private deployment is never accidentally held to a public policy
+    # nor a public one to a private policy.
+    public = _env_bool("SABER_PUBLIC", False)
+    app.config["PUBLIC_DEPLOYMENT"] = public
+    logger.info("Auth mode: %s (public=%s)", mode, public)
 
     # --- Secret key: required for signed session cookies + CSRF ---
     secret = os.environ.get("SABER_SECRET_KEY")
     if not secret:
+        if _env_bool("SABER_PUBLIC", False):
+            # A random per-process key on a public deployment means CSRF tokens
+            # and sessions break on every restart, and it is the kind of thing
+            # that gets noticed as "flaky logins" rather than as a
+            # misconfiguration. Refuse to start instead.
+            raise ValueError(
+                "SABER_SECRET_KEY must be set when SABER_PUBLIC=1. Generate "
+                "one with: python -c 'import secrets; "
+                "print(secrets.token_hex(32))'"
+            )
         secret = secrets.token_hex(32)
         logger.warning(
             "SABER_SECRET_KEY not set — using a random key. Sessions will not "
@@ -110,11 +124,36 @@ def create_app(db_path: Path | None = None) -> Flask:
     app.register_blueprint(cedh_bp)
     app.register_blueprint(main_bp)
 
+    @app.after_request
+    def _security_headers(response):
+        """Baseline response hardening.
+
+        Cheap, and none of it is conditional on the deployment being public —
+        a header that is only correct sometimes is a header nobody can reason
+        about. HSTS is the exception: it is meaningless over plain http and
+        would pin a stale policy on a local preview, so it is public-only.
+        """
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault(
+            "Referrer-Policy", "strict-origin-when-cross-origin"
+        )
+        response.headers.setdefault(
+            "Permissions-Policy", "geolocation=(), microphone=(), camera=()"
+        )
+        if app.config.get("PUBLIC_DEPLOYMENT"):
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            )
+        return response
+
     logger.info("Flask app created, DB: %s", db_path)
     return app
 
 
-def run_server(host: str = "127.0.0.1", port: int = 5000, db_path: Path | None = None) -> None:
+def run_server(
+    host: str = "127.0.0.1", port: int = 5000, db_path: Path | None = None
+) -> None:
     """Start the UI server via waitress (production WSGI, macOS-friendly).
 
     The app always binds to 127.0.0.1; public access is via the Cloudflare

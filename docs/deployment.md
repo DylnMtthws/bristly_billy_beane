@@ -15,16 +15,33 @@ command instead of a daemon, a config file, a DNS record and an account.
 
 ---
 
+## Pick a shape first
+
+| | Private (tailnet only) | **Public (Funnel)** |
+|---|---|---|
+| Who can reach it | Devices on your tailnet | Anyone with the URL |
+| Testers must install Tailscale | Yes | No |
+| `SABER_AUTH_MODE` | `tailscale` | `hybrid` |
+| How people sign in | Tailscale identity, no password | You: identity. Them: password |
+| Public attack surface | None | The login page |
+
+Both are below. Private is stronger and is the default; public is what you want
+if testers should be able to open a link and nothing else.
+
+---
+
 ## 1. Start the app
 
 ```bash
 export SABER_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-export SABER_AUTH_MODE=tailscale
-sabermetrics serve            # binds 127.0.0.1:5000, always
+export SABER_AUTH_MODE=tailscale     # or `hybrid` for a public deployment
+sabermetrics serve                   # binds 127.0.0.1:5000, always
 ```
 
-`SABER_SECRET_KEY` must be set and stable. Without it the app generates a random
-key at startup, which signs CSRF tokens — every restart invalidates them.
+`SABER_SECRET_KEY` must be set and stable — it signs session cookies and CSRF
+tokens, so a fresh key on every restart logs everyone out. On a public
+deployment the app **refuses to start** without one, because that failure
+otherwise shows up as "logins are flaky" rather than as a misconfiguration.
 
 ## 2. Put it on the tailnet
 
@@ -40,10 +57,8 @@ reachable only from your tailnet. On this machine that is:
 https://macmini.tail8c92e6.ts.net
 ```
 
-**Do not run `tailscale funnel`.** Funnel exposes the same port to the public
-internet *and does not set identity headers*, so every request arrives
-anonymous. The app refuses anonymous requests, so Funnel would not leak data —
-but it would put the origin on the public internet for no benefit.
+If you want a public URL instead, skip to
+[Going public with Funnel](#going-public-with-funnel).
 
 ## 3. Give yourself an account
 
@@ -89,6 +104,80 @@ no session to expire and no token to wait out.
 
 ---
 
+## Going public with Funnel
+
+`tailscale funnel` publishes the same port to the public internet, on the same
+`.ts.net` hostname, with the same certificate. Testers open a link; they install
+nothing.
+
+**Funnel traffic is anonymous.** Tailscale does not set identity headers on it,
+so a public visitor can never arrive already authenticated. That is why a public
+deployment runs in `hybrid` mode: your tailnet requests still authenticate by
+identity, and everyone else gets the password form.
+
+```bash
+# One-time: enable Funnel for the tailnet in the admin console
+#   https://login.tailscale.com/admin/acls  →  add "funnel" to nodeAttrs
+
+export SABER_AUTH_MODE=hybrid
+export SABER_PUBLIC=1                # required; turns on the public posture
+export SABER_SECRET_KEY="<a real, stable 64-char hex string>"
+sabermetrics serve
+
+tailscale funnel --bg 5000
+tailscale funnel status              # prints the public URL
+```
+
+Then give each tester a password account the ordinary way:
+
+```bash
+sabermetrics invite-user --email alice@example.com
+# → prints a one-time link; send it to her
+```
+
+You keep passwordless access over the tailnet; they sign in with a password.
+
+### What `SABER_PUBLIC=1` changes
+
+It does not change routing. It tightens the posture, and it is opt-in so a
+private deployment is never held to a public policy or the reverse.
+
+* **A stable `SABER_SECRET_KEY` becomes mandatory** — the app refuses to start
+  without one.
+* **HSTS is sent.** Only here: over plain http it is meaningless, and on a
+  local preview it would pin a stale policy into your browser.
+
+Baseline headers (`X-Content-Type-Options`, `X-Frame-Options: DENY`,
+`Referrer-Policy`, `Permissions-Policy`) are always sent, public or not — a
+header that is only correct sometimes is one nobody can reason about.
+
+### What protects the login page
+
+It is on the internet now, so:
+
+| Control | Behaviour |
+|---|---|
+| Rate limiting | 10 sign-ins/minute, 50/hour per source address |
+| Account lockout | 5 failures locks the account for 15 minutes |
+| Locked + correct password | Still refused — otherwise the lock is decorative against someone who guesses right |
+| Unknown email vs wrong password | Identical message, so the form cannot enumerate accounts |
+| Hashing | argon2id |
+| Registration | None. Invite-only, admin-issued |
+
+Lockout is per **account**, not only per address, because an attacker rotates
+IPs and Funnel traffic may share one.
+
+### Turning it off
+
+```bash
+tailscale funnel --bg off       # back to tailnet-only, instantly
+```
+
+Then drop `SABER_PUBLIC` and set `SABER_AUTH_MODE=tailscale` to remove the
+password path entirely.
+
+---
+
 ## How the identity actually works
 
 `tailscale serve` sets three headers on every proxied request:
@@ -126,18 +215,23 @@ about header trust are how this class of auth goes wrong.
 | Opened `localhost:5000` directly | 403, "did not arrive through the tailnet" |
 | On the tailnet, no account | 403, page prints the `grant-access` command |
 | Account disabled | 403, "this account has been disabled" |
-| Funnel enabled, request from the internet | 403, anonymous requests are refused |
+| Funnel enabled, `tailscale` mode, request from the internet | 403, anonymous requests are refused |
+| Funnel enabled, `hybrid` mode, request from the internet | The password login page |
+| Identity headers on a Funnel request | Refused — Tailscale never sets them there, so their presence is a forgery |
 | Not on the tailnet at all | Connection refused — nothing is listening publicly |
 
 ---
 
-## Password mode
+## The three modes
 
-`SABER_AUTH_MODE=password` (the default) keeps the original email + argon2id
-flow with admin-issued invite links, and is what the test suite runs against.
-Use it for local development. It is still a supported mode, not dead code — but
-it is not how this is deployed, because it needs the app to be reachable
-somewhere a password can be typed.
+| Mode | Tailnet identity | Password form | Use |
+|---|---|---|---|
+| `tailscale` | Yes | No | Private tailnet deployment |
+| `hybrid` | Yes | Yes | Public Funnel deployment |
+| `password` | No | Yes | Local development; the test suite default |
+
+`password` ignores identity headers entirely, so a password deployment can
+never silently become header-authenticated.
 
 ```bash
 sabermetrics create-admin --email you@example.com

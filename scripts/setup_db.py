@@ -327,6 +327,8 @@ DDL_STATEMENTS = [
         avatar_emoji TEXT,
         password_hash TEXT,
         tailscale_login TEXT,
+        failed_login_count INTEGER DEFAULT 0,
+        locked_until TIMESTAMP,
         role TEXT NOT NULL DEFAULT 'user',
         status TEXT NOT NULL DEFAULT 'invited',
         monthly_deck_quota INTEGER,
@@ -453,7 +455,14 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
         # Tailnet identity (ADR-026). Its own column rather than reuse of
         # `email`, because a Tailscale login is not always an email address:
         # GitHub SSO renders as "someone@github".
-        "users": [("tailscale_login", "TEXT")],
+        "users": [
+            ("tailscale_login", "TEXT"),
+            # Per-account lockout (ADR-027). IP rate limiting alone is weak
+            # once /login faces the internet: an attacker rotates addresses,
+            # and Funnel traffic may share one.
+            ("failed_login_count", "INTEGER"),
+            ("locked_until", "TIMESTAMP"),
+        ],
     }
     for table, cols in column_migrations.items():
         cursor = conn.execute(f"PRAGMA table_info({table})")

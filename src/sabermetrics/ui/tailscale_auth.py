@@ -22,9 +22,14 @@ goes wrong when it is left implicit:
   module can close — a local process can also just read the SQLite file. The
   host is the trust boundary, and it is the admin's own machine.
 * **Funnel traffic is anonymous.** ``tailscale funnel`` exposes the same port to
-  the public internet and does *not* set identity headers. Requests with no
-  identity are rejected rather than treated as some default user, so turning
-  Funnel on by accident locks strangers out instead of letting them in.
+  the public internet and does *not* set identity headers, so a public visitor
+  can never arrive already authenticated. They are offered the password login
+  instead (hybrid mode), or refused outright (tailscale mode).
+
+  Two independent checks reach that conclusion, deliberately. The source-address
+  check below fails for public traffic, and :func:`is_funnel_request` reads
+  Tailscale's own marker. Either alone would be enough; neither is trusted to
+  be the only thing standing between a stranger and an admin session.
 
 The source check below is defence in depth against the realistic misconfiguration
 rather than against a determined attacker: if the app is ever bound to a LAN
@@ -48,6 +53,12 @@ LOGIN_HEADER = "Tailscale-User-Login"
 NAME_HEADER = "Tailscale-User-Name"
 PROFILE_PIC_HEADER = "Tailscale-User-Profile-Pic"
 
+#: Set by Tailscale on requests that arrived through Funnel, i.e. from the
+#: public internet rather than the tailnet. Funnel traffic is anonymous — it
+#: carries no identity headers — so this is a second, independent signal for
+#: the same conclusion rather than the thing we rely on.
+FUNNEL_HEADER = "Tailscale-Funnel-Request"
+
 
 @dataclass(frozen=True, slots=True)
 class TailscaleIdentity:
@@ -67,6 +78,15 @@ class TailscaleIdentity:
     def suggested_name(self) -> str:
         """Display name to seed a new account with."""
         return self.display_name or self.login.split("@", 1)[0]
+
+
+def is_funnel_request(headers) -> bool:
+    """Return True if Tailscale marked this request as arriving via Funnel.
+
+    Funnel means "from the public internet". Used to refuse identity headers
+    outright and to apply the stricter public login policy.
+    """
+    return bool((headers.get(FUNNEL_HEADER) or "").strip())
 
 
 def is_tailnet_address(addr: str | None) -> bool:
@@ -97,6 +117,19 @@ def identity_from_headers(
     """
     login = (headers.get(LOGIN_HEADER) or "").strip()
     if not login:
+        return None
+
+    if is_funnel_request(headers):
+        # Tailscale does not set identity headers on Funnel requests, so their
+        # presence here means someone put them there. Refuse regardless of the
+        # source check — this is the one case where a header pair is actively
+        # suspicious rather than merely unverified.
+        logger.warning(
+            "Rejected %s=%r on a Funnel (public internet) request. Tailscale "
+            "does not set identity headers on Funnel traffic.",
+            LOGIN_HEADER,
+            login,
+        )
         return None
 
     if require_tailnet_source and not is_tailnet_address(remote_addr):
