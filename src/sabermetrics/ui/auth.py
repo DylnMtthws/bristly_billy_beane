@@ -1,13 +1,17 @@
 """Authentication: Flask-Login glue, forms, and the auth blueprint.
 
-Two modes, chosen by ``SABER_AUTH_MODE`` and fixed at app-creation time:
+Three modes, chosen by ``SABER_AUTH_MODE`` and fixed at app-creation time:
 
-``tailscale`` (ADR-026, how it is deployed)
+``tailscale`` (ADR-026, local/private-tailnet alternative)
     The app sits behind ``tailscale serve`` and takes the caller's identity
     from the headers that proxy sets. There is no password, no invite link and
     no login form: Tailscale has already authenticated the user, and the
     ``users`` table only says what they may do. Provisioning is one command —
     ``sabermetrics grant-access <login>``.
+
+``hybrid`` (ADR-028 production)
+    Password login for public platform-proxy traffic, plus tailnet identity
+    when requests actually arrive through that trusted proxy.
 
 ``password`` (default; local development and the test suite)
     The original email + argon2id flow with admin-issued invite links.
@@ -55,8 +59,8 @@ logger = logging.getLogger(__name__)
 MODE_TAILSCALE = "tailscale"
 MODE_PASSWORD = "password"
 #: Both at once: tailnet identity when present, password login otherwise. This
-#: is what a Funnel deployment needs — Funnel traffic is anonymous, so public
-#: visitors have to be able to sign in, while you keep passwordless access.
+#: is what a public deployment needs — platform traffic has no Tailscale
+#: identity, so public visitors have to be able to sign in.
 MODE_HYBRID = "hybrid"
 ALL_MODES = (MODE_TAILSCALE, MODE_PASSWORD, MODE_HYBRID)
 

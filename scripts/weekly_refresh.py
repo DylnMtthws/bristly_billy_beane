@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Weekly refresh script (D8.2).
+"""Weekly refresh script (D8.2), for the legacy path only.
+
+Not used by the cEDH container or its managed ``mtg_v1`` data boundary.
 
 Runs Sunday 3am via launchd.
 Actions:

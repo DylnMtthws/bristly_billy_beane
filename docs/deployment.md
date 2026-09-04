@@ -1,23 +1,148 @@
 # Deployment
 
-One machine, one command, no public surface.
+Production is one Python 3.11 container on one managed machine, behind the
+platform TLS proxy, with SQLite app state on a persistent volume at `/data`.
+The image binds `0.0.0.0:8080` **inside the container only**. Do not expose that
+port directly and do not start a second app machine while SQLite is the state
+store. The checked-in `deploy/fly.toml` is a draft; deployment and account
+creation remain separate, deliberate operations.
 
-The app binds `127.0.0.1` and **is never exposed by a port forward**.
-`tailscale serve` terminates TLS on your tailnet and proxies to that local
-port, so the only people who can reach it are devices on your tailnet — and
-Tailscale has already authenticated every one of them.
+## ADR-028: cloud hosting
 
-This replaces the Cloudflare Tunnel design (ADR-016), which was specified but
-never deployed. Tailscale is a strictly better position for this app: the
-tunnel would have put a login page on the public internet, where anyone could
-knock on it. A tailnet has no public surface to knock on at all. It is also one
-command instead of a daemon, a config file, a DNS record and an account.
+ADR-028 supersedes ADR-008's rejection of cloud hosting on cost and ADR-026's
+tailnet-only production posture. The closed beta needs a public URL that does
+not require every invited tester to install Tailscale. The chosen shape is one
+container on a managed platform, still one Python process, with waitress and
+one process-wide build thread pool. SQLite remains appropriate only because
+there is exactly one machine and one attached volume.
+
+Production uses `hybrid` auth. Public requests use the password and one-time
+invite path; trusted Tailscale identity headers can still provide passwordless
+access where that proxy is actually present. Accounts remain admin-issued and
+there is no registration route (ADR-015 is unchanged). The cEDH app reads
+`mtg_v1` from managed Postgres over TLS with `sslmode=require`, and calls the
+simulator over plain HTTP on the platform's private network. Its response is
+accepted only after validating `cedh-simulation-result.v2`.
+
+The annual `$30` target and `$100` ceiling in `CLAUDE.md` now describe LLM
+spend only. Hosting is budgeted separately at approximately $15–$25 per month.
+If a second app machine is ever needed, migrate users, jobs, feedback,
+candidates and the other app-state tables from SQLite to Postgres first; do
+not attach two writers to this volume.
+
+## Container deployment
+
+Build and smoke the artifact locally without publishing it:
+
+```bash
+docker build --platform linux/amd64 -t decklab .
+docker run --rm --tmpfs /data:rw,uid=1001,gid=1001 \
+  -e SABER_AUTH_MODE=password -e SABER_SECRET_KEY=local-smoke-only \
+  -p 127.0.0.1:8080:8080 decklab
+curl http://127.0.0.1:8080/healthz
+curl http://127.0.0.1:8080/login
+```
+
+The final verification produced a 91,467,622-byte (about 91.5 MB) amd64 image,
+running as uid/gid `1001:1001`. CI rebuilds it, enforces the 400 MB ceiling,
+and smokes both endpoints on an empty tmpfs `/data`.
+
+### Environment
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SABER_BIND_HOST` | `127.0.0.1` | Waitress bind host; production sets `0.0.0.0` inside the container |
+| `SABER_PORT` | `5000` | Listen port; production sets `8080` |
+| `SABER_TRUSTED_PROXY` | `127.0.0.1` | Immediate proxy trusted by waitress; production sets `*`, still limited to one hop |
+| `SABER_DB_PATH` | `data/sabermetrics.db` | SQLite app-state path; production sets `/data/sabermetrics.db` |
+| `CEDH_SIMULATOR_URL` | unset | Selects the HTTP simulator client and supplies its private base URL |
+| `CEDH_SIMULATOR_TIMEOUT` | `180` | Simulator read timeout in seconds, including cold-start allowance |
+
+Production additionally sets `SABER_PUBLIC=1` and `SABER_AUTH_MODE=hybrid` as
+shown in `deploy/fly.toml`. `SABER_PUBLIC=1` without a stable secret is fatal;
+public `0.0.0.0` binding with `tailscale`-only auth is also fatal.
+
+### Secrets
+
+Set these in the platform secret store, never in `fly.toml`, `.env`, an image
+layer, a log, or a commit:
+
+| Secret | Required | Purpose |
+|---|---|---|
+| `SABER_SECRET_KEY` | Yes | Stable session and CSRF signing key; generate 32 random bytes or more |
+| `MTG_V1_DSN` | Yes for production card data | `mtg_consumer` Postgres DSN, including `?sslmode=require` |
+| `HF_TOKEN` | Optional | Enables DeepSeek narrative/explanation calls; builds remain deterministic without it |
+| `CEDH_SIMULATOR_URL` | Yes for production simulation | Private simulator base URL; also selects HTTP mode |
+
+### First admin and tester onboarding under `hybrid`
+
+Run the first command in the production container/console. It prompts for the
+password rather than putting a credential in shell history:
+
+```bash
+SABER_DB_PATH=/data/sabermetrics.db sabermetrics create-admin \
+  --email admin@example.com --display-name "Deck Lab Admin"
+```
+
+Then sign in as that admin, or provision each tester from the console. The
+admin creates an inactive account and a one-time invite; the tester opens the
+link, chooses their own password, and becomes active. There is no
+self-registration.
+
+```bash
+SABER_DB_PATH=/data/sabermetrics.db sabermetrics invite-user \
+  --email alice@example.com --display-name "Alice" \
+  --base-url https://decklab.example.com
+```
+
+### Backup and restore
+
+`db-backup` uses SQLite's online backup API, so snapshots are consistent even
+while the single app process is serving requests:
+
+```bash
+SABER_DB_PATH=/data/sabermetrics.db sabermetrics db-backup \
+  /data/backups/sabermetrics-2026-09-04.db
+```
+
+To restore, first stop the app process, preserve the current database, restore
+through the same SQLite backup API, then restart:
+
+```bash
+SABER_DB_PATH=/data/sabermetrics.db sabermetrics db-backup \
+  /data/backups/pre-restore.db
+SABER_DB_PATH=/data/backups/sabermetrics-2026-09-04.db \
+  sabermetrics db-backup /data/sabermetrics.db
+```
+
+The schema is created automatically on an empty mounted volume. Any build job
+left nonterminal by a restart is surfaced as `failed(interrupted)` and can be
+rebuilt; only a completed candidate counts against quota.
+
+### Integration hand-off
+
+- Postgres stays behind `mtg_v1` and `assert_v1_only`; the production DSN must
+  retain `sslmode=require`.
+- The simulator request contract is the frozen contract in
+  `CLOUD_ALIGNMENT_PLAN.md` section 2.2.
+- The vendored response schema is
+  `fixtures/cedh/contracts/cedh-simulation-result.v2.schema.json`; its schema id
+  is `cedh-simulation-result.v2` and every HTTP 200 is validated against it.
+- Platform secrets are exactly the four entries in the table above. No real
+  secret or remote DSN is checked into this repository.
+
+## Local/tailnet alternative
+
+The app still defaults to `127.0.0.1:5000`. `tailscale serve` can terminate TLS
+on a private tailnet and proxy to that local port, so devices on the tailnet
+can use passwordless `tailscale` auth. This is a supported local/private shape,
+not the ADR-028 production deployment.
 
 ---
 
-## Pick a shape first
+### Pick a local shape
 
-| | Private (tailnet only) | **Public (Funnel)** |
+| | Private (tailnet only) | **Public (local Funnel alternative)** |
 |---|---|---|
 | Who can reach it | Devices on your tailnet | Anyone with the URL |
 | Testers must install Tailscale | Yes | No |
@@ -25,8 +150,8 @@ command instead of a daemon, a config file, a DNS record and an account.
 | How people sign in | Tailscale identity, no password | You: identity. Them: password |
 | Public attack surface | None | The login page |
 
-Both are below. Private is stronger and is the default; public is what you want
-if testers should be able to open a link and nothing else.
+Both local alternatives are below. The managed container above is the intended
+production shape for testers who should be able to open a link and nothing else.
 
 ---
 
@@ -124,7 +249,7 @@ no session to expire and no token to wait out.
 
 ---
 
-## Going public with Funnel
+## Local public alternative: Funnel
 
 `tailscale funnel` publishes the same port to the public internet, on the same
 `.ts.net` hostname, with the same certificate. Testers open a link; they install
@@ -265,7 +390,7 @@ about header trust are how this class of auth goes wrong.
 | Mode | Tailnet identity | Password form | Use |
 |---|---|---|---|
 | `tailscale` | Yes | No | Private tailnet deployment |
-| `hybrid` | Yes | Yes | Public Funnel deployment |
+| `hybrid` | Yes | Yes | Managed public deployment, or local Funnel alternative |
 | `password` | No | Yes | Local development; the test suite default |
 
 `password` ignores identity headers entirely, so a password deployment can
@@ -276,7 +401,7 @@ sabermetrics create-admin --email you@example.com
 sabermetrics invite-user --email tester@example.com
 ```
 
-## Keeping it running
+## Keeping the local alternative running
 
 `sabermetrics serve` runs under `waitress`. To survive reboots, run it from a
 launchd job in the style of the ones in `launchd/`, and set `tailscale serve`

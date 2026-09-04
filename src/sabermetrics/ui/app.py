@@ -49,7 +49,7 @@ def create_app(db_path: Path | None = None) -> Flask:
         raise ValueError(f"SABER_AUTH_MODE must be one of {ALL_MODES}, got {mode!r}")
     app.config["AUTH_MODE"] = mode
 
-    # `public` means the app is reachable from the internet (Tailscale Funnel).
+    # `public` means the app is reachable from the internet through a proxy.
     # It does not change routing; it tightens the posture, and it is opt-in so
     # that a private deployment is never accidentally held to a public policy
     # nor a public one to a private policy.
@@ -78,7 +78,7 @@ def create_app(db_path: Path | None = None) -> Flask:
     app.config["SECRET_KEY"] = secret
 
     # --- Session cookie hardening ---
-    # Secure defaults to on (the app is fronted by HTTPS via the tunnel). For
+    # Secure defaults to on (the app is fronted by HTTPS via a proxy). For
     # local http previews, set SABER_COOKIE_SECURE=0 so the cookie is sent.
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,

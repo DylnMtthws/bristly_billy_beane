@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Quarterly set refresh script (D8.4).
+"""Quarterly set refresh script (D8.4), for the legacy path only.
+
+Not used by the cEDH container or its managed ``mtg_v1`` data boundary.
 
 Follows SKILL-006: Refresh for Set Release.
 Actions:

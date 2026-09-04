@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Nightly refresh script (D8.1).
+"""Nightly refresh script (D8.1), for the legacy path only.
+
+Not used by the cEDH container or its managed ``mtg_v1`` data boundary.
 
 Runs daily at 2am via launchd.
 Actions:

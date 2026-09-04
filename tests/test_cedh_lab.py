@@ -374,6 +374,7 @@ class TestPackSupport:
 
 def test_the_shipped_pack_matches_the_list_the_simulator_models():
     """The pack's 99 are the real list, not an approximation of it."""
+    import os
     import tomllib
     from pathlib import Path
 
@@ -386,11 +387,12 @@ def test_the_shipped_pack_matches_the_list_the_simulator_models():
     assert sum(pack["role_targets"].values()) == 99
     assert "cards_sha256" in pack["source"]
 
-    simulator_list = Path(
-        "/Users/dylan/Projects/commander_simulator/data/kinnan.deck.toml"
-    )
-    if not simulator_list.exists():
-        pytest.skip("commander_simulator checkout not present")
+    configured_path = os.environ.get("CEDH_KINNAN_DECK_TOML")
+    if not configured_path:
+        pytest.skip("CEDH_KINNAN_DECK_TOML is not set")
+    simulator_list = Path(configured_path)
+    if not simulator_list.is_file():
+        pytest.skip("CEDH_KINNAN_DECK_TOML does not name a file")
     with simulator_list.open("rb") as handle:
         mainboard = set(tomllib.load(handle)["cards"]["mainboard"])
     assert {c["name"] for c in pack["cards"]} == mainboard
