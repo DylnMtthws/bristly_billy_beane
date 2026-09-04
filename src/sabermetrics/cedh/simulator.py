@@ -372,7 +372,7 @@ class HttpSimulatorClient:
         *,
         games: int = 20000,
         objective_turn: int = 3,
-        timeout_seconds: float = 180.0,
+        timeout_seconds: float = 330.0,
         transport: httpx.BaseTransport | None = None,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -444,6 +444,13 @@ class HttpSimulatorClient:
             for attempt in range(2):
                 try:
                     response = client.post(self._url, json=request)
+                except (httpx.ReadTimeout, httpx.WriteTimeout) as exc:
+                    # The server may already be running this simulation. Retrying
+                    # would submit it twice and can hide the timeout behind busy.
+                    return NotSimulated(
+                        reason="timeout",
+                        detail=str(exc) or "simulation service request timed out",
+                    )
                 except httpx.RequestError as exc:
                     if attempt == 0:
                         self._sleep(1.0)
@@ -498,7 +505,7 @@ class SubprocessSimulatorClient:
         *,
         games: int = 20000,
         objective_turn: int = 3,
-        timeout_seconds: float = 180.0,
+        timeout_seconds: float = 330.0,
         cards_path: Path | str = "fixtures/cedh/cards.json",
         supported: frozenset[str] = frozenset(),
     ) -> None:

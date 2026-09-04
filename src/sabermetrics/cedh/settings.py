@@ -93,7 +93,7 @@ class SimulatorSettings(BaseModel):
     fixture_dir: str = "fixtures/cedh/simulation"
     games: int = 20000
     objective_turn: int = 3
-    timeout_seconds: float = 180.0
+    timeout_seconds: float = 330.0
 
 
 class MetaSettings(BaseModel):

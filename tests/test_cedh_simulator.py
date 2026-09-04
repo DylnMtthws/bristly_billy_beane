@@ -289,7 +289,7 @@ class TestHttpClient:
         assert seen["document"]["turn"] == 3
         assert seen["document"]["seed"] == int(candidate.deck_sha256[:16], 16)
         assert seen["timeout"]["connect"] == 15.0
-        assert seen["timeout"]["read"] == 180.0
+        assert seen["timeout"]["read"] == 330.0
         assert result.simulator_version == "2.3.4"
         assert result.result_schema == HTTP_RESULT_SCHEMA_ID
         assert result.cards_sha256 == "b" * 64
@@ -363,6 +363,25 @@ class TestHttpClient:
         result = self._client(handler, sleeps).simulate(candidate)
         assert result.status == "simulated"
         assert sleeps == [1.0]
+        assert calls == 2
+
+    @pytest.mark.parametrize("timeout_type", [httpx.ReadTimeout, httpx.WriteTimeout])
+    def test_timeout_is_not_resubmitted(self, candidate, timeout_type):
+        calls = []
+        sleeps = []
+
+        def handler(request):
+            calls.append(request)
+            if len(calls) == 1:
+                raise timeout_type("simulation timed out", request=request)
+            return httpx.Response(429, json={"error": "busy"})
+
+        result = self._client(handler, sleeps).simulate(candidate)
+        assert isinstance(result, NotSimulated)
+        assert result.reason == "timeout"
+        assert result.detail == "simulation timed out"
+        assert len(calls) == 1
+        assert sleeps == []
 
     def test_two_connection_failures_are_unavailable(self, candidate):
         def handler(request):
