@@ -56,10 +56,11 @@ and smokes both endpoints on an empty tmpfs `/data`.
 | `SABER_TRUSTED_PROXY` | `127.0.0.1` | Immediate proxy trusted by waitress; production sets `*`, still limited to one hop |
 | `SABER_DB_PATH` | `data/sabermetrics.db` | SQLite app-state path; production sets `/data/sabermetrics.db` |
 | `CEDH_SIMULATOR_URL` | unset | Selects the HTTP simulator client and supplies its private base URL |
-| `CEDH_SIMULATOR_TIMEOUT` | `180` | Simulator read timeout in seconds, including cold-start allowance |
+| `CEDH_SIMULATOR_TIMEOUT` | `330` | Simulator read/write timeout in seconds; outlives the server's 300 s ceiling |
 
 Production additionally sets `SABER_PUBLIC=1` and `SABER_AUTH_MODE=hybrid` as
-shown in `deploy/fly.toml`. `SABER_PUBLIC=1` without a stable secret is fatal;
+shown in `deploy/fly.toml`. `SABER_PUBLIC=1` requires a stable secret,
+`MTG_V1_DSN`, and `CEDH_SIMULATOR_URL`; missing values are fatal at startup.
 public `0.0.0.0` binding with `tailscale`-only auth is also fatal.
 
 ### Secrets
