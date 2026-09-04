@@ -70,7 +70,7 @@ jobs:
 
       - name: Smoke health and login
         run: |
-          curl --fail --silent --show-error --retry 20 --retry-connrefused \
+          curl --fail --silent --show-error --retry 20 --retry-all-errors \
             --retry-delay 1 http://127.0.0.1:8080/healthz
           curl --fail --silent --show-error http://127.0.0.1:8080/login \
             | grep --quiet "Sign In"
