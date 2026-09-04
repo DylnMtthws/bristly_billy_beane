@@ -5,7 +5,7 @@ consistent), plus thin repositories for the most-duplicated query shapes and a
 helper for hydrating Pydantic models from rows. This replaces the pattern of
 each module calling ``sqlite3.connect()`` directly with its own ad-hoc setup.
 
-Connection policy (deliberately behavior-preserving):
+Connection policy:
 
 - ``row_factory`` defaults to :class:`sqlite3.Row`. A ``Row`` supports positional
   (``row[0]``), keyed (``row["col"]``), iteration, and ``dict(row)`` access, so
@@ -14,8 +14,8 @@ Connection policy (deliberately behavior-preserving):
   foreign keys enabled (``scripts/setup_db.py``), but application connections
   have historically run with SQLite's per-connection default (off). Turning it on
   globally here could reject inserts that currently succeed, so it stays opt-in.
-- WAL journal mode is a persistent property of the database file, already set at
-  setup time; no per-connection pragma is needed.
+- Every connection sets a five-second busy timeout and WAL journal mode. WAL is
+  persistent, but setting it idempotently also hardens a newly copied database.
 """
 
 from __future__ import annotations
@@ -89,7 +89,11 @@ def connect(
     Yields:
         An open :class:`sqlite3.Connection`.
     """
-    conn = sqlite3.connect(str(db_path))
+    path = Path(db_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA journal_mode=WAL")
     if row_factory:
         conn.row_factory = sqlite3.Row
     if foreign_keys:

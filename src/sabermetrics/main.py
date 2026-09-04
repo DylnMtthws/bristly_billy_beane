@@ -215,9 +215,33 @@ def search_rules(query: str, top_k: int) -> None:
 def serve(port: int, host: str) -> None:
     """Start the Flask UI server."""
     from sabermetrics.ui.app import run_server
+    from scripts.setup_db import setup_database
 
     db_path = _default_db_path()
+    setup_database(db_path)
     run_server(host=host, port=port, db_path=db_path)
+
+
+@cli.command("db-backup")
+@click.argument("dest", type=click.Path(path_type=Path))
+def db_backup(dest: Path) -> None:
+    """Create a consistent online SQLite backup at DEST."""
+    import sqlite3
+
+    from sabermetrics import db
+
+    source = _default_db_path()
+    if not source.exists():
+        raise click.ClickException(f"Database does not exist: {source}")
+    if source.resolve() == dest.resolve():
+        raise click.ClickException("Backup destination must differ from the database")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with (
+        db.connect(source, row_factory=False) as source_conn,
+        sqlite3.connect(str(dest)) as dest_conn,
+    ):
+        source_conn.backup(dest_conn)
+    click.echo(f"Backed up {source} to {dest}")
 
 
 @cli.command("create-admin")

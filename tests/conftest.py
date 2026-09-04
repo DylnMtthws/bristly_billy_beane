@@ -173,7 +173,14 @@ def _offline_cedh_env(monkeypatch):
     The opt-in smoke tests read the same variables directly at import time, so
     they are unaffected by this.
     """
-    for var in ("MTG_V1_DSN", "HF_TOKEN", "SABER_AUTH_MODE", "SABER_PUBLIC"):
+    for var in (
+        "MTG_V1_DSN",
+        "HF_TOKEN",
+        "CEDH_SIMULATOR_URL",
+        "CEDH_SIMULATOR_TIMEOUT",
+        "SABER_AUTH_MODE",
+        "SABER_PUBLIC",
+    ):
         monkeypatch.delenv(var, raising=False)
     # Several tests invoke the Click CLI, whose entry point loads `.env`. On a
     # machine that has actually been deployed that file sets AUTH_MODE,

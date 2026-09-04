@@ -537,6 +537,7 @@ def setup_database(db_path: Path) -> None:
 
     conn = sqlite3.connect(str(db_path))
     try:
+        conn.execute("PRAGMA busy_timeout=5000")
         # Enable WAL mode for better concurrent read performance
         conn.execute("PRAGMA journal_mode=WAL")
         # Enable foreign keys
