@@ -22,7 +22,7 @@ access where that proxy is actually present. Accounts remain admin-issued and
 there is no registration route (ADR-015 is unchanged). The cEDH app reads
 `mtg_v1` from managed Postgres over TLS with `sslmode=require`, and calls the
 simulator over plain HTTP on the platform's private network. Its response is
-accepted only after validating `cedh-simulation-result.v2`.
+accepted only after validating `cedh-simulation-result.v3`.
 
 The annual `$30` target and `$100` ceiling in `CLAUDE.md` now describe LLM
 spend only. Hosting is budgeted separately at approximately $15–$25 per month.
@@ -126,8 +126,8 @@ rebuilt; only a completed candidate counts against quota.
 - The simulator request contract is the frozen contract in
   `CLOUD_ALIGNMENT_PLAN.md` section 2.2.
 - The vendored response schema is
-  `fixtures/cedh/contracts/cedh-simulation-result.v2.schema.json`; its schema id
-  is `cedh-simulation-result.v2` and every HTTP 200 is validated against it.
+  `fixtures/cedh/contracts/cedh-simulation-result.v3.schema.json`; its schema id
+  is `cedh-simulation-result.v3` and every HTTP 200 is validated against it.
 - Platform secrets are exactly the four entries in the table above. No real
   secret or remote DSN is checked into this repository.
 

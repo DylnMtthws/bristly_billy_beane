@@ -238,9 +238,9 @@ inputs are fixtures rather than live.
 ### What is not built
 
 One commander pack, because the simulator models one deck. The interfaces take
-more; nothing claims more exists. The tournament half of the `mtg_v1` contract
-and the simulator's JSON interface do not exist yet either — both absences are
-visible in the product rather than worked around.
+more; nothing claims more exists. Tournament evidence is derived from the live
+atomic `mtg_v1` views. The simulator is a separate versioned JSON boundary; an
+unavailable result remains visible in the product rather than worked around.
 [`docs/integration-handoff.md`](docs/integration-handoff.md) states exactly what
 is needed from each sibling repository.
 

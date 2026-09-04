@@ -9,11 +9,10 @@ Nothing in this document asks either repository to import our code, and nothing
 here imports theirs. The boundaries are a Postgres schema and two JSON
 documents.
 
-**Status at time of writing (2026-09-03).** The card half of the `mtg_v1`
-contract is live and we read it. The tournament half does not exist. The
-simulator's JSON contract does not exist. Both absences are visible in the
-product — as "no tournament evidence" and "not simulated" — rather than papered
-over, and the cEDH slice ships and runs without either.
+**Status at time of writing (2026-09-04).** The atomic card, deck, and tournament
+facts in `mtg_v1` are live and Deck Lab reads them. The simulator remains a
+separate versioned JSON boundary; any unavailable run is visible as "not
+simulated" rather than being papered over.
 
 ---
 
@@ -34,88 +33,67 @@ over, and the cEDH slice ships and runs without either.
 
 ## 2. Required from `ingestion_pipeline_mtg`
 
-### 2.1 The tournament half of `mtg_v1` — **required, does not exist**
+### 2.1 Canonical tournament and deck facts — **published**
 
-`mtg_v1` currently publishes `card`, `card_any_medium`, `card_non_gameplay`,
-`card_face` and `card_legality`. Stage 3 (decklist import) is paused, so there
-is no tournament data in the contract at all.
+The ingest service publishes atomic facts. It does not publish, and Deck Lab
+does not require, consumer-specific commander or inclusion aggregates.
 
-`MetaRepository` is written against the four views below.
-`PostgresMetaRepository.availability()` probes `information_schema.views` and
-reports which are missing; until they exist, every read raises
-`RepositoryUnavailable` and the UI states that no tournament evidence is
-available. It never returns an empty list, because an empty list reads as "no
-decks ran this card" and means "we have no data".
+| View | Columns Deck Lab requires |
+|---|---|
+| `mtg_v1.tournament` | `tournament_id`, `source`, `name`, `event_date`, `url`, `player_count`, `top_cut` |
+| `mtg_v1.tournament_entry` | `entry_id`, `tournament_id`, `deck_id`, `standing`, `wins`, `losses`, `draws` |
+| `mtg_v1.deck` | `deck_id`, `commander_identity`, `is_complete` |
+| `mtg_v1.deck_commander` | `deck_id`, `oracle_id`, `submitted_name`, `position` |
+| `mtg_v1.deck_card` | `deck_id`, `oracle_id`, `board` |
+| `mtg_v1.card_any_medium` | `oracle_id`, `name` (plus the card facts used elsewhere) |
 
-Column names below are what the adapter selects. If different names are more
-natural on your side, say so and the adapter changes — the shape is what
-matters.
+`PostgresMetaRepository` maps producer names to its internal read model:
+`tournament_id` → `event_id`, `event_date` → `held_on`, `player_count` →
+`size`, `url` → `source_url`, `deck_id` → `decklist_id`, and
+`deck.commander_identity` → `identity_key`.
 
-```sql
--- One row per tournament.
-CREATE VIEW mtg_v1.tournament AS SELECT
-    event_id     text,   -- stable id, unique
-    name         text,
-    held_on      date,   -- required: the metagame window filters on it
-    size         int,    -- player count; the min-event-size filter needs it
-    source       text,   -- e.g. 'TopDeck.gg'
-    source_url   text    -- so a claim can be traced to the event
-;
+Deck Lab owns aggregation. Its exact cohort joins `tournament` →
+`tournament_entry` → `deck`, requires a submitted non-null `deck_id`, and
+filters `deck.commander_identity` to the requested identity,
+`tournament.event_date >= since`, and
+`tournament.player_count >= min_event_size`. Commander Oracle IDs and submitted
+names come from `deck_commander`; a partner pair therefore remains one deck
+identity with two commander rows.
 
--- One row per deck's finish at one event.
-CREATE VIEW mtg_v1.tournament_entry AS SELECT
-    entry_id     text,
-    event_id     text,   -- -> mtg_v1.tournament.event_id
-    identity_key text,   -- -> mtg_v1.commander_identity.identity_key
-    standing     int,    -- nullable
-    wins         int,
-    losses       int,
-    draws        int,
-    decklist_id  text    -- nullable
-;
+From that same cohort:
 
--- One row per commander identity, aggregated over all events.
-CREATE VIEW mtg_v1.commander_identity AS SELECT
-    identity_key text,   -- see 2.2 below
-    oracle_ids   uuid[], -- 1 or 2 entries; partners are one identity
-    names        text[],
-    entries      int,
-    events       int,
-    wins         int,
-    top_cuts     int
-;
+- entries are distinct qualifying `entry_id` values;
+- events are distinct qualifying `tournament_id` values;
+- event wins are entries with `standing = 1` (not the sum of match `wins`);
+- top cuts are entries with a known `top_cut` and `standing <= top_cut`;
+- the inclusion denominator is the exact count of distinct submitted deck IDs;
+- each numerator is the count of distinct cohort deck IDs containing a resolved,
+  non-null mainboard `oracle_id`; names resolve through `card_any_medium`.
 
--- Per-card inclusion, pre-aggregated per (identity, window, event-size floor).
-CREATE VIEW mtg_v1.commander_card_inclusion AS SELECT
-    identity_key    text,
-    oracle_id       uuid,
-    card_name       text,
-    decks_including int,
-    decks           int,  -- REQUIRED and > 0: the denominator
-    since           date, -- window start this row was computed over
-    min_event_size  int   -- event-size floor this row was computed over
-;
-```
+`deck.is_complete = false` does not remove a deck from the presence-based
+inclusion denominator. EDHTop16 commonly marks a list incomplete when duplicate
+basic lands were collapsed; removing those decks would bias the corpus by color
+identity. Evidence reports both the denominator and incomplete-deck count.
 
-**`decks` is not optional.** An inclusion rate without its sample size is not
-usable as evidence, and `InclusionFact` will not construct without it. We
-display the rate and the denominator together, always.
+The repository loads a whole evidence slice on one Postgres connection in a
+read-only, repeatable-read transaction. Display limits apply only after exact
+counts have been computed. Provenance identifies the canonical views and calls
+the result a Deck Lab cohort aggregate.
 
-If pre-aggregating inclusion is the wrong shape for your pipeline, the
-alternative we can work with is raw `mtg_v1.deck` + `mtg_v1.deck_card` views and
-we aggregate here. Say which you prefer; we would rather not have both.
+### 2.2 Capability and absence behavior
 
-### 2.2 `identity_key` — a definition we need to agree on
+Availability probes execute zero-row selects against every required column, so
+they detect missing views, missing columns, and missing `mtg_consumer` SELECT
+permission. Tournament summaries (`tournament`, `tournament_entry`, `deck`,
+`deck_commander`) and card inclusion (those four plus `deck_card` and
+`card_any_medium`) are separate capabilities.
 
-We use the sorted `oracle_id`s joined by `+`, so a partner pair addressed in
-either order is one identity:
-
-```python
-identity_key = "+".join(sorted(oracle_ids))
-```
-
-If you compute it differently, publish yours and we will adopt it. What must
-not happen is two definitions that agree on singletons and disagree on partners.
+- Missing tournament facts render as "no tournament evidence."
+- Missing inclusion facts preserve tournament finishes and explicitly mark card
+  inclusion unavailable.
+- A successful zero-row cohort remains an available empty result; unavailable
+  data is represented separately and is never turned into an empty list or a
+  neutral value.
 
 ### 2.3 The `is_paper` defect — **we are working around it, on your advice**
 
@@ -167,147 +145,136 @@ that the adapter has exactly one execution path.
 
 ---
 
-## 3. Required from `commander_simulator`
+## 3. `commander_simulator` — **delivered, and the contract is now two-way**
 
-### 3.1 A JSON interface — **required, does not exist**
+**Status 2026-09-04.** The simulator publishes versioned JSON contracts and we
+consume them. Everything below describes the contract as it stands; the
+requests in earlier revisions of this section have been met.
 
-Today the binary reads a hand-authored `data/kinnan.deck.toml` plus
-`data/cards.json` and prints a human report. A report is not a contract, and
-`SubprocessSimulatorClient` deliberately does not parse one: non-JSON on stdout
-becomes `not_simulated(contract_violation)`.
+### 3.1 What we vendor, and why both directions
 
-What we need:
+`fixtures/cedh/contracts/` holds four files copied verbatim from
+`commander_simulator/contracts/`:
 
-```
-cs --candidate <path-to-cedh-deck-candidate.v1.json> \
-   --games <n> --turn <n> --format json
-```
+| File | Direction | Pins |
+|---|---|---|
+| `cedh-simulation-request.v1.schema.json` | we send | the `POST /simulate` envelope |
+| `cedh-deck-candidate.v2.schema.json` | we send | the deck document inside it |
+| `cedh-simulation-result.v3.schema.json` | we receive | the result |
+| `hash-golden-vectors.json` | both | `deck_sha256` and `simulation_input_sha256` |
 
-* reads the candidate document described in §3.3,
-* writes **one** `cedh-simulation-result.v1` document to **stdout**,
-* writes everything else (progress, the honesty header, warnings) to **stderr**,
-* exits non-zero on any failure, with the reason on stderr.
+An earlier revision vendored the **response** schema only. The request body was
+described in prose here and read differently there; each suite tested its own
+shape against itself and both stayed green; every real deck build failed on the
+wire with `422 unsupported candidate schema_version`, which this repository
+surfaced to users as "commander unsupported". A contract pinned in one
+direction is not pinned. `tests/test_cedh_hash_contract.py` now validates the
+documents this repository actually builds against the schemas the simulator
+actually publishes.
 
-### 3.2 `cedh-simulation-result.v1`
+`sabermetrics.cedh.wire` is the only place a simulator request is constructed.
 
-```jsonc
-{
-  "schema": "cedh-simulation-result.v1",
-  "candidate_id": "…",            // echoed from the candidate
-  "deck_sha256": "…",             // MUST equal the candidate's deck_sha256
-  "simulator_version": "…",
-  "games": 20000,
-  "objective_turn": 3,
+### 3.2 The two hashes
 
-  // These three are REQUIRED. We will not render a probability without them.
-  "metric": "goldfish_turns_to_assembly",
-  "measures": "turns until a declared pattern is assembled, playing alone …",
-  "does_not_measure": "deck quality, matchups, or whether the deck wins …",
+Agreeing on a field's *shape* is not agreeing on its *meaning*, and that was
+the second-order defect behind the first. v1 had one field, `candidate_hash`,
+that this repository read as "the deck" and the simulator computed as "the deck
+plus the strategy pack". Both readings were defensible. Neither could be
+correct at the same time as the other.
 
-  "assembly": [
-    {"turn": 3, "probability": 0.0141, "ci_low": 0.0132, "ci_high": 0.0150}
-  ],
-  "censored_fraction": 0.2318,
+| | `deck_sha256` | `simulation_input_sha256` |
+|---|---|---|
+| Answers | "is this the same deck?" | "is this the same measurement?" |
+| Covers | commander oracle IDs + library oracle IDs and quantities | the deck hash, the resolved pack's id/version/content hash, simulator and card-data versions, scenario, seed, games, turn, sweep, ablations |
+| Computed by | us, then **independently recomputed** by the simulator | the simulator only |
+| We use it for | deck identity | cache key / reproducibility |
 
-  "modeled_cards": 68,
-  "inert_cards": [
-    {"oracle_id": "…", "name": "…", "reason": "…", "category": "interaction"}
-  ],
-  "known_misclassifications": ["Hullbreaker Horror is filed inert and …"],
-  "unauthored_cards": ["Sylvan Library", "…"]
-}
-```
+`deck_sha256` is ours, unchanged, and it is ADR-025 made checkable: because the
+engine has no price and no collection input, a build is reproducible from the
+pack alone, so a deck hash identifies a **list** and not a list-plus-requester.
+Adding the strategy pack to it would have broken exactly that property.
 
-`metric`, `measures` and `does_not_measure` are required fields, not optional
-metadata. Your run report prints the honesty header before any figure; making
-those fields mandatory is how that survives the trip into a web page. Our
-template renders them above the numbers and cannot render the numbers without
-them.
-
-`deck_sha256` is how we know a stored result describes the list in front of the
-user. Ours is `sha256` over `C:<oracle_id>\n` for each sorted commander id then
-`<oracle_id>:<quantity>\n` for each card sorted by oracle_id. Adopt it, or
-publish yours and we will compute both.
-
-`known_misclassifications` exists because of *Hullbreaker Horror*. Keep sending
-it; we display it under the inert table, as you do.
-
-### 3.3 `cedh-deck-candidate.v1` — what we send
-
-Produced today. `fixtures/cedh/` has a real example, and
-`sabermetrics cedh build --pack kinnan_basalt --out cand.json` writes one.
-
-```jsonc
-{
-  "schema": "cedh-deck-candidate.v1",
-  "candidate_id": "cand-…",
-  "generated_at": "2026-09-03T…Z",
-  "deck_sha256": "…",
-  "commander": {
-    "oracle_ids": ["…"],           // 1 or 2
-    "names": ["Kinnan, Bonder Prodigy"],
-    "color_identity": ["G", "U"]
-  },
-  "cards": [                        // sums to exactly 99
-    {"oracle_id": "…", "name": "Sol Ring", "role": "acceleration",
-     "quantity": 1, "source": "auto_include"}
-  ],
-  "win_packages": [ … ],
-  "role_counts": { … },
-  "provenance": { … },
-  "notes": [ … ]
-}
+```python
+# The preimage, unchanged from what this repository has always computed.
+sha256(
+    b"".join(f"C:{oid}\n".encode() for oid in sorted(commander.oracle_ids))
+    + b"".join(f"{c.oracle_id}:{c.quantity}\n".encode()
+               for c in sorted(cards, key=lambda c: c.oracle_id))
+)
 ```
 
-**Cards are addressed by `oracle_id`.** Names are for display. A name-keyed
-handoff loses multi-faced cards at the far end, which is the failure your
-exporter already works around.
+On the wire it is `sha256:<hex>`; `DeckCandidate.deck_sha256` remains bare hex
+and `DeckCandidate.deck_sha256_wire` adds the prefix.
 
-### 3.4 The hard one: cards you have not authored
+**We compare `result.candidate.deck_sha256`, and only that, for deck
+integrity.** It is the simulator's own recomputation from the list it ran, not
+an echo of what we sent. `simulation_input_sha256` is carried on
+`SimulationResult` and is the correct key for caching a measurement — which
+makes `deck_sha256` the wrong one, since the same deck under a different pack
+or seed is a different measurement.
 
-**This is the item most likely to be underestimated, so it is stated plainly.**
+`hash-golden-vectors.json` makes all of this executable across three
+implementations (our Python, the simulator's Python, the simulator's C++): that
+ordering does not affect `deck_sha256`; that changing a commander, card or
+quantity does; that changing the strategy pack does not; and that changing the
+strategy pack does change `simulation_input_sha256`.
 
-Your card model is hand-authored for one list, and 4 of its 100 cards are
-already unauthored. A generator that varies the 99 will hand you cards with no
-authored effect — not occasionally, but on the first build that differs from
-list A.
+### 3.3 Which simulator strategy pack we ask for
 
-We are not asking you to author the format. We are asking the contract to
-define what happens, and we can work with either answer:
+The two pack namespaces are unrelated: our `kinnan_basalt` is the simulator's
+`kinnan-midrange-goldfish@1.0.0`. The mapping is **declared** in the authored
+pack YAML (`simulator_pack_id` / `simulator_pack_version`), never derived from
+the name. A pack without a declared mapping defaults to `derived-generic@1.0.0`,
+which is the simulator's reserved id for explicit derived execution — so a pack
+nobody has deliberately mapped is never run under commander-specific logic.
 
-1. **Preferred.** Accept any candidate. Treat unauthored cards as inert with
-   `category: "unauthored"`, run anyway, and report them in
-   `unauthored_cards` and `modeled_cards`. We already surface both, so the user
-   sees "this figure was computed with 22 of the 99 invisible to the model"
-   rather than a number that looks complete.
-2. **Acceptable.** Reject a candidate containing unauthored cards, exit
-   non-zero, and name them on stderr. We render `not_simulated` with the list.
-   This makes simulation available only for lists close to your authored one,
-   which is a real limitation but an honest one.
+The pack is a request for an execution context. It travels beside the deck
+hash and is not part of it.
 
-What does not work is silently substituting, dropping or approximating an
-unauthored card. That produces a number whose meaning nobody can state.
+### 3.4 Error taxonomy — what may and may not be called a deck mismatch
 
-### 3.5 Supported commanders
+| Service code | Our `NotSimulated.reason` | Means |
+|---|---|---|
+| `deck_hash_mismatch` | `deck_mismatch` | the simulator ran a different list than we submitted |
+| `contract_violation` | `contract_violation` | we and the simulator disagree about the contract |
+| `unsupported` | `unsupported` | the pack/commander/snapshot cannot run here |
 
-A way to ask which commanders have a model:
+Only the first is a deck mismatch. An unsupported pack or a stale card export
+is a fault in the simulator's execution context and says nothing about the
+user's list; telling somebody their deck changed when it did not is both wrong
+and something they cannot act on, and it spends the credibility of the message
+for the case where it *is* true.
 
-```
-cs --list-commanders --format json
-→ {"commander_keys": ["<oracle_id>", …]}
-```
+### 3.5 Cards we have not authored
 
-We call `supported_commander_keys()` before offering a build, and show anything
-outside the set as unsupported. Kinnan is the only one today and we do not
-claim otherwise anywhere in the UI.
+Resolved as option 1, as preferred. The simulator accepts any candidate, runs
+it, and reports coverage: `coverage.modeled_cards`, `coverage.inert_cards`,
+`coverage.unauthored_cards`, `inert_by_reason`, and the specific card names in
+`warnings`. We surface all of it, so the user sees "this figure was computed
+with N of the 99 invisible to the model" rather than a number that looks
+complete.
 
-### 3.6 The `source_url` gap
+Note the shape: the result reports inert and unauthored cards as **counts plus
+warning strings**, not as a per-card structured list. `SimulationResult.
+inert_cards` therefore stays empty on the live path and `inert_card_count` /
+`unauthored_card_count` carry the figures. If a structured per-card list is
+wanted for display, that is a new field and a new result version, not something
+to reconstruct by parsing warning text.
 
-Your `[provenance]` block records `source_url = ""` for the list A snapshot. Our
-Kinnan pack carries the same gap in its `source` field, and neither of us
-should reconstruct one. If the Moxfield URL turns up, both files want it.
+### 3.6 Supported commanders
 
----
+The HTTP contract discovers support by attempting the request:
+`HttpSimulatorClient.supported_commander_keys()` returns the empty set and an
+unsupported candidate comes back as `422 unsupported`. `GET /healthz` lists the
+installed packs (`strategy_packs: ["kinnan-midrange-goldfish@1.0.0", ...]`),
+which is what the UI uses to say what is supported without guessing.
+
+### 3.7 The `source_url` gap
+
+Unchanged and still open. The simulator's `[provenance]` block records
+`source_url = ""` for the list A snapshot; our Kinnan pack carries the same gap
+in its `source` field. Neither of us should reconstruct one. If the Moxfield URL
+turns up, both files want it.
 
 ## 4. Duplicate ingestion responsibilities: deprecation plan
 
