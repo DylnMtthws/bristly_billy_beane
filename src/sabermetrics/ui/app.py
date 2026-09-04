@@ -77,6 +77,19 @@ def create_app(db_path: Path | None = None) -> Flask:
         )
     app.config["SECRET_KEY"] = secret
 
+    if public:
+        if not os.environ.get("MTG_V1_DSN", "").strip():
+            raise ValueError(
+                "MTG_V1_DSN must be set when SABER_PUBLIC=1. Set it to the "
+                "mtg_consumer Postgres DSN with sslmode=require in the "
+                "deployment environment."
+            )
+        if not os.environ.get("CEDH_SIMULATOR_URL", "").strip():
+            raise ValueError(
+                "CEDH_SIMULATOR_URL must be set when SABER_PUBLIC=1. Set it "
+                "to the private simulator base URL in the deployment environment."
+            )
+
     # --- Session cookie hardening ---
     # Secure defaults to on (the app is fronted by HTTPS via a proxy). For
     # local http previews, set SABER_COOKIE_SECURE=0 so the cookie is sent.

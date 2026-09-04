@@ -537,6 +537,8 @@ class TestPublicDeployment:
     def test_hsts_is_set_only_when_public(self, db_path, monkeypatch):
         """Meaningless over http, and it would pin a stale policy locally."""
         monkeypatch.setenv("SABER_SECRET_KEY", "x" * 64)
+        monkeypatch.setenv("MTG_V1_DSN", "postgresql://mtg_consumer@db.invalid/mtg")
+        monkeypatch.setenv("CEDH_SIMULATOR_URL", "http://sim.invalid:8080")
         monkeypatch.setenv("SABER_PUBLIC", "1")
         public = _app(db_path, "hybrid", monkeypatch)
         assert "Strict-Transport-Security" in public.test_client().get("/login").headers

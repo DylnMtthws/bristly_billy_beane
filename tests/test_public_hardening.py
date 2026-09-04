@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from flask import jsonify, url_for
 
 from sabermetrics.ui.app import create_app
@@ -15,10 +16,37 @@ def _public_app(tmp_path, monkeypatch):
     monkeypatch.setenv("SABER_PUBLIC", "1")
     monkeypatch.setenv("SABER_AUTH_MODE", "hybrid")
     monkeypatch.setenv("SABER_SECRET_KEY", "stable-test-secret" * 4)
+    monkeypatch.setenv("MTG_V1_DSN", "postgresql://mtg_consumer@db.invalid/mtg")
+    monkeypatch.setenv("CEDH_SIMULATOR_URL", "http://sim.invalid:8080")
     monkeypatch.setenv("SABER_TRUSTED_PROXY", "*")
     app = create_app(db_path)
     app.config.update(TESTING=True, RATELIMIT_ENABLED=False)
     return app
+
+
+@pytest.mark.parametrize("variable", ["MTG_V1_DSN", "CEDH_SIMULATOR_URL"])
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_public_startup_requires_production_endpoints(
+    tmp_path, monkeypatch, variable, value
+):
+    monkeypatch.setenv("SABER_PUBLIC", "1")
+    monkeypatch.setenv("SABER_SECRET_KEY", "stable-test-secret")
+    monkeypatch.setenv("MTG_V1_DSN", "postgresql://mtg_consumer@db.invalid/mtg")
+    monkeypatch.setenv("CEDH_SIMULATOR_URL", "http://sim.invalid:8080")
+    if value is None:
+        monkeypatch.delenv(variable)
+    else:
+        monkeypatch.setenv(variable, value)
+    with pytest.raises(ValueError, match=variable + " must be set.*Set it"):
+        create_app(tmp_path / "app.db")
+
+
+def test_private_startup_allows_missing_production_endpoints(tmp_path, monkeypatch):
+    for variable in ("SABER_PUBLIC", "MTG_V1_DSN", "CEDH_SIMULATOR_URL"):
+        monkeypatch.delenv(variable, raising=False)
+    app = create_app(tmp_path / "app.db")
+    assert app.config["PUBLIC_DEPLOYMENT"] is False
+    assert app.test_client().get("/healthz").status_code == 200
 
 
 def test_public_cookie_is_secure_http_only_and_same_site_lax(tmp_path, monkeypatch):
