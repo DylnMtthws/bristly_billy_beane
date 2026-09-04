@@ -1,0 +1,35 @@
+# Secrets are SABER_SECRET_KEY, MTG_V1_DSN, HF_TOKEN, and CEDH_SIMULATOR_URL.
+# Set them on the platform; never put them in this file. Run exactly one machine
+# because SQLite state lives on the attached volume.
+
+app = "decklab"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SABER_PUBLIC = "1"
+  SABER_AUTH_MODE = "hybrid"
+  SABER_BIND_HOST = "0.0.0.0"
+  SABER_PORT = "8080"
+  SABER_TRUSTED_PROXY = "*"
+  SABER_DB_PATH = "/data/sabermetrics.db"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  min_machines_running = 1
+
+  [http_service.checks.healthz]
+    path = "/healthz"
+    interval = "30s"
+
+[mounts]
+  source = "decklab_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
