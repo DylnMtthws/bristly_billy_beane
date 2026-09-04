@@ -1,18 +1,16 @@
 {
-  "_README": "The default meta fixture reproduces TODAY'S REALITY: the ingestion pipeline's decklist import is paused and mtg_v1 publishes no tournament views, so the meta repository is unavailable. Tests that need the populated world load meta_populated.json instead. Having the absent case be the default is deliberate \u2014 it is the case that ships.",
-  "available": false,
-  "missing_views": [
-    "mtg_v1.tournament",
-    "mtg_v1.tournament_entry",
-    "mtg_v1.commander_identity",
-    "mtg_v1.commander_card_inclusion"
-  ],
-  "detail": "the ingestion pipeline has not published the tournament half of the mtg_v1 contract yet (its Stage 3 is paused)",
-  "snapshot": {
-    "source_view": "mtg_v1.tournament"
+  "_README": "Synthetic unavailable-capability fixture. Unavailability is explicit and is not represented as an empty cohort.",
+  "availability": {
+    "summaries_available": false,
+    "inclusion_available": false,
+    "summary_detail": "mtg_v1.tournament: required columns or SELECT permission unavailable",
+    "inclusion_detail": "card inclusion requires the tournament-summary capability"
   },
-  "commanders": [],
-  "events": [],
-  "entries": [],
-  "inclusions": []
+  "snapshot": {"source_view": "mtg_v1.tournament"},
+  "tournaments": [],
+  "tournament_entries": [],
+  "decks": [],
+  "deck_commanders": [],
+  "deck_cards": [],
+  "cards": []
 }

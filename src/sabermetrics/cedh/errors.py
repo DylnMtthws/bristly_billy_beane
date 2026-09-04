@@ -28,7 +28,7 @@ class ModelConfigurationError(CedhError, FatalError):
 
 
 class RepositoryUnavailable(CedhError, DegradableError):
-    """A backing repository cannot be reached, or the view it needs is absent.
+    """A repository cannot be reached or an expected contract read cannot run.
 
     Degradable on purpose: missing tournament evidence must surface as absent
     evidence in the UI, never as a silently empty result that reads like "no

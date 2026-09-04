@@ -35,6 +35,8 @@ from sabermetrics.cedh.errors import RepositoryUnavailable
 from sabermetrics.cedh.repositories import (
     CorpusSnapshot,
     MetaAvailability,
+    MetaEvidenceLimits,
+    MetaEvidenceSlice,
     MetaRepository,
 )
 from sabermetrics.cedh.settings import EvidenceSettings
@@ -129,6 +131,7 @@ class EvidencePackage(BaseModel):
 
     commander_key: str
     commander_name: str
+    since: date
     window_days: int
     min_event_size: int
     chunks: tuple[EvidenceChunk, ...] = ()
@@ -136,6 +139,10 @@ class EvidencePackage(BaseModel):
     meta_snapshot: str = ""
     meta_available: bool = True
     meta_detail: str = ""
+    inclusion_available: bool = True
+    inclusion_detail: str = ""
+    inclusion_decks: int | None = Field(default=None, ge=0)
+    incomplete_decks: int | None = Field(default=None, ge=0)
     #: Chunks dropped by the bounds. Reported so a truncated package is visibly
     #: truncated rather than quietly shorter.
     dropped_chunks: int = 0
@@ -156,7 +163,11 @@ class EvidencePackage(BaseModel):
         """
         digest = hashlib.sha256()
         digest.update(self.commander_key.encode("utf-8"))
-        digest.update(f"|{self.window_days}|{self.min_event_size}|".encode())
+        digest.update(
+            f"|{self.since.isoformat()}|{self.window_days}|"
+            f"{self.min_event_size}|{self.meta_available}|"
+            f"{self.inclusion_available}|".encode()
+        )
         for chunk in self.chunks:
             digest.update(chunk.content_sha256.encode("utf-8"))
             digest.update(b"\x00")
@@ -174,6 +185,23 @@ class EvidencePackage(BaseModel):
             (
                 f"corpus: cards {self.card_snapshot or 'unknown'}; "
                 f"tournaments {self.meta_snapshot or 'unavailable'}"
+            ),
+            (
+                "tournament cohort: "
+                + (
+                    f"available since {self.since.isoformat()}"
+                    if self.meta_available
+                    else f"unavailable ({self.meta_detail})"
+                )
+            ),
+            (
+                "card inclusion: "
+                + (
+                    f"available (n={self.inclusion_decks or 0} distinct decks; "
+                    f"{self.incomplete_decks or 0} incomplete)"
+                    if self.inclusion_available
+                    else f"unavailable ({self.inclusion_detail})"
+                )
             ),
             "",
         ]
@@ -277,31 +305,41 @@ class EvidenceService:
         now = datetime.now(UTC)
         since = now.date() - timedelta(days=window.days)
 
-        availability = self._meta.availability()
         chunks: list[EvidenceChunk] = []
         events_seen = 0
         decks_seen = 0
         meta_snapshot = ""
+        try:
+            meta_slice = self._meta.load_evidence(
+                identity.key,
+                since=since,
+                min_event_size=window.min_event_size,
+                limits=MetaEvidenceLimits(events=200, entries=25, inclusions=60),
+            )
+            availability = meta_slice.availability
+        except RepositoryUnavailable as exc:
+            logger.warning("cEDH evidence: meta unavailable: %s", exc)
+            availability = MetaAvailability(
+                summaries_available=False,
+                inclusion_available=False,
+                summary_detail=str(exc),
+                inclusion_detail="card inclusion requires tournament facts",
+            )
+            meta_slice = MetaEvidenceSlice(
+                identity_key=identity.key,
+                since=since,
+                min_event_size=window.min_event_size,
+                availability=availability,
+                inclusions=None,
+            )
 
-        if availability.available:
-            try:
-                meta_snapshot = self._meta.snapshot().label
-                chunks.extend(
-                    self._tournament_chunks(identity, since, window, now, meta_snapshot)
-                )
-                chunks.extend(
-                    self._inclusion_chunks(identity, since, window, now, meta_snapshot)
-                )
-                events_seen = len(
-                    self._meta.events(
-                        since=since, min_size=window.min_event_size, limit=200
-                    )
-                )
-                commander = self._meta.commander(identity.key)
-                decks_seen = commander.entries if commander else 0
-            except RepositoryUnavailable as exc:
-                logger.warning("cEDH evidence: meta unavailable: %s", exc)
-                availability = MetaAvailability(available=False, detail=str(exc))
+        if availability.summaries_available:
+            meta_snapshot = meta_slice.snapshot.label if meta_slice.snapshot else ""
+            chunks.extend(self._tournament_chunks(identity, window, now, meta_slice))
+            chunks.extend(self._inclusion_chunks(identity, window, now, meta_slice))
+            commander = meta_slice.commander
+            events_seen = commander.events if commander else 0
+            decks_seen = commander.entries if commander else 0
 
         chunks.extend(self._curated_chunks(identity, now))
         kept, dropped = self._bound(chunks)
@@ -309,18 +347,32 @@ class EvidenceService:
         return EvidencePackage(
             commander_key=identity.key,
             commander_name=identity.display_name,
+            since=since,
             window_days=window.days,
             min_event_size=window.min_event_size,
             chunks=tuple(kept),
             card_snapshot=(self._card_snapshot.label if self._card_snapshot else ""),
             meta_snapshot=meta_snapshot,
-            meta_available=availability.available,
-            meta_detail=availability.detail
+            meta_available=availability.summaries_available,
+            meta_detail=availability.summary_detail
+            or (
+                "no qualifying tournament decks in the requested cohort"
+                if availability.summaries_available and meta_slice.commander is None
+                else (
+                    ""
+                    if availability.summaries_available
+                    else "no tournament evidence is available for this build"
+                )
+            ),
+            inclusion_available=availability.inclusion_available,
+            inclusion_detail=availability.inclusion_detail
             or (
                 ""
-                if availability.available
+                if availability.inclusion_available
                 else "no tournament evidence is available for this build"
             ),
+            inclusion_decks=meta_slice.inclusion_denominator,
+            incomplete_decks=meta_slice.incomplete_decks,
             dropped_chunks=dropped,
             events_seen=events_seen,
             decks_seen=decks_seen,
@@ -331,26 +383,15 @@ class EvidenceService:
     def _tournament_chunks(
         self,
         identity: CommanderIdentity,
-        since: date,
         window: MetagameWindow,
         now: datetime,
-        snapshot: str,
+        meta_slice: MetaEvidenceSlice,
     ) -> list[EvidenceChunk]:
-        commander = self._meta.commander(identity.key)
+        commander = meta_slice.commander
         if commander is None:
             return []
-        entries = self._meta.entries(
-            identity.key,
-            since=since,
-            min_event_size=window.min_event_size,
-            limit=25,
-        )
-        events = {
-            e.event_id: e
-            for e in self._meta.events(
-                since=since, min_size=window.min_event_size, limit=200
-            )
-        }
+        snapshot = meta_slice.snapshot.label if meta_slice.snapshot else "unknown"
+        events = {event.event_id: event for event in meta_slice.events}
         out = [
             EvidenceChunk.build(
                 chunk_id="meta-presence",
@@ -362,15 +403,18 @@ class EvidenceService:
                     f"{commander.wins} event wins. Presence is exposure, not "
                     f"quality — it says how often the deck was brought."
                 ),
-                source="mtg_v1 tournament contract",
-                source_id="mtg_v1.commander_identity",
+                source="Deck Lab cohort aggregate",
+                source_id=(
+                    "mtg_v1.tournament+mtg_v1.tournament_entry+mtg_v1.deck+"
+                    "mtg_v1.deck_commander"
+                ),
                 commander_key=identity.key,
                 corpus_snapshot=snapshot,
                 fetched_at=now,
                 sample_size=commander.entries,
             )
         ]
-        for entry in entries[:12]:
+        for entry in meta_slice.entries[:12]:
             event = events.get(entry.event_id)
             if event is None:
                 continue
@@ -383,7 +427,7 @@ class EvidenceService:
                         f"finished {entry.standing if entry.standing else 'n/a'} "
                         f"at {entry.wins}-{entry.losses}-{entry.draws}."
                     ),
-                    source=event.source or "mtg_v1 tournament contract",
+                    source=event.source or "Deck Lab cohort aggregate",
                     source_url=event.source_url,
                     source_id=f"mtg_v1.tournament_entry:{entry.entry_id}",
                     commander_key=identity.key,
@@ -398,36 +442,44 @@ class EvidenceService:
     def _inclusion_chunks(
         self,
         identity: CommanderIdentity,
-        since: date,
         window: MetagameWindow,
         now: datetime,
-        snapshot: str,
+        meta_slice: MetaEvidenceSlice,
     ) -> list[EvidenceChunk]:
-        facts = self._meta.inclusions(
-            identity.key,
-            since=since,
-            min_event_size=window.min_event_size,
-            limit=60,
-        )
+        facts = meta_slice.inclusions
+        if facts is None:
+            return []
         if not facts:
             return []
         lines = [
             f"- {f.card_name}: {f.decks_including}/{f.decks} decks " f"({f.rate:.0%})"
             for f in facts[:40]
         ]
-        denominator = max(f.decks for f in facts)
+        denominator = meta_slice.inclusion_denominator
+        if denominator is None or denominator <= 0:
+            return []
+        incomplete = meta_slice.incomplete_decks or 0
+        snapshot = meta_slice.snapshot.label if meta_slice.snapshot else "unknown"
         return [
             EvidenceChunk.build(
                 chunk_id="meta-inclusions",
                 kind="inclusion_fact",
                 content=(
                     "Card inclusion among tournament decks for "
-                    f"{identity.display_name} ({window.label}, n={denominator} "
-                    "decks). These are rates of play, not measures of card "
-                    "quality:\n" + "\n".join(lines)
+                    f"{identity.display_name} (since {meta_slice.since.isoformat()}, "
+                    f"events of {window.min_event_size}+, n={denominator} distinct "
+                    f"submitted decks; {incomplete} incomplete). Incomplete decks "
+                    "remain in this presence-based denominator because collapsed "
+                    "duplicate basic lands do not make observed card presence "
+                    "invalid. These are rates of play, not measures of card quality:\n"
+                    + "\n".join(lines)
                 ),
-                source="mtg_v1 tournament contract",
-                source_id="mtg_v1.commander_card_inclusion",
+                source="Deck Lab cohort aggregate",
+                source_id=(
+                    "mtg_v1.tournament+mtg_v1.tournament_entry+mtg_v1.deck+"
+                    "mtg_v1.deck_commander+mtg_v1.deck_card+"
+                    "mtg_v1.card_any_medium"
+                ),
                 commander_key=identity.key,
                 corpus_snapshot=snapshot,
                 fetched_at=now,

@@ -29,6 +29,8 @@ from sabermetrics.cedh.repositories import (
     MetaCommander,
     MetaEntry,
     MetaEvent,
+    MetaEvidenceLimits,
+    MetaEvidenceSlice,
 )
 
 #: Repo-root fixture directory. Shared by tests and local development.
@@ -115,9 +117,9 @@ class FixtureCardRepository:
 class FixtureMetaRepository:
     """:class:`MetaRepository` backed by ``fixtures/cedh/meta.json``.
 
-    ``available`` is a field in the fixture, so both branches are testable: the
-    populated world the contract will eventually provide, and today's world
-    where the tournament views do not exist.
+    The JSON mirrors the producer's atomic view rows.  This adapter deliberately
+    derives the same cohort as the Postgres adapter instead of storing
+    consumer-specific commander and inclusion aggregates in a fixture.
     """
 
     def __init__(self, root: Path | None = None, filename: str = "meta.json") -> None:
@@ -129,129 +131,198 @@ class FixtureMetaRepository:
             max_content_updated_at=_dt(snap.get("max_content_updated_at")),
             captured_at=_dt(snap.get("captured_at")),
         )
+        availability = data.get("availability", {})
         self._availability = MetaAvailability(
-            available=bool(data.get("available", True)),
-            missing_views=tuple(data.get("missing_views", ())),
-            detail=data.get("detail", ""),
+            summaries_available=bool(
+                availability.get("summaries_available", data.get("available", True))
+            ),
+            inclusion_available=bool(
+                availability.get("inclusion_available", data.get("available", True))
+            ),
+            summary_detail=availability.get("summary_detail", data.get("detail", "")),
+            inclusion_detail=availability.get("inclusion_detail", ""),
         )
-        self._commanders = {
-            c["identity_key"]: MetaCommander(
-                identity_key=c["identity_key"],
-                oracle_ids=tuple(c.get("oracle_ids", ())),
-                names=tuple(c.get("names", ())),
-                entries=int(c.get("entries", 0)),
-                events=int(c.get("events", 0)),
-                wins=int(c.get("wins", 0)),
-                top_cuts=int(c.get("top_cuts", 0)),
-            )
-            for c in data.get("commanders", [])
-        }
-        self._events = [
-            MetaEvent(
-                event_id=e["event_id"],
-                name=e.get("name", ""),
-                held_on=_d(e.get("held_on")),
-                size=int(e.get("size", 0)),
-                source=e.get("source", ""),
-                source_url=e.get("source_url", ""),
-            )
-            for e in data.get("events", [])
-        ]
-        self._entries = [
-            MetaEntry(
-                entry_id=e["entry_id"],
-                event_id=e["event_id"],
-                identity_key=e["identity_key"],
-                standing=e.get("standing"),
-                wins=int(e.get("wins", 0)),
-                losses=int(e.get("losses", 0)),
-                draws=int(e.get("draws", 0)),
-                decklist_id=e.get("decklist_id"),
-            )
-            for e in data.get("entries", [])
-        ]
-        self._inclusions = [
-            InclusionFact(
-                identity_key=i["identity_key"],
-                oracle_id=i["oracle_id"],
-                card_name=i.get("card_name", ""),
-                decks_including=int(i["decks_including"]),
-                decks=int(i["decks"]),
-            )
-            for i in data.get("inclusions", [])
-        ]
+        self._tournaments = []
+        for raw in data.get("tournaments", []):
+            event = dict(raw)
+            event["event_date"] = _d(event.get("event_date"))
+            self._tournaments.append(event)
+        self._tournament_entries = list(data.get("tournament_entries", []))
+        self._decks = list(data.get("decks", []))
+        self._deck_commanders = list(data.get("deck_commanders", []))
+        self._deck_cards = list(data.get("deck_cards", []))
+        self._cards = list(data.get("cards", []))
 
     # -- MetaRepository ---------------------------------------------------
 
     def availability(self) -> MetaAvailability:
         return self._availability
 
-    def _require(self) -> None:
-        if not self._availability.available:
-            from sabermetrics.cedh.errors import RepositoryUnavailable
-
-            raise RepositoryUnavailable(
-                "tournament evidence is unavailable: missing "
-                f"{', '.join(self._availability.missing_views)} — "
-                f"{self._availability.detail}"
+    def load_evidence(
+        self,
+        identity_key: str,
+        *,
+        since: date,
+        min_event_size: int = 0,
+        limits: MetaEvidenceLimits | None = None,
+    ) -> MetaEvidenceSlice:
+        """Derive one cohort from the fixture's atomic producer-shaped rows."""
+        limits = limits or MetaEvidenceLimits()
+        if not self._availability.summaries_available:
+            return MetaEvidenceSlice(
+                identity_key=identity_key,
+                since=since,
+                min_event_size=min_event_size,
+                availability=self._availability,
+                inclusions=None,
             )
 
-    def snapshot(self) -> CorpusSnapshot:
-        self._require()
-        return self._snapshot
-
-    def commander(self, identity_key: str) -> MetaCommander | None:
-        self._require()
-        return self._commanders.get(identity_key)
-
-    def _event_ok(self, event_id: str, since: date, min_size: int) -> bool:
-        for event in self._events:
-            if event.event_id != event_id:
+        tournaments = {str(t["tournament_id"]): t for t in self._tournaments}
+        decks = {str(d["deck_id"]): d for d in self._decks}
+        cohort: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
+        seen_entries: set[str] = set()
+        for entry in self._tournament_entries:
+            entry_id = str(entry["entry_id"])
+            deck_id = entry.get("deck_id")
+            event = tournaments.get(str(entry.get("tournament_id")))
+            deck = decks.get(str(deck_id)) if deck_id is not None else None
+            if entry_id in seen_entries or event is None or deck is None:
                 continue
-            if event.size < min_size:
-                return False
-            return event.held_on is None or event.held_on >= since
-        return False
+            event_date = event.get("event_date")
+            if (
+                deck.get("commander_identity") != identity_key
+                or event_date is None
+                or event_date < since
+                or int(event.get("player_count") or 0) < min_event_size
+            ):
+                continue
+            seen_entries.add(entry_id)
+            cohort.append((entry, event, deck))
 
-    def events(
-        self, *, since: date, min_size: int = 0, limit: int = 50
-    ) -> list[MetaEvent]:
-        self._require()
-        hits = [
-            e
-            for e in self._events
-            if e.size >= min_size and (e.held_on is None or e.held_on >= since)
+        cohort.sort(
+            key=lambda row: (
+                row[1].get("event_date") or date.min,
+                -(row[0].get("standing") or 1_000_000),
+            ),
+            reverse=True,
+        )
+        deck_ids = {str(entry["deck_id"]) for entry, _, _ in cohort}
+        event_ids = {str(entry["tournament_id"]) for entry, _, _ in cohort}
+
+        commander_rows: dict[str, tuple[Any, str]] = {}
+        for raw in self._deck_commanders:
+            oracle_id = raw.get("oracle_id")
+            if str(raw.get("deck_id")) not in deck_ids or oracle_id is None:
+                continue
+            key = str(oracle_id)
+            candidate = (
+                int(raw.get("position") or 0),
+                str(raw.get("submitted_name") or ""),
+            )
+            if key not in commander_rows or candidate < commander_rows[key]:
+                commander_rows[key] = candidate
+        ordered_commanders = sorted(
+            commander_rows.items(), key=lambda item: (item[1][0], item[0])
+        )
+
+        event_wins = sum(1 for entry, _, _ in cohort if entry.get("standing") == 1)
+        top_cuts = sum(
+            1
+            for entry, event, _ in cohort
+            if event.get("top_cut") is not None
+            and entry.get("standing") is not None
+            and int(entry["standing"]) <= int(event["top_cut"])
+        )
+        commander = (
+            MetaCommander(
+                identity_key=identity_key,
+                oracle_ids=tuple(item[0] for item in ordered_commanders),
+                names=tuple(item[1][1] for item in ordered_commanders),
+                entries=len(cohort),
+                events=len(event_ids),
+                wins=event_wins,
+                top_cuts=top_cuts,
+            )
+            if cohort
+            else None
+        )
+
+        unique_events = {event_id: tournaments[event_id] for event_id in event_ids}
+        event_models = [
+            MetaEvent(
+                event_id=event_id,
+                name=event.get("name") or "",
+                held_on=event.get("event_date"),
+                size=int(event.get("player_count") or 0),
+                source=event.get("source") or "",
+                source_url=event.get("url") or "",
+            )
+            for event_id, event in unique_events.items()
         ]
-        hits.sort(key=lambda e: (e.held_on or date.min), reverse=True)
-        return hits[:limit]
+        event_models.sort(key=lambda event: event.held_on or date.min, reverse=True)
+        entry_models = tuple(
+            MetaEntry(
+                entry_id=str(entry["entry_id"]),
+                event_id=str(entry["tournament_id"]),
+                identity_key=identity_key,
+                standing=entry.get("standing"),
+                wins=int(entry.get("wins") or 0),
+                losses=int(entry.get("losses") or 0),
+                draws=int(entry.get("draws") or 0),
+                decklist_id=str(entry["deck_id"]),
+            )
+            for entry, _, _ in cohort[: limits.entries]
+        )
 
-    def entries(
-        self,
-        identity_key: str,
-        *,
-        since: date,
-        min_event_size: int = 0,
-        limit: int = 50,
-    ) -> list[MetaEntry]:
-        self._require()
-        hits = [
-            e
-            for e in self._entries
-            if e.identity_key == identity_key
-            and self._event_ok(e.event_id, since, min_event_size)
-        ]
-        hits.sort(key=lambda e: (e.standing is None, e.standing or 0))
-        return hits[:limit]
+        inclusions: tuple[InclusionFact, ...] | None = None
+        denominator: int | None = None
+        if self._availability.inclusion_available:
+            denominator = len(deck_ids)
+            names = {
+                str(card["oracle_id"]): str(card.get("name") or "")
+                for card in self._cards
+            }
+            included_by: dict[str, set[str]] = {}
+            for raw in self._deck_cards:
+                deck_id = str(raw.get("deck_id"))
+                oracle_id = raw.get("oracle_id")
+                if (
+                    deck_id not in deck_ids
+                    or raw.get("board") != "mainboard"
+                    or oracle_id is None
+                    or str(oracle_id) not in names
+                ):
+                    continue
+                included_by.setdefault(str(oracle_id), set()).add(deck_id)
+            ranked = sorted(
+                included_by.items(),
+                key=lambda item: (-len(item[1]), names[item[0]], item[0]),
+            )[: limits.inclusions]
+            inclusions = tuple(
+                InclusionFact(
+                    identity_key=identity_key,
+                    oracle_id=oracle_id,
+                    card_name=names[oracle_id],
+                    decks_including=len(including),
+                    decks=denominator,
+                )
+                for oracle_id, including in ranked
+                if denominator > 0
+            )
 
-    def inclusions(
-        self,
-        identity_key: str,
-        *,
-        since: date,
-        min_event_size: int = 0,
-        limit: int = 200,
-    ) -> list[InclusionFact]:
-        self._require()
-        hits = [i for i in self._inclusions if i.identity_key == identity_key]
-        hits.sort(key=lambda i: i.decks_including, reverse=True)
-        return hits[:limit]
+        incomplete_decks = sum(
+            1 for deck_id in deck_ids if decks[deck_id].get("is_complete") is False
+        )
+        return MetaEvidenceSlice(
+            identity_key=identity_key,
+            since=since,
+            min_event_size=min_event_size,
+            availability=self._availability,
+            snapshot=self._snapshot,
+            commander=commander,
+            events=tuple(event_models[: limits.events]),
+            entries=entry_models,
+            inclusions=inclusions,
+            inclusion_denominator=denominator,
+            incomplete_decks=incomplete_decks,
+        )

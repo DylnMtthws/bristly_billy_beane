@@ -53,8 +53,8 @@ class LabModes:
             )
         if self.meta == "fixture":
             out.append(
-                "Tournament data is a fixture. Set MTG_V1_DSN once the "
-                "mtg_v1 tournament views exist."
+                "Tournament data is a synthetic fixture. Set MTG_V1_DSN to "
+                "derive evidence from the live mtg_v1 atomic views."
             )
         if self.model == "none":
             out.append(

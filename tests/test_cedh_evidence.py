@@ -97,8 +97,9 @@ class TestDenominators:
         """Popularity is not quality, and a rate without n is not a claim."""
         package = _service(cedh_meta_populated, cedh_cards).build(kinnan_pack.commander)
         inclusion = next(c for c in package.chunks if c.kind == "inclusion_fact")
-        assert inclusion.sample_size == 42
-        assert "n=42" in inclusion.content
+        assert inclusion.sample_size == 3
+        assert "n=3" in inclusion.content
+        assert "1 incomplete" in inclusion.content
         assert "not measures of card quality" in inclusion.content
 
     def test_presence_is_labelled_as_exposure_not_quality(
@@ -115,6 +116,77 @@ class TestDenominators:
             kinnan_pack.commander, MetagameWindow(days=90, min_event_size=64)
         )
         assert "last 90d, events of 64+" in package.render()
+
+    def test_inclusion_provenance_names_atomic_views_and_exact_since(
+        self, cedh_meta_populated, cedh_cards, kinnan_pack
+    ):
+        package = _service(cedh_meta_populated, cedh_cards).build(kinnan_pack.commander)
+        inclusion = next(c for c in package.chunks if c.kind == "inclusion_fact")
+        assert package.since.isoformat() in inclusion.content
+        assert "mtg_v1.deck_card" in inclusion.source_id
+        assert "mtg_v1.card_any_medium" in inclusion.source_id
+        assert "commander_card_inclusion" not in inclusion.source_id
+
+    def test_summary_only_capability_marks_inclusion_unavailable(
+        self, cedh_meta_populated, cedh_cards, kinnan_pack, tmp_path
+    ):
+        import json
+        from pathlib import Path
+
+        from sabermetrics.cedh.adapters_fixture import FixtureMetaRepository
+
+        raw = json.loads(
+            Path("fixtures/cedh/meta_populated.json").read_text(encoding="utf-8")
+        )
+        raw["availability"]["inclusion_available"] = False
+        raw["availability"]["inclusion_detail"] = "deck_card cannot be selected"
+        (tmp_path / "partial.json").write_text(json.dumps(raw), encoding="utf-8")
+        package = _service(
+            FixtureMetaRepository(tmp_path, filename="partial.json"), cedh_cards
+        ).build(kinnan_pack.commander)
+        assert package.meta_available is True
+        assert package.inclusion_available is False
+        assert any(c.kind == "tournament_fact" for c in package.chunks)
+        assert not any(c.kind == "inclusion_fact" for c in package.chunks)
+        assert "card inclusion: unavailable" in package.render()
+
+    def test_builder_uses_one_repository_snapshot_operation(
+        self, cedh_meta_populated, cedh_cards, kinnan_pack
+    ):
+        class OneShotRepository:
+            def __init__(self):
+                self.calls = 0
+
+            def availability(self):
+                raise AssertionError("EvidenceService must not probe separately")
+
+            def load_evidence(self, identity_key, *, since, min_event_size, limits):
+                self.calls += 1
+                return cedh_meta_populated.load_evidence(
+                    identity_key,
+                    since=since,
+                    min_event_size=min_event_size,
+                    limits=limits,
+                )
+
+        repository = OneShotRepository()
+        package = _service(repository, cedh_cards).build(kinnan_pack.commander)
+        assert repository.calls == 1
+        assert package.meta_available is True
+
+    def test_candidate_provenance_keeps_exact_inclusion_scope(
+        self, cedh_meta_populated, cedh_cards, kinnan_pack
+    ):
+        from sabermetrics.cedh.builder import build_candidate
+
+        package = _service(cedh_meta_populated, cedh_cards).build(kinnan_pack.commander)
+        candidate = build_candidate(kinnan_pack, cedh_cards, evidence=package)
+        provenance = candidate.provenance
+        assert provenance.meta_since == package.since
+        assert provenance.min_event_size == package.min_event_size
+        assert provenance.inclusion_decks == package.inclusion_decks == 3
+        assert provenance.incomplete_decks == package.incomplete_decks == 1
+        assert provenance.inclusion_available is True
 
 
 class TestBounds:

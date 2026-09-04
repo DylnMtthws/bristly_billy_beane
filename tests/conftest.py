@@ -124,7 +124,7 @@ def cedh_cards():
 
 @pytest.fixture
 def cedh_meta_absent():
-    """A meta repository in today's state: the tournament views do not exist."""
+    """A meta repository with an explicitly unavailable tournament capability."""
     from sabermetrics.cedh.adapters_fixture import FixtureMetaRepository
 
     return FixtureMetaRepository()
@@ -132,7 +132,7 @@ def cedh_meta_absent():
 
 @pytest.fixture
 def cedh_meta_populated():
-    """A meta repository in the state the mtg_v1 contract is asked to provide."""
+    """A meta repository backed by synthetic atomic mtg_v1-shaped rows."""
     from sabermetrics.cedh.adapters_fixture import FixtureMetaRepository
 
     return FixtureMetaRepository(filename="meta_populated.json")

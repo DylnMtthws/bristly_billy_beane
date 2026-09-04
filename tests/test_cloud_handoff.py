@@ -29,7 +29,7 @@ def test_handoff_contains_env_secrets_backup_schema_and_bootstrap_commands():
     ):
         assert f"`{name}`" in handoff
     assert "sabermetrics db-backup" in handoff
-    assert "cedh-simulation-result.v2" in handoff
+    assert "cedh-simulation-result.v3" in handoff
     assert "sabermetrics create-admin" in handoff
     assert "sabermetrics invite-user" in handoff
     assert "--base-url https://decklab.example.com" in handoff

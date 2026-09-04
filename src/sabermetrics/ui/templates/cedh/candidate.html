@@ -104,9 +104,20 @@
                 </dd>
             </div>
             <div class="flex items-baseline justify-between gap-4">
+                <dt class="text-muted">Card inclusion</dt>
+                <dd class="{% if doc.provenance.inclusion_available %}text-emerald-400{% else %}text-muted{% endif %}">
+                    {% if doc.provenance.inclusion_available %}
+                    available (n={{ doc.provenance.inclusion_decks or 0 }} distinct decks;
+                    {{ doc.provenance.incomplete_decks or 0 }} incomplete)
+                    {% else %}unavailable{% endif %}
+                </dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-4">
                 <dt class="text-muted">Window</dt>
                 <dd class="text-body">
-                    last {{ doc.provenance.window_days }}d, events of {{ doc.provenance.min_event_size }}+
+                    since {{ doc.provenance.meta_since or 'unknown' }}
+                    (last {{ doc.provenance.window_days }}d), events of
+                    {{ doc.provenance.min_event_size }}+
                 </dd>
             </div>
             <div class="flex items-baseline justify-between gap-4">

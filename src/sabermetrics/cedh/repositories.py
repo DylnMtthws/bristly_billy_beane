@@ -24,7 +24,7 @@ from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from sabermetrics.cedh.domain import Legality
 from sabermetrics.cedh.errors import SchemaBoundaryViolation
@@ -197,9 +197,13 @@ class MetaCommander(BaseModel):
     identity_key: str
     oracle_ids: tuple[str, ...]
     names: tuple[str, ...]
+    #: Distinct qualifying tournament entries in the requested cohort.
     entries: int = 0
+    #: Distinct tournaments represented by those entries.
     events: int = 0
+    #: Event wins (``standing = 1``), not summed match wins.
     wins: int = 0
+    #: Entries within a known event top cut; unknown cut sizes never count.
     top_cuts: int = 0
 
 
@@ -254,60 +258,113 @@ class InclusionFact(BaseModel):
 class MetaAvailability(BaseModel):
     """What the meta repository can currently answer.
 
-    Reported rather than assumed, because the tournament half of ``mtg_v1`` is
-    not published yet. A UI that cannot tell "no decks ran this card" from "we
-    have no tournament data" will state the first and mean the second.
+    Tournament summaries and card inclusion are separate capabilities.  The
+    latter needs two additional source views, so losing it must not hide valid
+    finishes.  Each state is reported rather than inferred from an empty list:
+    "no qualifying decks" and "the query could not be executed" are different
+    facts.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    available: bool
-    missing_views: tuple[str, ...] = ()
-    detail: str = ""
+    summaries_available: bool
+    inclusion_available: bool
+    summary_detail: str = ""
+    inclusion_detail: str = ""
+
+    @model_validator(mode="after")
+    def _inclusion_requires_summaries(self) -> MetaAvailability:
+        if self.inclusion_available and not self.summaries_available:
+            raise ValueError("card inclusion requires tournament summaries")
+        return self
+
+    @property
+    def available(self) -> bool:
+        """Compatibility name for the core tournament-summary capability."""
+        return self.summaries_available
+
+    @property
+    def detail(self) -> str:
+        """Compatibility name for the core tournament-summary detail."""
+        return self.summary_detail
+
+
+class MetaEvidenceLimits(BaseModel):
+    """Bounds on rows returned for display, never on aggregate sample counts."""
+
+    model_config = ConfigDict(frozen=True)
+
+    events: int = Field(default=200, ge=1)
+    entries: int = Field(default=25, ge=1)
+    inclusions: int = Field(default=60, ge=1)
+
+
+class MetaEvidenceSlice(BaseModel):
+    """One snapshot-consistent Deck Lab cohort and its derived facts.
+
+    ``entries``/``events`` are bounded display rows.  The counts on
+    ``commander`` and ``inclusion_denominator`` are computed over the full
+    cohort and therefore never come from the lengths of those lists.
+
+    ``inclusions=None`` means the inclusion capability was unavailable;
+    ``inclusions=()`` with a zero denominator means it ran successfully and
+    found an empty cohort.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    identity_key: str
+    since: date
+    min_event_size: int = Field(ge=0)
+    availability: MetaAvailability
+    snapshot: CorpusSnapshot | None = None
+    commander: MetaCommander | None = None
+    events: tuple[MetaEvent, ...] = ()
+    entries: tuple[MetaEntry, ...] = ()
+    inclusions: tuple[InclusionFact, ...] | None = None
+    inclusion_denominator: int | None = Field(default=None, ge=0)
+    incomplete_decks: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def _availability_is_explicit(self) -> MetaEvidenceSlice:
+        if not self.availability.summaries_available and (
+            self.snapshot is not None
+            or self.commander is not None
+            or self.events
+            or self.entries
+        ):
+            raise ValueError("unavailable tournament summaries cannot carry facts")
+        if self.availability.inclusion_available:
+            if self.inclusions is None or self.inclusion_denominator is None:
+                raise ValueError(
+                    "available inclusion must carry a result and exact denominator"
+                )
+            if any(
+                fact.decks != self.inclusion_denominator for fact in self.inclusions
+            ):
+                raise ValueError("all inclusion facts must use the exact denominator")
+        elif self.inclusions is not None or self.inclusion_denominator is not None:
+            raise ValueError("unavailable inclusion cannot masquerade as empty data")
+        return self
 
 
 @runtime_checkable
 class MetaRepository(Protocol):
-    """Tournament, entry, deck, commander and inclusion facts from ``mtg_v1``."""
+    """Deck Lab cohort aggregates derived from atomic ``mtg_v1`` facts."""
 
     def availability(self) -> MetaAvailability:
-        """Report whether the backing views exist, without raising."""
+        """Execute cheap contract probes for each independently useful capability."""
         ...
 
-    def snapshot(self) -> CorpusSnapshot:
-        """Return which corpus version this repository is serving."""
-        ...
-
-    def commander(self, identity_key: str) -> MetaCommander | None:
-        """Aggregate tournament presence for one commander identity."""
-        ...
-
-    def events(
-        self, *, since: date, min_size: int = 0, limit: int = 50
-    ) -> list[MetaEvent]:
-        """Events inside the metagame window, most recent first."""
-        ...
-
-    def entries(
+    def load_evidence(
         self,
         identity_key: str,
         *,
         since: date,
         min_event_size: int = 0,
-        limit: int = 50,
-    ) -> list[MetaEntry]:
-        """Finishes for one identity inside the metagame window."""
-        ...
-
-    def inclusions(
-        self,
-        identity_key: str,
-        *,
-        since: date,
-        min_event_size: int = 0,
-        limit: int = 200,
-    ) -> list[InclusionFact]:
-        """Per-card inclusion facts for one identity, with sample sizes."""
+        limits: MetaEvidenceLimits | None = None,
+    ) -> MetaEvidenceSlice:
+        """Load all evidence through one consistent repository snapshot."""
         ...
 
 

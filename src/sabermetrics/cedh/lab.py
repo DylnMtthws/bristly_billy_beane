@@ -179,6 +179,11 @@ class CedhDeckLab:
                 f"{evidence.meta_detail}. Nothing below is corroborated by "
                 "event results."
             )
+        elif not evidence.inclusion_available:
+            warnings.append(
+                "Tournament finishes are available, but card inclusion evidence "
+                f"is unavailable: {evidence.inclusion_detail}."
+            )
 
         try:
             candidate = build_candidate(

@@ -4,13 +4,10 @@ Connects as ``mtg_consumer`` and reads ``mtg_v1`` only. ``psycopg`` is imported
 lazily so the ordinary test suite — which uses the fixture adapters — needs
 neither the driver nor a database.
 
-Card data is live today. The tournament half of the contract is **not
-published yet**: the ingestion pipeline's decklist import (its Stage 3) is
-paused, and ``mtg_v1`` currently exposes ``card``, ``card_any_medium``,
-``card_non_gameplay``, ``card_face`` and ``card_legality`` and nothing else.
-:class:`PostgresMetaRepository` is therefore written against the view contract
-requested in ``docs/integration-handoff.md`` and reports itself unavailable,
-by probing, until those views exist. It never fabricates a fallback.
+Tournament evidence is derived here from the ingestion service's atomic views.
+The producer owns source facts; Deck Lab owns the commander/window cohort and
+its aggregates.  Summary and inclusion capabilities are probed separately so
+a missing ``deck_card`` grant, for example, does not hide valid finishes.
 """
 
 from __future__ import annotations
@@ -32,6 +29,8 @@ from sabermetrics.cedh.repositories import (
     MetaCommander,
     MetaEntry,
     MetaEvent,
+    MetaEvidenceLimits,
+    MetaEvidenceSlice,
     assert_v1_only,
     chunked,
 )
@@ -43,13 +42,47 @@ CARD_VIEW = "mtg_v1.card_any_medium"
 FACE_VIEW = "mtg_v1.card_face"
 LEGALITY_VIEW = "mtg_v1.card_legality"
 
-#: Views the meta repository needs. Requested, not yet published.
-META_VIEWS = (
-    "tournament",
-    "tournament_entry",
-    "commander_identity",
-    "commander_card_inclusion",
+#: Executable contract checks.  Unlike an ``information_schema`` name lookup,
+#: these validate required columns and the consumer role's SELECT permission.
+SUMMARY_CONTRACT_CHECKS = (
+    (
+        "mtg_v1.tournament",
+        "SELECT tournament_id, source, name, event_date, url, player_count, "
+        "top_cut FROM mtg_v1.tournament WHERE FALSE",
+    ),
+    (
+        "mtg_v1.tournament_entry",
+        "SELECT entry_id, tournament_id, deck_id, standing, wins, losses, draws "
+        "FROM mtg_v1.tournament_entry WHERE FALSE",
+    ),
+    (
+        "mtg_v1.deck",
+        "SELECT deck_id, commander_identity, is_complete "
+        "FROM mtg_v1.deck WHERE FALSE",
+    ),
+    (
+        "mtg_v1.deck_commander",
+        "SELECT deck_id, oracle_id, submitted_name, position "
+        "FROM mtg_v1.deck_commander WHERE FALSE",
+    ),
 )
+INCLUSION_CONTRACT_CHECKS = (
+    (
+        "mtg_v1.deck_card",
+        "SELECT deck_id, oracle_id, board FROM mtg_v1.deck_card WHERE FALSE",
+    ),
+    (
+        "mtg_v1.card_any_medium",
+        "SELECT oracle_id, name FROM mtg_v1.card_any_medium WHERE FALSE",
+    ),
+)
+
+_CONTRACT_SQLSTATES = {
+    "3F000",  # invalid_schema_name
+    "42501",  # insufficient_privilege
+    "42703",  # undefined_column
+    "42P01",  # undefined_table
+}
 
 
 def _dsn() -> str:
@@ -90,7 +123,7 @@ def _query(conn: Any, sql: str, params: dict[str, Any] | None = None) -> list[di
     assert_v1_only(sql)
     with conn.cursor() as cur:
         cur.execute(sql, params or {})
-        return list(cur.fetchall())
+        return list(cur.fetchall()) if cur.description is not None else []
 
 
 def _tuple(value: Any) -> tuple:
@@ -254,188 +287,319 @@ class PostgresCardRepository:
 class PostgresMetaRepository:
     """:class:`~sabermetrics.cedh.repositories.MetaRepository` over ``mtg_v1``.
 
-    Probes for its views before answering. Until the ingestion pipeline
-    publishes them, :meth:`availability` reports what is missing and every read
-    raises :class:`RepositoryUnavailable` — the caller renders "no tournament
-    evidence", which is a different statement from "no decks ran this card".
+    All evidence for a package is loaded on one connection inside a read-only,
+    repeatable-read transaction. Aggregate counts are computed over the full
+    cohort before display limits are applied.
     """
 
     def __init__(self, dsn: str | None = None) -> None:
         self._dsn = dsn
-        self._availability: MetaAvailability | None = None
 
-    def _rows(self, sql: str, params: dict[str, Any]) -> list[dict]:
-        with _connect(self._dsn) as conn:
-            return _query(conn, sql, params)
+    @staticmethod
+    def _is_contract_error(exc: Exception) -> bool:
+        """Return whether ``exc`` is an expected schema/grant contract failure."""
+        try:
+            import psycopg
+        except ImportError:  # pragma: no cover - _connect reports this first
+            return False
+        return isinstance(exc, psycopg.Error) and getattr(exc, "sqlstate", None) in (
+            _CONTRACT_SQLSTATES
+        )
+
+    @staticmethod
+    def _is_connection_error(exc: Exception) -> bool:
+        """Return whether ``exc`` means Postgres could not serve the read."""
+        try:
+            import psycopg
+        except ImportError:  # pragma: no cover - _connect reports this first
+            return False
+        return isinstance(exc, psycopg.OperationalError)
+
+    @classmethod
+    def _probe_group(
+        cls, conn: Any, checks: Sequence[tuple[str, str]]
+    ) -> tuple[str, ...]:
+        """Execute a capability's checks, isolating expected failures by savepoint."""
+        failures: list[str] = []
+        for source, sql in checks:
+            try:
+                # This is a savepoint when called inside load_evidence's outer
+                # transaction, keeping a missing optional view from aborting it.
+                with conn.transaction():
+                    _query(conn, sql)
+            except Exception as exc:
+                if not cls._is_contract_error(exc):
+                    raise
+                failures.append(f"{source}: {exc}")
+        return tuple(failures)
+
+    @classmethod
+    def _probe_availability(cls, conn: Any) -> MetaAvailability:
+        summary_failures = cls._probe_group(conn, SUMMARY_CONTRACT_CHECKS)
+        inclusion_failures = cls._probe_group(conn, INCLUSION_CONTRACT_CHECKS)
+        summaries_available = not summary_failures
+        inclusion_available = summaries_available and not inclusion_failures
+        if summary_failures:
+            inclusion_detail = (
+                "card inclusion requires the tournament-summary capability"
+            )
+            if inclusion_failures:
+                inclusion_detail += "; " + "; ".join(inclusion_failures)
+        else:
+            inclusion_detail = "; ".join(inclusion_failures)
+        return MetaAvailability(
+            summaries_available=summaries_available,
+            inclusion_available=inclusion_available,
+            summary_detail="; ".join(summary_failures),
+            inclusion_detail=inclusion_detail,
+        )
+
+    @staticmethod
+    def _unreachable(detail: str) -> MetaAvailability:
+        return MetaAvailability(
+            summaries_available=False,
+            inclusion_available=False,
+            summary_detail=detail,
+            inclusion_detail="card inclusion requires tournament facts",
+        )
 
     def availability(self) -> MetaAvailability:
-        if self._availability is not None:
-            return self._availability
         try:
-            rows = self._rows(
-                "SELECT table_name FROM information_schema.views "
-                "WHERE table_schema = 'mtg_v1'",
-                {},
-            )
-            present = {str(r["table_name"]) for r in rows}
-            missing = tuple(v for v in META_VIEWS if v not in present)
-            self._availability = MetaAvailability(
-                available=not missing,
-                missing_views=tuple(f"mtg_v1.{v}" for v in missing),
-                detail=(
-                    ""
-                    if not missing
-                    else "the ingestion pipeline has not published the "
-                    "tournament half of the mtg_v1 contract yet"
-                ),
-            )
+            with _connect(self._dsn) as conn, conn.transaction():
+                return self._probe_availability(conn)
+        except RepositoryUnavailable as exc:
+            return self._unreachable(str(exc))
         except Exception as exc:
-            self._availability = MetaAvailability(
-                available=False,
-                missing_views=tuple(f"mtg_v1.{v}" for v in META_VIEWS),
-                detail=f"could not reach mtg_v1: {exc}",
-            )
-        return self._availability
+            if self._is_connection_error(exc):
+                return self._unreachable(f"could not reach mtg_v1: {exc}")
+            raise
 
-    def _require(self) -> None:
-        state = self.availability()
-        if not state.available:
-            raise RepositoryUnavailable(
-                "tournament evidence is unavailable: missing "
-                f"{', '.join(state.missing_views)} — {state.detail}"
-            )
-
-    def snapshot(self) -> CorpusSnapshot:
-        self._require()
-        rows = self._rows(
-            "SELECT COUNT(*) AS n, MAX(held_on) AS latest FROM mtg_v1.tournament",
-            {},
-        )
-        row = rows[0] if rows else {}
-        latest = row.get("latest")
-        return CorpusSnapshot(
-            source_view="mtg_v1.tournament",
-            row_count=row.get("n"),
-            max_content_updated_at=(
-                datetime.combine(latest, datetime.min.time(), tzinfo=UTC)
-                if isinstance(latest, date)
-                else None
-            ),
-            captured_at=datetime.now(UTC),
-        )
-
-    def commander(self, identity_key: str) -> MetaCommander | None:
-        self._require()
-        rows = self._rows(
-            "SELECT identity_key, oracle_ids, names, entries, events, wins, "
-            "top_cuts FROM mtg_v1.commander_identity "
-            "WHERE identity_key = %(key)s",
-            {"key": identity_key},
-        )
-        if not rows:
-            return None
-        row = rows[0]
-        return MetaCommander(
-            identity_key=row["identity_key"],
-            oracle_ids=_tuple(row.get("oracle_ids")),
-            names=_tuple(row.get("names")),
-            entries=int(row.get("entries") or 0),
-            events=int(row.get("events") or 0),
-            wins=int(row.get("wins") or 0),
-            top_cuts=int(row.get("top_cuts") or 0),
-        )
-
-    def events(
-        self, *, since: date, min_size: int = 0, limit: int = 50
-    ) -> list[MetaEvent]:
-        self._require()
-        rows = self._rows(
-            "SELECT event_id, name, held_on, size, source, source_url "
-            "FROM mtg_v1.tournament "
-            "WHERE held_on >= %(since)s AND size >= %(min_size)s "
-            "ORDER BY held_on DESC LIMIT %(limit)s",
-            {"since": since, "min_size": min_size, "limit": limit},
-        )
-        return [
-            MetaEvent(
-                event_id=str(r["event_id"]),
-                name=r.get("name") or "",
-                held_on=r.get("held_on"),
-                size=int(r.get("size") or 0),
-                source=r.get("source") or "",
-                source_url=r.get("source_url") or "",
-            )
-            for r in rows
-        ]
-
-    def entries(
+    def load_evidence(
         self,
         identity_key: str,
         *,
         since: date,
         min_event_size: int = 0,
-        limit: int = 50,
-    ) -> list[MetaEntry]:
-        self._require()
-        rows = self._rows(
-            "SELECT e.entry_id, e.event_id, e.identity_key, e.standing, "
-            "e.wins, e.losses, e.draws, e.decklist_id "
-            "FROM mtg_v1.tournament_entry e "
-            "JOIN mtg_v1.tournament t ON t.event_id = e.event_id "
-            "WHERE e.identity_key = %(key)s AND t.held_on >= %(since)s "
-            "AND t.size >= %(min_size)s "
-            "ORDER BY t.held_on DESC, e.standing ASC NULLS LAST "
-            "LIMIT %(limit)s",
-            {
-                "key": identity_key,
-                "since": since,
-                "min_size": min_event_size,
-                "limit": limit,
-            },
-        )
-        return [
-            MetaEntry(
-                entry_id=str(r["entry_id"]),
-                event_id=str(r["event_id"]),
-                identity_key=r["identity_key"],
-                standing=r.get("standing"),
-                wins=int(r.get("wins") or 0),
-                losses=int(r.get("losses") or 0),
-                draws=int(r.get("draws") or 0),
-                decklist_id=(str(r["decklist_id"]) if r.get("decklist_id") else None),
+        limits: MetaEvidenceLimits | None = None,
+    ) -> MetaEvidenceSlice:
+        """Load one exact cohort and all derived facts in a consistent snapshot."""
+        limits = limits or MetaEvidenceLimits()
+        params = {
+            "key": identity_key,
+            "since": since,
+            "min_size": min_event_size,
+        }
+        cohort = """
+            WITH cohort AS MATERIALIZED (
+                SELECT e.entry_id, e.tournament_id, e.deck_id, e.standing,
+                       e.wins, e.losses, e.draws, t.name AS event_name,
+                       t.event_date, t.player_count, t.source, t.url, t.top_cut,
+                       d.commander_identity, d.is_complete
+                FROM mtg_v1.tournament AS t
+                JOIN mtg_v1.tournament_entry AS e
+                  ON e.tournament_id = t.tournament_id
+                JOIN mtg_v1.deck AS d ON d.deck_id = e.deck_id
+                WHERE e.deck_id IS NOT NULL
+                  AND d.commander_identity = %(key)s
+                  AND t.event_date >= %(since)s
+                  AND t.player_count >= %(min_size)s
             )
-            for r in rows
-        ]
+        """
+        try:
+            with _connect(self._dsn) as conn, conn.transaction():
+                _query(
+                    conn,
+                    "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY",
+                )
+                availability = self._probe_availability(conn)
+                if not availability.summaries_available:
+                    return MetaEvidenceSlice(
+                        identity_key=identity_key,
+                        since=since,
+                        min_event_size=min_event_size,
+                        availability=availability,
+                        inclusions=None,
+                    )
 
-    def inclusions(
-        self,
-        identity_key: str,
-        *,
-        since: date,
-        min_event_size: int = 0,
-        limit: int = 200,
-    ) -> list[InclusionFact]:
-        self._require()
-        rows = self._rows(
-            "SELECT identity_key, oracle_id, card_name, decks_including, decks "
-            "FROM mtg_v1.commander_card_inclusion "
-            "WHERE identity_key = %(key)s AND since <= %(since)s "
-            "AND min_event_size >= %(min_size)s AND decks > 0 "
-            "ORDER BY decks_including DESC LIMIT %(limit)s",
-            {
-                "key": identity_key,
-                "since": since,
-                "min_size": min_event_size,
-                "limit": limit,
-            },
-        )
-        return [
-            InclusionFact(
-                identity_key=r["identity_key"],
-                oracle_id=str(r["oracle_id"]),
-                card_name=r.get("card_name") or "",
-                decks_including=int(r["decks_including"]),
-                decks=int(r["decks"]),
-            )
-            for r in rows
-        ]
+                captured_at = datetime.now(UTC)
+                snapshot_rows = _query(
+                    conn,
+                    "SELECT COUNT(*) AS n, MAX(event_date) AS latest "
+                    "FROM mtg_v1.tournament",
+                )
+                snapshot_row = snapshot_rows[0] if snapshot_rows else {}
+                latest = snapshot_row.get("latest")
+                latest_at = (
+                    latest
+                    if isinstance(latest, datetime)
+                    else (
+                        datetime.combine(latest, datetime.min.time(), tzinfo=UTC)
+                        if isinstance(latest, date)
+                        else None
+                    )
+                )
+                snapshot = CorpusSnapshot(
+                    source_view="mtg_v1.tournament",
+                    row_count=snapshot_row.get("n"),
+                    max_content_updated_at=latest_at,
+                    captured_at=captured_at,
+                )
+
+                aggregate_rows = _query(
+                    conn,
+                    cohort + """
+                    SELECT COUNT(DISTINCT entry_id) AS entries,
+                           COUNT(DISTINCT tournament_id) AS events,
+                           COUNT(DISTINCT entry_id)
+                               FILTER (WHERE standing = 1) AS event_wins,
+                           COUNT(DISTINCT entry_id) FILTER (
+                               WHERE top_cut IS NOT NULL
+                                 AND standing IS NOT NULL
+                                 AND standing <= top_cut
+                           ) AS top_cuts,
+                           COUNT(DISTINCT deck_id) AS decks,
+                           COUNT(DISTINCT deck_id)
+                               FILTER (WHERE is_complete IS FALSE)
+                               AS incomplete_decks
+                    FROM cohort
+                    """,
+                    params,
+                )
+                aggregate = aggregate_rows[0] if aggregate_rows else {}
+                entry_count = int(aggregate.get("entries") or 0)
+                denominator = int(aggregate.get("decks") or 0)
+                incomplete_decks = int(aggregate.get("incomplete_decks") or 0)
+
+                commander: MetaCommander | None = None
+                if entry_count:
+                    commander_rows = _query(
+                        conn,
+                        cohort + """
+                        SELECT dc.oracle_id,
+                               MIN(dc.submitted_name) AS submitted_name,
+                               MIN(dc.position) AS position
+                        FROM cohort AS c
+                        JOIN mtg_v1.deck_commander AS dc
+                          ON dc.deck_id = c.deck_id
+                        WHERE dc.oracle_id IS NOT NULL
+                        GROUP BY dc.oracle_id
+                        ORDER BY MIN(dc.position), dc.oracle_id
+                        """,
+                        params,
+                    )
+                    commander = MetaCommander(
+                        identity_key=identity_key,
+                        oracle_ids=tuple(str(r["oracle_id"]) for r in commander_rows),
+                        names=tuple(
+                            str(r.get("submitted_name") or "") for r in commander_rows
+                        ),
+                        entries=entry_count,
+                        events=int(aggregate.get("events") or 0),
+                        wins=int(aggregate.get("event_wins") or 0),
+                        top_cuts=int(aggregate.get("top_cuts") or 0),
+                    )
+
+                event_rows = _query(
+                    conn,
+                    cohort + """
+                    SELECT DISTINCT tournament_id AS event_id, event_name AS name,
+                           event_date AS held_on, player_count AS size, source,
+                           url AS source_url
+                    FROM cohort
+                    ORDER BY held_on DESC, event_id
+                    LIMIT %(event_limit)s
+                    """,
+                    {**params, "event_limit": limits.events},
+                )
+                events = tuple(
+                    MetaEvent(
+                        event_id=str(r["event_id"]),
+                        name=r.get("name") or "",
+                        held_on=r.get("held_on"),
+                        size=int(r.get("size") or 0),
+                        source=r.get("source") or "",
+                        source_url=r.get("source_url") or "",
+                    )
+                    for r in event_rows
+                )
+
+                entry_rows = _query(
+                    conn,
+                    cohort + """
+                    SELECT entry_id, tournament_id AS event_id,
+                           commander_identity AS identity_key, standing,
+                           wins, losses, draws, deck_id AS decklist_id
+                    FROM cohort
+                    ORDER BY event_date DESC, standing ASC NULLS LAST, entry_id
+                    LIMIT %(entry_limit)s
+                    """,
+                    {**params, "entry_limit": limits.entries},
+                )
+                entries = tuple(
+                    MetaEntry(
+                        entry_id=str(r["entry_id"]),
+                        event_id=str(r["event_id"]),
+                        identity_key=str(r["identity_key"]),
+                        standing=r.get("standing"),
+                        wins=int(r.get("wins") or 0),
+                        losses=int(r.get("losses") or 0),
+                        draws=int(r.get("draws") or 0),
+                        decklist_id=str(r["decklist_id"]),
+                    )
+                    for r in entry_rows
+                )
+
+                inclusions: tuple[InclusionFact, ...] | None = None
+                if availability.inclusion_available:
+                    inclusion_rows = _query(
+                        conn,
+                        cohort + """
+                        SELECT dc.oracle_id, card.name AS card_name,
+                               COUNT(DISTINCT c.deck_id) AS decks_including
+                        FROM (SELECT DISTINCT deck_id FROM cohort) AS c
+                        JOIN mtg_v1.deck_card AS dc ON dc.deck_id = c.deck_id
+                        JOIN mtg_v1.card_any_medium AS card
+                          ON card.oracle_id = dc.oracle_id
+                        WHERE dc.board = 'mainboard'
+                          AND dc.oracle_id IS NOT NULL
+                        GROUP BY dc.oracle_id, card.name
+                        ORDER BY decks_including DESC, card.name, dc.oracle_id
+                        LIMIT %(inclusion_limit)s
+                        """,
+                        {**params, "inclusion_limit": limits.inclusions},
+                    )
+                    inclusions = tuple(
+                        InclusionFact(
+                            identity_key=identity_key,
+                            oracle_id=str(r["oracle_id"]),
+                            card_name=r.get("card_name") or "",
+                            decks_including=int(r["decks_including"]),
+                            decks=denominator,
+                        )
+                        for r in inclusion_rows
+                        if denominator > 0
+                    )
+
+                return MetaEvidenceSlice(
+                    identity_key=identity_key,
+                    since=since,
+                    min_event_size=min_event_size,
+                    availability=availability,
+                    snapshot=snapshot,
+                    commander=commander,
+                    events=events,
+                    entries=entries,
+                    inclusions=inclusions,
+                    inclusion_denominator=(
+                        denominator if availability.inclusion_available else None
+                    ),
+                    incomplete_decks=incomplete_decks,
+                )
+        except RepositoryUnavailable:
+            raise
+        except Exception as exc:
+            if self._is_contract_error(exc) or self._is_connection_error(exc):
+                raise RepositoryUnavailable(
+                    f"tournament evidence query could not use mtg_v1: {exc}"
+                ) from exc
+            raise

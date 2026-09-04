@@ -89,7 +89,34 @@ class TestLivePostgres:
         state = PostgresMetaRepository(DSN).availability()
         assert isinstance(state.available, bool)
         if not state.available:
-            assert state.missing_views
+            assert state.summary_detail
+
+    def test_every_meta_evidence_path_executes_as_mtg_consumer(self):
+        """Execute probes, cohort aggregates, rows, and inclusion SQL."""
+        from datetime import date
+
+        from sabermetrics.cedh.adapters_postgres import (
+            PostgresCardRepository,
+            PostgresMetaRepository,
+        )
+
+        card = PostgresCardRepository(DSN).resolve_names(["Kinnan, Bonder Prodigy"])
+        assert card, "the ingest corpus must contain the contract-test commander"
+        identity_key = card["Kinnan, Bonder Prodigy"].oracle_id
+        repo = PostgresMetaRepository(DSN)
+        result = repo.load_evidence(
+            identity_key,
+            since=date(2000, 1, 1),
+            min_event_size=0,
+        )
+        assert (
+            result.availability.summaries_available
+        ), result.availability.summary_detail
+        assert (
+            result.availability.inclusion_available
+        ), result.availability.inclusion_detail
+        assert result.snapshot is not None
+        assert result.inclusions is not None
 
 
 @pytest.mark.model
@@ -140,11 +167,16 @@ class TestLiveSimulator:
         )
         if isinstance(outcome, NotSimulated):
             pytest.fail(
-                "the simulator did not accept cedh-deck-candidate.v1: "
+                "the simulator did not accept cedh-deck-candidate.v2: "
                 f"{outcome.reason} — {outcome.detail}"
             )
+        # The simulator's own recomputation of the deck hash, not an echo.
         assert outcome.deck_sha256 == candidate.deck_sha256
         assert outcome.metric == "goldfish_turns_to_assembly"
+        # The pack-inclusive fingerprint is present and is a different value:
+        # the two hashes answer different questions and must not collapse.
+        assert outcome.simulation_input_sha256.startswith("sha256:")
+        assert outcome.simulation_input_sha256 != candidate.deck_sha256_wire
 
 
 def test_default_suite_is_offline():
