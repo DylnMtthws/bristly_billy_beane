@@ -326,6 +326,7 @@ DDL_STATEMENTS = [
         display_name TEXT,
         avatar_emoji TEXT,
         password_hash TEXT,
+        tailscale_login TEXT,
         role TEXT NOT NULL DEFAULT 'user',
         status TEXT NOT NULL DEFAULT 'invited',
         monthly_deck_quota INTEGER,
@@ -449,6 +450,10 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
     column_migrations = {
         "generated_decks": [("owner_id", "TEXT"), ("deck_name", "TEXT")],
         "cost_log": [("user_id", "TEXT"), ("deck_id", "TEXT")],
+        # Tailnet identity (ADR-026). Its own column rather than reuse of
+        # `email`, because a Tailscale login is not always an email address:
+        # GitHub SSO renders as "someone@github".
+        "users": [("tailscale_login", "TEXT")],
     }
     for table, cols in column_migrations.items():
         cursor = conn.execute(f"PRAGMA table_info({table})")
@@ -461,6 +466,12 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_generated_decks_owner "
         "ON generated_decks(owner_id)"
+    )
+    # UNIQUE so one tailnet identity cannot map to two accounts. Partial, so
+    # any number of password-only accounts may have a NULL login.
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tailscale_login "
+        "ON users(tailscale_login) WHERE tailscale_login IS NOT NULL"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_user ON cost_log(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_deck ON cost_log(deck_id)")

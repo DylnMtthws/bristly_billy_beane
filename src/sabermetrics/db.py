@@ -232,11 +232,12 @@ class UsersRepo:
     def create(
         self,
         *,
-        email: str,
+        email: str | None = None,
         display_name: str | None = None,
         role: str = "user",
         status: str = "invited",
         password_hash: str | None = None,
+        tailscale_login: str | None = None,
         avatar_emoji: str | None = None,
         invited_by: str | None = None,
         monthly_deck_quota: int | None = None,
@@ -244,22 +245,30 @@ class UsersRepo:
     ) -> str:
         """Insert a new user and return its id.
 
+        ``email`` is optional because a tailnet-authenticated account is keyed
+        on ``tailscale_login`` and may have no email at all — a GitHub SSO
+        identity renders as ``someone@github``, which is not an address anyone
+        can be reached at.
+
         Raises:
-            sqlite3.IntegrityError: if ``email`` is already taken.
+            sqlite3.IntegrityError: if ``email`` or ``tailscale_login`` is
+                already taken.
         """
         uid = user_id or new_id()
         with connect(self.db_path) as conn:
             conn.execute(
                 """INSERT INTO users
-                (id, email, display_name, avatar_emoji, password_hash, role,
-                 status, monthly_deck_quota, invited_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (id, email, display_name, avatar_emoji, password_hash,
+                 tailscale_login, role, status, monthly_deck_quota,
+                 invited_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     uid,
                     email,
                     display_name,
                     avatar_emoji,
                     password_hash,
+                    tailscale_login,
                     role,
                     status,
                     monthly_deck_quota,
@@ -269,6 +278,28 @@ class UsersRepo:
             )
             conn.commit()
         return uid
+
+    def get_by_tailscale_login(self, login: str) -> dict | None:
+        """Look up an account by its tailnet identity.
+
+        The lookup is exact and case-sensitive: Tailscale login names are
+        stable identifiers, and loosening the match here would be the one place
+        two identities could collide into one account.
+        """
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM users WHERE tailscale_login = ?", (login,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def set_tailscale_login(self, user_id: str, login: str | None) -> None:
+        """Attach (or clear) a tailnet identity on an existing account."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE users SET tailscale_login = ? WHERE id = ?",
+                (login, user_id),
+            )
+            conn.commit()
 
     def get(self, user_id: str) -> dict | None:
         """Return the user row for ``user_id``, or None."""

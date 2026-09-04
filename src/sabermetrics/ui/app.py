@@ -1,10 +1,15 @@
-"""Flask application factory (D7.1 + P1 auth hardening).
+"""Flask application factory.
 
-Creates the Flask app bound to 127.0.0.1 only. Public access is expected to
-come through a Cloudflare Tunnel (ADR-016), so the app trusts Cloudflare's
-forwarded headers (ProxyFix) and enables the security posture required once the
-app is internet-reachable: hashed passwords (in the auth layer), CSRF on POSTs,
-hardened session cookies, and login rate-limiting.
+Creates the Flask app bound to 127.0.0.1 only. Access comes through
+``tailscale serve``, which terminates TLS on the tailnet and proxies to that
+local port (ADR-026), so the app trusts one hop of forwarded headers via
+ProxyFix and keeps the rest of the hardening: CSRF on POSTs, hardened session
+cookies, and login rate-limiting.
+
+The app is never bound to a public interface and never exposed by a port
+forward. On a tailnet there is no public surface to attack at all, which is a
+stronger position than the Cloudflare Tunnel this replaced — and one command
+instead of a tunnel daemon, a config file and a DNS record.
 """
 
 import logging
@@ -44,6 +49,20 @@ def create_app(db_path: Path | None = None) -> Flask:
         db_path = Path("data/sabermetrics.db")
     app.config["DB_PATH"] = db_path
 
+    # --- Auth mode ---
+    # `tailscale`: identity comes from the tailscale serve proxy headers.
+    # `password`:  email + argon2id with invite links (default; local dev).
+    from sabermetrics.ui.auth import MODE_PASSWORD, MODE_TAILSCALE
+
+    mode = os.environ.get("SABER_AUTH_MODE", MODE_PASSWORD).strip().lower()
+    if mode not in {MODE_TAILSCALE, MODE_PASSWORD}:
+        raise ValueError(
+            f"SABER_AUTH_MODE must be {MODE_TAILSCALE!r} or {MODE_PASSWORD!r}, "
+            f"got {mode!r}"
+        )
+    app.config["AUTH_MODE"] = mode
+    logger.info("Auth mode: %s", mode)
+
     # --- Secret key: required for signed session cookies + CSRF ---
     secret = os.environ.get("SABER_SECRET_KEY")
     if not secret:
@@ -65,7 +84,11 @@ def create_app(db_path: Path | None = None) -> Flask:
         WTF_CSRF_TIME_LIMIT=None,  # tie CSRF validity to the session
     )
 
-    # --- Trust Cloudflare's forwarded headers (1 proxy hop) ---
+    # --- Trust exactly one proxy hop (tailscale serve) ---
+    # x_for=1 is what makes request.remote_addr the *tailnet* address of the
+    # calling node rather than 127.0.0.1, which is what the identity-source
+    # check in tailscale_auth verifies against. More than one hop would let a
+    # caller prepend its own X-Forwarded-For entry; there is only one proxy.
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)  # type: ignore[method-assign]
 
     # --- Extensions ---

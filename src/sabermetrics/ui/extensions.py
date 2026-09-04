@@ -14,12 +14,18 @@ from flask_wtf import CSRFProtect
 
 
 def client_ip() -> str:
-    """Rate-limit key: the real client IP behind the Cloudflare Tunnel.
+    """Rate-limit key: the calling node's address.
 
-    Cloudflare forwards the origin IP in ``CF-Connecting-IP``; fall back to the
-    peer address for direct/local access.
+    ProxyFix has already rewritten ``remote_addr`` from the single trusted
+    ``X-Forwarded-For`` hop that ``tailscale serve`` sets, so this is the
+    tailnet address of the caller rather than 127.0.0.1.
+
+    This previously read ``CF-Connecting-IP``, for a Cloudflare Tunnel that was
+    never deployed. That header is never present, so every request fell through
+    to the same proxy address and the login limiter was effectively global —
+    one person fat-fingering a password could throttle everyone.
     """
-    return request.headers.get("CF-Connecting-IP") or get_remote_address()
+    return get_remote_address()
 
 
 csrf = CSRFProtect()

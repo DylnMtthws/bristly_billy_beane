@@ -834,3 +834,140 @@ def cedh_build(
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(candidate.to_json(), encoding="utf-8")
         click.echo(f"\nwrote {out}")
+
+
+@cli.command("grant-access")
+@click.argument("tailscale_login")
+@click.option("--name", "display_name", default=None, help="Display name.")
+@click.option("--admin", "as_admin", is_flag=True, help="Grant the admin role.")
+@click.option(
+    "--quota",
+    type=int,
+    default=None,
+    help="Monthly deck quota override (default: the global quota).",
+)
+def grant_access(
+    tailscale_login: str,
+    display_name: str | None,
+    as_admin: bool,
+    quota: int | None,
+) -> None:
+    """Give a tailnet identity an account. The whole provisioning story.
+
+    TAILSCALE_LOGIN is the login Tailscale reports, e.g. 'alice@github' or
+    'alice@example.com'. Find it with `tailscale status` once they have joined
+    the tailnet, or read it off the app's own "no access" page after they try.
+
+    There is no invite link, no password and no email to send: Tailscale has
+    already authenticated them, so this only records what they may do. Re-run it
+    to change a role or quota; it updates an existing account rather than
+    failing.
+    """
+    from sabermetrics import db
+
+    db_path = _default_db_path()
+    users = db.UsersRepo(db_path)
+    role = "admin" if as_admin else "user"
+
+    existing = users.get_by_tailscale_login(tailscale_login)
+    if existing is None and "@" in tailscale_login:
+        # A Tailscale login is often the person's email. If an account already
+        # exists under that address (a password-era account), attach the
+        # identity to it rather than creating a second one that would silently
+        # own none of their decks.
+        by_email = users.get_by_email(tailscale_login)
+        if by_email is not None:
+            users.set_tailscale_login(by_email["id"], tailscale_login)
+            existing = users.get_by_tailscale_login(tailscale_login)
+            click.echo(
+                f"Linked {tailscale_login} to the existing account "
+                f"{by_email['email']} (keeping its decks and feedback)."
+            )
+
+    if existing is not None:
+        users.set_status(existing["id"], "active")
+        if quota is not None:
+            users.set_quota(existing["id"], quota)
+        with db.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE users SET role = ? WHERE id = ?", (role, existing["id"])
+            )
+            if display_name:
+                conn.execute(
+                    "UPDATE users SET display_name = ? WHERE id = ?",
+                    (display_name, existing["id"]),
+                )
+            conn.commit()
+        click.echo(f"Updated {tailscale_login}: role={role}, status=active.")
+        return
+
+    user_id = users.create(
+        tailscale_login=tailscale_login,
+        display_name=display_name or tailscale_login.split("@", 1)[0],
+        role=role,
+        status="active",
+        monthly_deck_quota=quota,
+    )
+    click.echo(f"Granted access to {tailscale_login} (role={role}).")
+    if as_admin:
+        backfilled = users.backfill_deck_owner(user_id)
+        if backfilled:
+            click.echo(f"Backfilled {backfilled} owner-less deck(s) to this admin.")
+
+
+@cli.command("revoke-access")
+@click.argument("tailscale_login")
+@click.option(
+    "--delete",
+    is_flag=True,
+    help="Delete the account outright instead of disabling it.",
+)
+def revoke_access(tailscale_login: str, delete: bool) -> None:
+    """Revoke a tailnet identity's access.
+
+    Disabling is the default and takes effect on the person's next request:
+    identity is re-checked every time, so there is no session left to expire.
+
+    Deleting is offered but rarely right — the account owns their decks and
+    their per-card feedback, and that feedback is the research data this beta
+    exists to collect.
+    """
+    from sabermetrics import db
+
+    db_path = _default_db_path()
+    users = db.UsersRepo(db_path)
+    row = users.get_by_tailscale_login(tailscale_login)
+    if row is None:
+        raise click.ClickException(f"No account for {tailscale_login}.")
+
+    if delete:
+        with db.connect(db_path) as conn:
+            conn.execute("DELETE FROM users WHERE id = ?", (row["id"],))
+            conn.commit()
+        click.echo(f"Deleted the account for {tailscale_login}.")
+        return
+
+    users.set_status(row["id"], "disabled")
+    click.echo(f"Disabled {tailscale_login}. Their next request is refused.")
+
+
+@cli.command("list-access")
+def list_access() -> None:
+    """List every account and its tailnet identity."""
+    from sabermetrics import db
+
+    rows = db.UsersRepo(_default_db_path()).list_all()
+    if not rows:
+        click.echo("No accounts yet. Run: sabermetrics grant-access <login> --admin")
+        return
+
+    click.echo(
+        f"{'TAILNET LOGIN':<32} {'ROLE':<7} {'STATUS':<9} {'NAME':<20} LAST LOGIN"
+    )
+    for row in rows:
+        login = row.get("tailscale_login") or f"(password: {row.get('email') or '?'})"
+        click.echo(
+            f"{login:<32} {row.get('role', ''):<7} {row.get('status', ''):<9} "
+            f"{(row.get('display_name') or '')[:20]:<20} "
+            f"{row.get('last_login_at') or 'never'}"
+        )

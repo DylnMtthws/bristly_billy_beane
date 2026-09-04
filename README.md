@@ -10,10 +10,10 @@ card, grounding that reasoning in card text, aggregated decklists, community
 discussion and the official rules.
 
 > **Scope.** A multi-user web app, self-hosted on one machine, Commander format
-> only. Accounts are provisioned by the owner through one-time invite links —
-> there is no self-registration. The app binds to localhost only; public access
-> is via a Cloudflare Tunnel rather than an exposed port. Not deployed publicly
-> yet. See [Scope & non-goals](#scope--non-goals).
+> only. Accounts are provisioned by the owner — there is no self-registration.
+> The app binds to localhost and is published to a private Tailscale tailnet;
+> it has no public surface at all. See [Deployment](docs/deployment.md) and
+> [Scope & non-goals](#scope--non-goals).
 
 > **Two paths, one app.** The original generator above builds casual Commander
 > decks and runs on a local SQLite corpus. The **[cEDH Deck Lab](#the-cedh-deck-lab)**
@@ -59,7 +59,8 @@ configured monthly spend ceiling is reached.
 | **Data sources** | Casual: 11 ingestion modules — Scryfall, EDHREC, Moxfield, Archidekt, deckstats, TopDeck.gg, Commander Spellbook, magicthegathering.io, Reddit, Game Knights, WotC rules. cEDH: the `mtg_v1` Postgres contract only, plus curated strategy material |
 | **Retrieval** | `all-MiniLM-L6-v2` on CPU; cosine similarity in numpy over embeddings stored as SQLite blobs |
 | **Interfaces** | Flask web app (4 blueprints: portal, admin, auth, cEDH lab) and a 19-command Click CLI |
-| **Auth** | Flask-Login sessions, argon2id hashing, CSRF on POST, invite-only provisioning, no self-registration |
+| **Auth** | Tailnet identity from `tailscale serve` (no passwords, no invite links) or email + argon2id for local dev; CSRF on POST, admin-provisioned in both modes, no self-registration |
+| **Hosting** | `tailscale serve` on a private tailnet; app bound to 127.0.0.1, no port forward, no public surface |
 | **Scheduling** | 4 macOS launchd jobs — nightly, weekly, monthly, quarterly |
 | **Commits** | 157 on `main`, 2026-05-06 to 2026-08-26 |
 
@@ -384,7 +385,7 @@ Deliberately **not** built, and not planned:
 - Real-time gameplay assistance or game simulation
 - Manual data entry or human-in-the-loop labeling of any kind
 
-Multi-user support and hosted access were on this list until the July 2026 pivot, ruled out as firmly as the items above. Multi-user is now built; hosted access is planned but not yet deployed.
+Multi-user support and hosted access were on this list until the July 2026 pivot, ruled out as firmly as the items above. Multi-user is now built, and access is via a private Tailscale tailnet rather than the public internet — the Cloudflare Tunnel that was once planned was never deployed and is no longer the design ([ADR-026](docs/deployment.md)).
 
 The guiding constraints are locality (one process, one machine), bounded cost (every operation has a budget), and observability (every recommendation cites its sources).
 

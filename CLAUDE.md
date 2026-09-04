@@ -48,8 +48,8 @@ These constraints are non-negotiable. Every code generation must respect them.
 ```yaml
 constraints:
   users: "multi-user, admin-provisioned only — NO self-registration; the admin creates every account (ADR-015)"
-  hosting: "self-hosted on the Mac mini; the Flask app stays bound to 127.0.0.1 and is fronted by a Cloudflare Tunnel for public HTTPS — never bind 0.0.0.0 / expose the port directly (ADR-016)"
-  auth: "required on all non-public routes; passwords hashed (argon2); CSRF on every POST; hardened session cookies; login throttling; per-user authorization (a user must never see another user's decks/feedback)"
+  hosting: "self-hosted on the Mac mini; the Flask app stays bound to 127.0.0.1 and is published to the TAILNET by `tailscale serve` (ADR-026, supersedes the never-deployed Cloudflare Tunnel of ADR-016). Never bind 0.0.0.0, never port-forward, and never run `tailscale funnel` — Funnel is public AND sets no identity headers, so every request would arrive anonymous."
+  auth: "TWO MODES via SABER_AUTH_MODE. `tailscale` (deployed): identity comes from the `tailscale serve` proxy headers; no passwords, no invite links, no login form. `password` (default; local dev + tests): email + argon2id + invite links. BOTH are admin-provisioned — a tailnet identity with no users row is REFUSED, never auto-created (ADR-015). Header trust requires the request source to be in Tailscale's CGNAT range 100.64.0.0/10; TRUST_TAILSCALE_HEADERS_FROM_ANY_ADDRESS is test-only and raises outside TESTING. CSRF on every POST; hardened session cookies; login throttling; per-user authorization (a user must never see another user's decks/feedback)."
   per_user_quota: "20 generated decks per calendar month (admin-overridable per user); resets on the 1st (ADR-017)"
   cost_ceiling: "global monthly $ ceiling remains the ultimate hard stop across ALL users (settings.llm.monthly_cost_ceiling_usd)"
   # Feedback-collection input (thumbs + comments from testers) is the point of Phase 1 and is NOT the forbidden 'manual data entry' below — that rule bars manual entry of the CARD/PRICE/METRIC corpus, which stays fully automated.
@@ -404,6 +404,7 @@ These decisions are settled. Do not relitigate in code; refer here for the "why.
 | ADR-022 | Deterministic construction from curated strategy packs; the model never selects a card | Selection finishes before the first model call, so a provider outage costs prose and nothing else. It is also the only mechanism that actually prevents corpus-wide hallucination |
 | ADR-023 | Simulator boundary is versioned JSON over a subprocess; absence is a visible "not simulated" | A neutral score is indistinguishable from a measured one once it is in a table. The simulator's own honesty fields are required, so the number cannot be rendered without them |
 | ADR-024 | One cost ledger and one monthly ceiling across both providers | A per-provider ceiling is two soft limits, not one hard stop |
+| ADR-026 | Tailnet-only hosting via `tailscale serve`; identity from its proxy headers; accounts still admin-provisioned | The Cloudflare Tunnel (ADR-016) was specified and never deployed. A tunnel puts a login page on the public internet where anyone can knock; a tailnet has no public surface at all, and Tailscale has already authenticated every device on it. Removes passwords, invite tokens, the login form and the reset flow nobody had built yet — one `grant-access` command per tester. Accounts stay because owner-scoping, quota and per-card feedback all need identity |
 | ADR-025 | No budget, no card price, and no collection anywhere in the cEDH engine | cEDH is proxy-normal: expensive cards get proxied, so price is not a performance signal, and a budget would not trade money for power — it would just remove the best cards. Owned-cards preference is the same constraint wearing a different hat: building a new deck means acquiring or proxying cards, which is the normal case. Absence is enforced (no field to read, `extra="forbid"` on the constraints) because an available price or collection field always becomes a tie-break eventually. It also buys reproducibility: selection sees only the pack and the role, so the same pack yields the same 99 for everyone. NB: this is about *card* prices — the LLM **token** cost ceiling (ADR-024) is untouched |
 
 > **Charter pivot (2026-07):** ADR-015..018 supersede the original single-user / localhost-only / no-public-hosting posture. Where older ADRs or docs assume one user, the multi-user charter above wins.
@@ -427,6 +428,12 @@ documents:
   - file: CLAUDE.md
     purpose: "This file. Project context, auto-loaded."
     read_when: "Always, at session start"
+
+  - file: docs/deployment.md
+    purpose: "How this is deployed and how accounts are provisioned: tailscale
+      serve, the identity-header trust model and its stated limits, and the
+      grant-access/revoke-access flow."
+    read_when: "Before any auth, hosting or account-provisioning work"
 
   - file: docs/integration-handoff.md
     purpose: "The contracts with the two sibling repositories: what mtg_v1 must
