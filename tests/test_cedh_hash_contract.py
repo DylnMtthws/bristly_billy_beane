@@ -187,9 +187,7 @@ class TestTheRequestWeSend:
         }
         assert 0 <= document["seed"] <= 2**64 - 1
 
-    def test_an_envelope_missing_its_version_fails_the_vendored_schema(
-        self, candidate
-    ):
+    def test_an_envelope_missing_its_version_fails_the_vendored_schema(self, candidate):
         """The exact shape that used to go on the wire, refused here."""
         candidate_schema = _schema("cedh-deck-candidate.v2.schema.json")
         envelope_schema = _schema("cedh-simulation-request.v1.schema.json")
@@ -201,9 +199,7 @@ class TestTheRequestWeSend:
         del document["schema_version"]
         assert list(validator.iter_errors(document))
 
-    def test_this_repositorys_own_export_document_is_not_wire_shaped(
-        self, candidate
-    ):
+    def test_this_repositorys_own_export_document_is_not_wire_shaped(self, candidate):
         """``to_document()`` is a different artifact and must not be sent.
 
         Posting it is precisely what happened before: it is keyed ``schema``/

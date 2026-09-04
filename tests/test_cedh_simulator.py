@@ -154,9 +154,7 @@ class TestContractValidation:
         )
         assert result.deck_sha256 == candidate.deck_sha256
 
-    def test_the_input_fingerprint_is_carried_and_is_not_the_deck_hash(
-        self, candidate
-    ):
+    def test_the_input_fingerprint_is_carried_and_is_not_the_deck_hash(self, candidate):
         result = _parse_http_result(
             _result_payload(candidate), candidate, httpx.Headers(_result_headers())
         )
@@ -427,7 +425,9 @@ class TestHttpClient:
 
     def test_non_json_200_is_contract_violation(self, candidate):
         transport = httpx.MockTransport(
-            lambda request: httpx.Response(200, text="not-json", headers=_result_headers())
+            lambda request: httpx.Response(
+                200, text="not-json", headers=_result_headers()
+            )
         )
         result = HttpSimulatorClient("http://sim", transport=transport).simulate(
             candidate
