@@ -6,7 +6,7 @@ reimplement any part of its model.
 
 Two states, and only two:
 
-* :class:`SimulationResult` — a validated ``cedh-simulation-result.v1``
+* :class:`SimulationResult` — a validated ``cedh-simulation-result.v3``
   document from the simulator.
 * :class:`NotSimulated` — a named reason why there is no result.
 
@@ -15,6 +15,20 @@ neutral score. A neutral number is indistinguishable from a measured one once
 it is in a table, and it would be the only number in the product that means
 nothing. An unsupported commander is likewise shown as unsupported, not as a
 zero.
+
+**Deck identity is checked on one field, and it is the simulator's own.**
+Every result carries ``candidate.deck_sha256``: the simulator's independent
+recomputation of the deck hash from the list it actually ran, using the same
+ADR-025 algorithm this repository uses. We compare that, and only that, to
+decide whether a result describes the deck in front of the user.
+
+The field it replaces, ``candidate_hash``, hashed the deck list *together with*
+the strategy pack. This repository compared it to a deck-only hash, so it never
+matched, and the mismatch was reported as "different deck" when the deck was
+identical. The pack-inclusive fingerprint still exists and is still useful —
+it is ``simulation_input_sha256``, it covers every input that can change the
+numbers, and it is the right cache key. It is simply not a deck identity, and
+the two now have names that say which is which.
 
 The simulator's own framing travels with its numbers: the metric is
 ``goldfish_turns_to_assembly``, it plays alone, and it cannot see every card in
@@ -42,11 +56,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from sabermetrics.cedh.candidate import DeckCandidate
 from sabermetrics.cedh.errors import SimulatorContractError
 from sabermetrics.cedh.settings import SimulatorSettings
+from sabermetrics.cedh.wire import simulation_request
 
 logger = logging.getLogger(__name__)
 
-RESULT_SCHEMA_ID: Final = "cedh-simulation-result.v1"
-HTTP_RESULT_SCHEMA_ID: Final = "cedh-simulation-result.v2"
+#: The one result contract. There is deliberately no second accepted shape:
+#: this repository previously also described a flat ``cedh-simulation-result.v1``
+#: that the simulator never emitted, and three candidate meanings for one
+#: document is how the field-name collision survived as long as it did.
+RESULT_SCHEMA_ID: Final = "cedh-simulation-result.v3"
+HTTP_RESULT_SCHEMA_ID: Final = RESULT_SCHEMA_ID
 
 #: Why a candidate was not simulated. A closed set: an unmodelled reason is a
 #: reason nobody chose to state.
@@ -54,6 +73,12 @@ NotSimulatedReason = Literal[
     "simulator_disabled",
     "simulator_unavailable",
     "commander_unsupported",
+    #: The simulator ran a different list than we submitted. This is the ONLY
+    #: reason that means the deck is not what we think it is. An unsupported
+    #: pack, a stale card snapshot or a schema disagreement are execution-context
+    #: and contract faults and must never arrive here — a user told their deck
+    #: changed when it did not cannot act on that, and will not trust the next
+    #: such message either.
     "deck_mismatch",
     "simulator_failed",
     "contract_violation",
@@ -98,13 +123,18 @@ class SimulationResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    schema_id: Literal["cedh-simulation-result.v1", "cedh-simulation-result.v2"] = (
-        RESULT_SCHEMA_ID
-    )
+    schema_id: Literal["cedh-simulation-result.v3"] = RESULT_SCHEMA_ID
     status: Literal["simulated"] = "simulated"
     candidate_id: str
-    #: The simulator's hash of the list it actually ran.
+    #: The simulator's OWN recomputation of the deck hash, in bare hex. Deck
+    #: identity is decided on this and nothing else.
     deck_sha256: str
+    #: The simulator's fingerprint of every behaviour-affecting input: this
+    #: deck, the resolved strategy pack and its content hash, the simulator and
+    #: card-data versions, the scenario, seed, games, turn, sweep and
+    #: ablations. Two results sharing it are the same measurement, which makes
+    #: it the correct cache key — and makes deck_sha256 the wrong one.
+    simulation_input_sha256: str = ""
     simulator_version: str
     games: int = Field(gt=0)
     objective_turn: int = Field(ge=1)
@@ -175,68 +205,15 @@ class SimulatorClient(Protocol):
         ...
 
 
-def parse_result(payload: dict, candidate: DeckCandidate) -> SimulationResult:
-    """Validate a simulator payload against the versioned contract.
-
-    Args:
-        payload: The decoded JSON document.
-        candidate: The candidate that was submitted.
-
-    Returns:
-        The validated result.
-
-    Raises:
-        SimulatorContractError: The payload declares the wrong schema, fails
-            validation, or describes a different deck. A malformed result is
-            never silently repaired — the caller turns this into a visible
-            ``not_simulated`` state.
-    """
-    declared = payload.get("schema") or payload.get("schema_id")
-    if declared != RESULT_SCHEMA_ID:
-        raise SimulatorContractError(
-            f"simulator returned schema {declared!r}, expected " f"{RESULT_SCHEMA_ID!r}"
-        )
-    body = {k: v for k, v in payload.items() if k != "schema"}
-    body["schema_id"] = RESULT_SCHEMA_ID
-    try:
-        result = SimulationResult.model_validate(body)
-    except Exception as exc:
-        raise SimulatorContractError(
-            f"simulator result failed validation: {exc}"
-        ) from exc
-    if result.deck_sha256 != candidate.deck_sha256:
-        raise SimulatorContractError(
-            "simulator result describes a different deck: it ran "
-            f"{result.deck_sha256[:12]}, we submitted "
-            f"{candidate.deck_sha256[:12]}"
-        )
-    return result
-
-
-def _request_document(
-    candidate: DeckCandidate, games: int, turn: int
-) -> dict[str, Any]:
-    """Build the frozen service request around the verbatim candidate document."""
-    return {
-        "candidate": candidate.to_document(),
-        "games": games,
-        "turn": turn,
-        "seed": int(candidate.deck_sha256[:16], 16),
-        "scenario": "goldfish_assembly.v1",
-        "sweep": False,
-        "ablate": [],
-    }
-
-
 @lru_cache(maxsize=1)
 def _http_result_validator() -> Draft202012Validator:
-    """Load the vendored v2 schema used for every successful HTTP response."""
+    """Load the vendored result schema used for every successful response."""
     path = (
         Path(__file__).resolve().parents[3]
         / "fixtures"
         / "cedh"
         / "contracts"
-        / "cedh-simulation-result.v2.schema.json"
+        / "cedh-simulation-result.v3.schema.json"
     )
     schema = json.loads(path.read_text(encoding="utf-8"))
     return Draft202012Validator(schema, format_checker=FormatChecker())
@@ -253,12 +230,16 @@ def _parse_http_result(
             f"simulator result failed vendored schema validation: {exc.message}"
         ) from exc
 
-    candidate_hash = str(payload["candidate"]["candidate_hash"])
-    expected_hash = f"sha256:{candidate.deck_sha256}"
-    if candidate_hash != expected_hash:
+    # The one deck-identity check. The simulator recomputed this from the list
+    # it ran; we recompute ours from the list we built. Nothing about the
+    # strategy pack, the corpus or the run parameters is in either value, so a
+    # mismatch here means the LIST differs and cannot mean anything else.
+    ran = str(payload["candidate"]["deck_sha256"])
+    submitted = candidate.deck_sha256_wire
+    if ran != submitted:
         raise SimulatorContractError(
             "simulator result describes a different deck: it ran "
-            f"{candidate_hash[:19]}, we submitted {expected_hash[:19]}"
+            f"{ran[:19]}, we submitted {submitted[:19]}"
         )
 
     coverage = payload["coverage"]
@@ -274,9 +255,10 @@ def _parse_http_result(
         for point in payload["assembly_cdf"]
     )
     return SimulationResult(
-        schema_id=HTTP_RESULT_SCHEMA_ID,
+        schema_id=RESULT_SCHEMA_ID,
         candidate_id=str(payload["candidate"]["candidate_id"]),
-        deck_sha256=candidate.deck_sha256,
+        deck_sha256=ran.removeprefix("sha256:"),
+        simulation_input_sha256=str(payload["simulation_input_sha256"]),
         simulator_version=headers.get(
             "X-Sim-Version", str(payload["simulator"]["version"])
         ),
@@ -357,24 +339,27 @@ class FixtureSimulatorClient:
                 ),
             )
         payload = json.loads(path.read_text(encoding="utf-8"))
+        # Fixture-only keys. The vendored schema is additionalProperties:false,
+        # so these must go before validation — which is the point: a fixture is
+        # held to the same contract as a live response.
         payload.pop("commander_keys", None)
-        payload["candidate_id"] = candidate.candidate_id
-        payload["deck_sha256"] = candidate.deck_sha256
-        version = payload.get("simulator_version", "unknown")
-        if not version.startswith("fixture:"):
-            payload["simulator_version"] = f"fixture:{version}"
+        payload.pop("_README", None)
+        # A fixture is a shape to develop against, not a measurement of the
+        # deck in front of it, so the deck hash is rewritten to the submitted
+        # candidate's. The substitution is stated in simulator_version below,
+        # so a fixture result is never mistaken for a live one.
+        payload["candidate"]["deck_sha256"] = candidate.deck_sha256_wire
+        payload["candidate"]["candidate_id"] = candidate.candidate_id
         try:
-            if payload.get("schema_version") == HTTP_RESULT_SCHEMA_ID:
-                headers = httpx.Headers(
-                    {
-                        "X-Sim-Version": str(payload["simulator"]["version"]),
-                        "X-Sim-Result-Schema": HTTP_RESULT_SCHEMA_ID,
-                        "X-Cards-Sha256": str(payload["card_data"]["cards_sha256"]),
-                    }
-                )
-                return _parse_http_result(payload, candidate, headers)
-            return parse_result(payload, candidate)
-        except SimulatorContractError as exc:
+            headers = httpx.Headers(
+                {
+                    "X-Sim-Version": f"fixture:{payload['simulator']['version']}",
+                    "X-Sim-Result-Schema": RESULT_SCHEMA_ID,
+                    "X-Cards-Sha256": str(payload["card_data"]["cards_sha256"]),
+                }
+            )
+            return _parse_http_result(payload, candidate, headers)
+        except (SimulatorContractError, KeyError) as exc:
             return NotSimulated(reason="contract_violation", detail=str(exc))
 
 
@@ -417,15 +402,25 @@ class HttpSimulatorClient:
             500: "simulator_failed",
         }.get(response.status_code, "simulator_failed")
         declared = body.get("error") if isinstance(body, dict) else None
-        allowed = {
-            "invalid_request",
-            "unsupported",
-            "busy",
-            "card_data_unavailable",
-            "timeout",
-            "simulator_failed",
+        # The service's machine codes, mapped to this repository's vocabulary.
+        # Only deck_hash_mismatch becomes deck_mismatch: an unsupported pack or
+        # a stale snapshot arrives as "unsupported", because telling a user
+        # their deck changed when only the execution context did is both wrong
+        # and something they cannot act on.
+        translated: dict[str, NotSimulatedReason] = {
+            "deck_hash_mismatch": "deck_mismatch",
+            "contract_violation": "contract_violation",
+            "invalid_request": "invalid_request",
+            "unsupported": "unsupported",
+            "busy": "busy",
+            "card_data_unavailable": "card_data_unavailable",
+            "timeout": "timeout",
+            "simulator_failed": "simulator_failed",
         }
-        reason = cast(NotSimulatedReason, declared if declared in allowed else fallback)
+        reason = translated.get(
+            declared if isinstance(declared, str) else "",
+            cast(NotSimulatedReason, fallback),
+        )
         detail = body.get("detail", "") if isinstance(body, dict) else ""
         stderr = body.get("stderr", "") if isinstance(body, dict) else ""
         if stderr:
@@ -442,7 +437,7 @@ class HttpSimulatorClient:
             return 1.0
 
     def simulate(self, candidate: DeckCandidate) -> SimulationOutcome:
-        request = _request_document(candidate, self._games, self._turn)
+        request = simulation_request(candidate, games=self._games, turn=self._turn)
         timeout = httpx.Timeout(self._timeout, connect=15.0)
         with httpx.Client(timeout=timeout, transport=self._transport) as client:
             response: httpx.Response | None = None
@@ -536,7 +531,11 @@ class SubprocessSimulatorClient:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "request.json"
             path.write_text(
-                json.dumps(_request_document(candidate, self._games, self._turn)),
+                json.dumps(
+                    simulation_request(candidate, games=self._games, turn=self._turn)[
+                        "candidate"
+                    ]
+                ),
                 encoding="utf-8",
             )
             cmd = [
@@ -584,17 +583,15 @@ class SubprocessSimulatorClient:
                 ),
             )
         try:
-            if payload.get("schema_version") == HTTP_RESULT_SCHEMA_ID:
-                headers = httpx.Headers(
-                    {
-                        "X-Sim-Version": str(payload["simulator"]["version"]),
-                        "X-Sim-Result-Schema": HTTP_RESULT_SCHEMA_ID,
-                        "X-Cards-Sha256": str(payload["card_data"]["cards_sha256"]),
-                    }
-                )
-                return _parse_http_result(payload, candidate, headers)
-            return parse_result(payload, candidate)
-        except SimulatorContractError as exc:
+            headers = httpx.Headers(
+                {
+                    "X-Sim-Version": str(payload["simulator"]["version"]),
+                    "X-Sim-Result-Schema": RESULT_SCHEMA_ID,
+                    "X-Cards-Sha256": str(payload["card_data"]["cards_sha256"]),
+                }
+            )
+            return _parse_http_result(payload, candidate, headers)
+        except (SimulatorContractError, KeyError) as exc:
             return NotSimulated(reason="contract_violation", detail=str(exc))
 
 

@@ -290,10 +290,16 @@ def build_candidate(
         card_snapshot=snapshot.label,
         meta_snapshot=evidence.meta_snapshot if evidence else "",
         meta_available=bool(evidence and evidence.meta_available),
+        meta_since=evidence.since if evidence else None,
+        inclusion_available=bool(evidence and evidence.inclusion_available),
+        inclusion_decks=evidence.inclusion_decks if evidence else None,
+        incomplete_decks=evidence.incomplete_decks if evidence else None,
         evidence_hash=evidence.evidence_hash if evidence else "",
         window_days=evidence.window_days if evidence else 0,
         min_event_size=evidence.min_event_size if evidence else 0,
         builder_version=BUILDER_VERSION,
+        simulator_pack_id=pack.simulator_pack_id,
+        simulator_pack_version=pack.simulator_pack_version,
     )
 
     return DeckCandidate(

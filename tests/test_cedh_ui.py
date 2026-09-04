@@ -173,7 +173,7 @@ class TestCandidateExport:
         assert response.status_code == 200
         assert "attachment" in response.headers["Content-Disposition"]
         document = json.loads(response.data)
-        assert document["schema"] == "cedh-deck-candidate.v1"
+        assert document["schema"] == "decklab-deck-candidate.v1"
         assert len(document["deck_sha256"]) == 64
 
     def test_cards_are_exported_by_oracle_id(self, client):

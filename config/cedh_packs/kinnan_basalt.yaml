@@ -470,3 +470,5 @@ source: Moxfield list 'Grind Them Into Dust - Kinnan Midrange Control' (WoundedS
 source_url: ''
 curated_at: '2026-09-03'
 version: '1'
+simulator_pack_id: kinnan-midrange-goldfish
+simulator_pack_version: 1.0.0

@@ -1,4 +1,16 @@
-"""``cedh-deck-candidate.v1`` — the deck candidate this repository exports.
+"""``decklab-deck-candidate.v1`` — the deck candidate this repository exports.
+
+This is **this repository's own export/download artifact**, not the document
+the simulator parses. It carries display names, roles, win packages, notes and
+full build provenance, because its readers are a person and this repository's
+own storage.
+
+It used to be called ``cedh-deck-candidate.v1``, which is also what the
+simulator called an entirely different document — same name, different required
+keys, and each side built its own reading from prose. The rename is not
+cosmetic: two documents sharing one schema id is the condition that let the
+mismatch survive review on both sides. The simulator's contract is built in
+:mod:`sabermetrics.cedh.wire` and is the only thing that goes on the wire.
 
 Cards are addressed by **oracle_id**, never by name. Names are carried for
 display and are not the key: they are not unique across the corpus, and the
@@ -15,14 +27,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from sabermetrics.cedh.domain import CommanderIdentity, WinPackageKind
 
-SCHEMA_ID: Final = "cedh-deck-candidate.v1"
+SCHEMA_ID: Final = "decklab-deck-candidate.v1"
 
 #: How a card got into the candidate. ``repair`` means the deterministic
 #: legality repair put it there, which is a fact about the build worth keeping.
@@ -70,10 +82,21 @@ class CandidateProvenance(BaseModel):
     card_snapshot: str = ""
     meta_snapshot: str = ""
     meta_available: bool = False
+    meta_since: date | None = None
+    inclusion_available: bool = False
+    inclusion_decks: int | None = Field(default=None, ge=0)
+    incomplete_decks: int | None = Field(default=None, ge=0)
     evidence_hash: str = ""
     window_days: int = 0
     min_event_size: int = 0
     builder_version: str = "1"
+    #: Which *simulator* strategy pack this candidate asks to be run under.
+    #: Distinct from ``pack_id`` above: that names the pack THIS repository
+    #: built the list from, and the two namespaces are unrelated. The default
+    #: is explicit derived execution, because a pack we have not deliberately
+    #: mapped must never be silently run under commander-specific logic.
+    simulator_pack_id: str = "derived-generic"
+    simulator_pack_version: str = "1.0.0"
     simulator_version: str = ""
     simulator_result_schema: str = ""
     simulator_cards_sha256: str = ""
@@ -85,7 +108,7 @@ class DeckCandidate(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    schema_id: Literal["cedh-deck-candidate.v1"] = SCHEMA_ID
+    schema_id: Literal["decklab-deck-candidate.v1"] = SCHEMA_ID
     candidate_id: str
     generated_at: datetime
     commander: CommanderIdentity
@@ -118,9 +141,16 @@ class DeckCandidate(BaseModel):
     def deck_sha256(self) -> str:
         """Hash of the 99 plus the commander, order-independent.
 
-        The simulator stamps a deck hash on its results; matching on this is
-        how a stored simulation is known to describe *this* list rather than a
-        list that has since changed.
+        Identifies a **list**, and nothing else. Not the strategy pack it was
+        built from, not the simulator that will run it, not who asked for it —
+        that absence is ADR-025, and it is what makes the hash comparable
+        across builds, across packs and across users.
+
+        The simulator implements this same algorithm and stamps its own
+        recomputation on every result. Matching on that is how a stored
+        simulation is known to describe *this* list rather than a list that
+        has since changed. Pinned across all three implementations by
+        ``fixtures/cedh/contracts/hash-golden-vectors.json``.
         """
         digest = hashlib.sha256()
         for oracle_id in sorted(self.commander.oracle_ids):
@@ -128,6 +158,17 @@ class DeckCandidate(BaseModel):
         for card in sorted(self.cards, key=lambda c: c.oracle_id):
             digest.update(f"{card.oracle_id}:{card.quantity}\n".encode())
         return digest.hexdigest()
+
+    @property
+    def deck_sha256_wire(self) -> str:
+        """:attr:`deck_sha256` in the algorithm-qualified form the wire uses.
+
+        The prefix is not decoration: it says which algorithm produced the
+        digest, so replacing the algorithm becomes a visible contract change
+        rather than a silent one. Kept as a separate property so the bare hex
+        stays the value stored and displayed here.
+        """
+        return f"sha256:{self.deck_sha256}"
 
     def to_document(self) -> dict[str, Any]:
         """Render the versioned export document."""

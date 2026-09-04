@@ -1,64 +1,284 @@
 {
-  "_README": "REPRESENTATIVE FIXTURE, not a measurement of any candidate this repository builds. commander_keys lists BOTH the synthetic id the fixture corpus assigns to Kinnan and his real mtg_v1 oracle_id (8d11aa49-...), so the same fixture attaches in offline and live modes without being duplicated. The probabilities are commander_simulator's published figures for its own authored list (STATE.md, 60,000 games, list A snapshot 2026-09-01). They are reproduced here so the consumer path has a realistic shape to develop against; the simulator_version is prefixed 'fixture:' on load so nothing renders it as a live run.",
-  "schema": "cedh-simulation-result.v1",
+  "_README": "REPRESENTATIVE FIXTURE, not a measurement of any candidate this repository builds. commander_keys lists BOTH the synthetic id the fixture corpus assigns to Kinnan and his real mtg_v1 oracle_id (8d11aa49-...), so the same fixture attaches in offline and live modes without being duplicated. The probabilities are commander_simulator's published figures for its own authored list (STATE.md, 60,000 games, list A snapshot 2026-09-01). They are reproduced here so the consumer path has a realistic shape to develop against. candidate.deck_sha256 is REWRITTEN to the submitted candidate's hash on load and the simulator_version is prefixed 'fixture:', so nothing renders this as a live run. simulation_input_sha256 is likewise a placeholder: this fixture is not the output of any real execution context, and a plausible-looking fingerprint here would be a lie a cache could act on.",
+  "schema_version": "cedh-simulation-result.v3",
   "commander_keys": [
     "38d25a87-dcc1-5cc2-a086-48796e7cdced",
     "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
   ],
-  "candidate_id": "placeholder",
-  "deck_sha256": "placeholder",
-  "simulator_version": "commander_simulator/phase-7",
-  "games": 60000,
-  "objective_turn": 3,
-  "metric": "goldfish_turns_to_assembly",
-  "measures": "turns until a declared pattern is assembled, playing alone with no opponents, no stack, no combat and no interaction",
-  "does_not_measure": "deck quality, matchups, or whether the deck wins. A faster number is not a better deck.",
-  "assembly": [
+  "run_id": "run-000000000000000000000000",
+  "simulation_input_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "timestamps": {
+    "started_at": "2026-09-01T00:00:00Z",
+    "completed_at": "2026-09-01T00:04:00Z"
+  },
+  "simulator": {
+    "version": "0.2.0",
+    "build_flavour": "release"
+  },
+  "metric": {
+    "id": "goldfish_turns_to_assembly",
+    "measures": "turns until a declared pattern is assembled, playing alone with no opponents, no stack, no combat and no interaction",
+    "does_not_measure": "deck strength, win rate, or card quality"
+  },
+  "candidate": {
+    "candidate_id": "placeholder",
+    "deck_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "strategy_pack": {
+    "id": "kinnan-midrange-goldfish",
+    "version": "1.0.0",
+    "content_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "derived": false,
+    "play_policy": "authored_kinnan_midrange",
+    "assembly_objectives": [
+      "infinite_C_into_thrasios"
+    ],
+    "patterns": [
+      {
+        "name": "infinite_C_into_thrasios",
+        "source": "pack",
+        "terminal_state": "assembly_proxy"
+      }
+    ],
+    "inherited_patterns": [],
+    "rank_overrides": [],
+    "declared_table_assumptions": [
+      "Three opponents and a WUBRG table are declared as card-text context only.",
+      "The model is on the play and keeps its opening seven without mulligans."
+    ],
+    "known_blind_spots": [
+      "Summoning sickness and the legend rule are not modelled.",
+      "Hullbreaker Horror is filed inert and the classification is a misread by the simulator's author, left in place deliberately and reported rather than silently corrected."
+    ]
+  },
+  "card_data": {
+    "manifest_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "cards_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "source_view": "fixture.list_a_snapshot",
+    "max_content_updated_at": "2026-09-01T00:00:00Z",
+    "corpus_row_count": 100
+  },
+  "simulation": {
+    "games": 60000,
+    "seed": 12345,
+    "objective_turn": 3,
+    "requested_scenario": {
+      "id": "goldfish_assembly",
+      "version": "1.0.0"
+    }
+  },
+  "coverage": {
+    "total_cards": 100,
+    "library_cards": 99,
+    "commander_cards": 1,
+    "modeled_cards": 68,
+    "inert_cards": 3,
+    "unauthored_cards": 4,
+    "inert_by_reason": {
+      "interaction": 1,
+      "opponent_trigger": 1,
+      "opponent_permanent": 1
+    }
+  },
+  "assembly_cdf": [
+    {
+      "turn": 1,
+      "assembled_games": 0,
+      "probability": 0.0,
+      "wilson_95": {
+        "low": 0.0,
+        "high": 0.0034
+      }
+    },
+    {
+      "turn": 2,
+      "assembled_games": 0,
+      "probability": 0.0,
+      "wilson_95": {
+        "low": 0.0,
+        "high": 0.0034
+      }
+    },
     {
       "turn": 3,
+      "assembled_games": 846,
       "probability": 0.0141,
-      "ci_low": 0.0132,
-      "ci_high": 0.015
+      "wilson_95": {
+        "low": 0.0132,
+        "high": 0.015
+      }
+    },
+    {
+      "turn": 4,
+      "assembled_games": 846,
+      "probability": 0.0141,
+      "wilson_95": {
+        "low": 0.0107,
+        "high": 0.0175
+      }
+    },
+    {
+      "turn": 5,
+      "assembled_games": 846,
+      "probability": 0.0141,
+      "wilson_95": {
+        "low": 0.0107,
+        "high": 0.0175
+      }
     },
     {
       "turn": 6,
+      "assembled_games": 12516,
       "probability": 0.2086,
-      "ci_low": 0.2054,
-      "ci_high": 0.2118
+      "wilson_95": {
+        "low": 0.2054,
+        "high": 0.2118
+      }
+    },
+    {
+      "turn": 7,
+      "assembled_games": 12516,
+      "probability": 0.2086,
+      "wilson_95": {
+        "low": 0.2052,
+        "high": 0.212
+      }
+    },
+    {
+      "turn": 8,
+      "assembled_games": 12516,
+      "probability": 0.2086,
+      "wilson_95": {
+        "low": 0.2052,
+        "high": 0.212
+      }
+    },
+    {
+      "turn": 9,
+      "assembled_games": 12516,
+      "probability": 0.2086,
+      "wilson_95": {
+        "low": 0.2052,
+        "high": 0.212
+      }
+    },
+    {
+      "turn": 10,
+      "assembled_games": 12516,
+      "probability": 0.2086,
+      "wilson_95": {
+        "low": 0.2052,
+        "high": 0.212
+      }
+    },
+    {
+      "turn": 11,
+      "assembled_games": 12516,
+      "probability": 0.2086,
+      "wilson_95": {
+        "low": 0.2052,
+        "high": 0.212
+      }
     },
     {
       "turn": 12,
+      "assembled_games": 46092,
       "probability": 0.7682,
-      "ci_low": 0.7648,
-      "ci_high": 0.7716
+      "wilson_95": {
+        "low": 0.7648,
+        "high": 0.7716
+      }
     }
   ],
-  "censored_fraction": 0.2318,
-  "modeled_cards": 68,
-  "inert_cards": [
+  "censored": {
+    "games": 13908,
+    "rate": 0.2318,
+    "wilson_95": {
+      "low": 0.2284,
+      "high": 0.2352
+    }
+  },
+  "percentiles": [
     {
-      "name": "Force of Will",
-      "reason": "counters or removal with nothing to answer",
-      "category": "interaction"
+      "percentile": 0.1,
+      "status": "observed",
+      "turn": 5,
+      "interval_95": {
+        "low_turn": 4,
+        "high_turn": 5
+      }
     },
     {
-      "name": "Consecrated Sphinx",
-      "reason": "fires only when an opponent acts",
-      "category": "opponent_trigger"
+      "percentile": 0.25,
+      "status": "observed",
+      "turn": 7,
+      "interval_95": {
+        "low_turn": 6,
+        "high_turn": 7
+      }
     },
     {
-      "name": "Hullbreaker Horror",
-      "reason": "targets an opponent's permanent",
-      "category": "opponent_permanent"
+      "percentile": 0.5,
+      "status": "observed",
+      "turn": 9,
+      "interval_95": {
+        "low_turn": 8,
+        "high_turn": 9
+      }
+    },
+    {
+      "percentile": 0.75,
+      "status": "observed",
+      "turn": 12,
+      "interval_95": {
+        "low_turn": 11,
+        "high_turn": 12
+      }
+    },
+    {
+      "percentile": 0.9,
+      "status": "censored",
+      "turn": null,
+      "interval_95": {
+        "low_turn": null,
+        "high_turn": null
+      }
     }
   ],
-  "known_misclassifications": [
-    "Hullbreaker Horror is filed inert and the classification is a misread by the simulator's author, left in place deliberately and reported rather than silently corrected."
+  "ablation_results": [],
+  "warnings": [
+    "Assembly probability is not win rate, deck strength, or card quality.",
+    "Hullbreaker Horror is filed inert and the classification is a misread by the simulator's author, left in place deliberately and reported rather than silently corrected.",
+    "Sylvan Library is unauthored and therefore dilutes draws without executing text.",
+    "The One Ring is unauthored and therefore dilutes draws without executing text.",
+    "Valley Floodcaller is unauthored and therefore dilutes draws without executing text.",
+    "Thrasios, Triton Hero (activated ability) is unauthored and therefore dilutes draws without executing text.",
+    "No ablations were requested; ablation_results is empty."
   ],
-  "unauthored_cards": [
-    "Sylvan Library",
-    "The One Ring",
-    "Valley Floodcaller",
-    "Thrasios, Triton Hero (activated ability)"
-  ]
+  "unsupported_assumptions": [
+    {
+      "code": "no_opponents",
+      "detail": "No opponents are simulated; table fields are declared card-text context only."
+    },
+    {
+      "code": "no_stack",
+      "detail": "The stack, priority, responses, and live interaction are unsupported."
+    },
+    {
+      "code": "no_combat",
+      "detail": "Combat, attacks, damage, and opponent-facing kills are unsupported."
+    },
+    {
+      "code": "assembly_proxy",
+      "detail": "A declared assembly state ends a game; it is not a demonstrated win."
+    },
+    {
+      "code": "not_general_rules_engine",
+      "detail": "Only explicitly authored effects execute; unlisted cards are reported unauthored."
+    }
+  ],
+  "determinism": {
+    "seed_scheme": "splitmix64(base_seed ^ splitmix64(game_index)) + xoshiro256++",
+    "result_digest": "0000000000000000"
+  }
 }

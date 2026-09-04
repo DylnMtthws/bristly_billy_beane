@@ -289,6 +289,13 @@ def build_pack() -> dict:
         "source_url": "",
         "curated_at": "2026-09-03",
         "version": "1",
+        # This list IS the one commander_simulator authored a pack for, so it
+        # asks for that pack by name. The mapping is declared here rather than
+        # derived: the two repositories' pack namespaces are unrelated, and a
+        # pack without a declared mapping falls back to explicit derived
+        # execution instead of silently borrowing Kinnan logic.
+        "simulator_pack_id": "kinnan-midrange-goldfish",
+        "simulator_pack_version": "1.0.0",
     }
 
 

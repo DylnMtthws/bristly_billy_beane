@@ -180,6 +180,11 @@ class StrategyPack(BaseModel):
     source_url: str = ""
     curated_at: date | None = None
     version: str = "1"
+    #: The simulator strategy pack this list asks to be run under. See
+    #: ``PackDefinition.simulator_pack_id``; the two pack namespaces are
+    #: unrelated and the mapping is declared, never inferred.
+    simulator_pack_id: str = "derived-generic"
+    simulator_pack_version: str = "1.0.0"
 
     @model_validator(mode="after")
     def _pool_roles_are_known(self) -> StrategyPack:

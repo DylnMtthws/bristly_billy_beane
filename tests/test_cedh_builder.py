@@ -395,7 +395,7 @@ class TestWinPackages:
 class TestCandidateDocument:
     def test_the_document_is_self_describing(self, kinnan_pack, cedh_cards):
         document = build_candidate(kinnan_pack, cedh_cards).to_document()
-        assert document["schema"] == "cedh-deck-candidate.v1"
+        assert document["schema"] == "decklab-deck-candidate.v1"
         assert document["provenance"]["pack_id"] == "kinnan_basalt"
         assert document["provenance"]["card_snapshot"]
         assert len(document["deck_sha256"]) == 64

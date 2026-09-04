@@ -13,7 +13,6 @@ from sabermetrics.cedh.builder import build_candidate
 from sabermetrics.cedh.errors import SimulatorContractError
 from sabermetrics.cedh.simulator import (
     HTTP_RESULT_SCHEMA_ID,
-    RESULT_SCHEMA_ID,
     DisabledSimulatorClient,
     FixtureSimulatorClient,
     HttpSimulatorClient,
@@ -21,8 +20,14 @@ from sabermetrics.cedh.simulator import (
     SimulationResult,
     SimulatorClient,
     SubprocessSimulatorClient,
+    _parse_http_result,
     build_simulator,
-    parse_result,
+)
+from sabermetrics.cedh.wire import (
+    CANDIDATE_SCHEMA_ID,
+    REQUEST_SCHEMA_ID,
+    candidate_document,
+    simulation_request,
 )
 
 LIVE_SIMULATOR_URL = os.environ.get("CEDH_SIMULATOR_URL", "").strip()
@@ -33,25 +38,7 @@ def candidate(kinnan_pack, cedh_cards):
     return build_candidate(kinnan_pack, cedh_cards)
 
 
-def _payload(candidate, **overrides):
-    body = {
-        "schema": RESULT_SCHEMA_ID,
-        "candidate_id": candidate.candidate_id,
-        "deck_sha256": candidate.deck_sha256,
-        "simulator_version": "test/1",
-        "games": 1000,
-        "objective_turn": 3,
-        "metric": "goldfish_turns_to_assembly",
-        "measures": "assembly, alone",
-        "does_not_measure": "deck quality.",
-        "assembly": [{"turn": 3, "probability": 0.01}],
-        "censored_fraction": 0.2,
-    }
-    body.update(overrides)
-    return body
-
-
-def _v2_payload(candidate):
+def _result_payload(candidate):
     percentiles = []
     for percentile in (0.1, 0.25, 0.5, 0.75, 0.9):
         percentiles.append(
@@ -64,7 +51,7 @@ def _v2_payload(candidate):
         )
     return {
         "schema_version": HTTP_RESULT_SCHEMA_ID,
-        "run_id": "run-test",
+        "run_id": "run-cccccccccccccccccccccccc",
         "timestamps": {
             "started_at": "2026-09-04T12:00:00Z",
             "completed_at": "2026-09-04T12:00:01Z",
@@ -77,11 +64,13 @@ def _v2_payload(candidate):
         },
         "candidate": {
             "candidate_id": candidate.candidate_id,
-            "candidate_hash": f"sha256:{candidate.deck_sha256}",
+            "deck_sha256": candidate.deck_sha256_wire,
         },
+        "simulation_input_sha256": f"sha256:{'c' * 64}",
         "strategy_pack": {
-            "id": "kinnan_basalt",
+            "id": "kinnan-midrange-goldfish",
             "version": "1.0.0",
+            "content_sha256": f"sha256:{'d' * 64}",
             "derived": False,
             "play_policy": "goldfish",
             "assembly_objectives": [],
@@ -139,7 +128,7 @@ def _v2_payload(candidate):
     }
 
 
-def _v2_headers():
+def _result_headers():
     return {
         "X-Sim-Version": "2.3.4",
         "X-Sim-Result-Schema": HTTP_RESULT_SCHEMA_ID,
@@ -150,32 +139,75 @@ def _v2_headers():
 
 class TestContractValidation:
     def test_a_valid_payload_parses(self, candidate):
-        result = parse_result(_payload(candidate), candidate)
+        result = _parse_http_result(
+            _result_payload(candidate), candidate, httpx.Headers(_result_headers())
+        )
         assert isinstance(result, SimulationResult)
         assert result.headline.turn == 3
 
-    def test_the_wrong_schema_id_is_rejected(self, candidate):
-        with pytest.raises(SimulatorContractError, match="expected"):
-            parse_result(_payload(candidate, schema="something-else.v9"), candidate)
+    def test_deck_identity_is_decided_on_the_simulators_own_recomputation(
+        self, candidate
+    ):
+        """Not on an echo of what we sent, and not on a pack-inclusive hash."""
+        result = _parse_http_result(
+            _result_payload(candidate), candidate, httpx.Headers(_result_headers())
+        )
+        assert result.deck_sha256 == candidate.deck_sha256
+
+    def test_the_input_fingerprint_is_carried_and_is_not_the_deck_hash(
+        self, candidate
+    ):
+        result = _parse_http_result(
+            _result_payload(candidate), candidate, httpx.Headers(_result_headers())
+        )
+        assert result.simulation_input_sha256 == f"sha256:{'c' * 64}"
+        assert result.simulation_input_sha256 != candidate.deck_sha256_wire
 
     def test_a_result_for_a_different_deck_is_rejected(self, candidate):
         """A stored simulation must be known to describe this list."""
+        payload = _result_payload(candidate)
+        payload["candidate"]["deck_sha256"] = f"sha256:{'0' * 64}"
         with pytest.raises(SimulatorContractError, match="different deck"):
-            parse_result(_payload(candidate, deck_sha256="0" * 64), candidate)
+            _parse_http_result(payload, candidate, httpx.Headers(_result_headers()))
+
+    def test_a_different_strategy_pack_is_not_a_different_deck(self, candidate):
+        """ADR-025 on the consumer side.
+
+        The regression this whole contract exists for: an identical list run
+        under another pack used to fail deck identity, and the user was told
+        their deck had changed when only the execution context had.
+        """
+        payload = _result_payload(candidate)
+        payload["strategy_pack"]["id"] = "derived-generic"
+        payload["strategy_pack"]["derived"] = True
+        payload["strategy_pack"]["content_sha256"] = f"sha256:{'e' * 64}"
+        result = _parse_http_result(
+            payload, candidate, httpx.Headers(_result_headers())
+        )
+        assert result.deck_sha256 == candidate.deck_sha256
 
     def test_missing_honesty_fields_are_rejected(self, candidate):
         """The framing is required, so a number cannot be shown without it."""
-        body = _payload(candidate)
-        del body["does_not_measure"]
-        with pytest.raises(SimulatorContractError, match="failed validation"):
-            parse_result(body, candidate)
+        payload = _result_payload(candidate)
+        del payload["metric"]["does_not_measure"]
+        with pytest.raises(SimulatorContractError, match="schema validation"):
+            _parse_http_result(payload, candidate, httpx.Headers(_result_headers()))
 
     def test_an_out_of_range_probability_is_rejected(self, candidate):
-        with pytest.raises(SimulatorContractError):
-            parse_result(
-                _payload(candidate, assembly=[{"turn": 3, "probability": 1.7}]),
-                candidate,
-            )
+        payload = _result_payload(candidate)
+        payload["assembly_cdf"][0]["probability"] = 1.7
+        with pytest.raises(SimulatorContractError, match="schema validation"):
+            _parse_http_result(payload, candidate, httpx.Headers(_result_headers()))
+
+    def test_the_removed_v1_candidate_hash_does_not_satisfy_the_contract(
+        self, candidate
+    ):
+        """A v2 result cannot be quietly accepted as if it were a v3 one."""
+        payload = _result_payload(candidate)
+        del payload["candidate"]["deck_sha256"]
+        payload["candidate"]["candidate_hash"] = candidate.deck_sha256_wire
+        with pytest.raises(SimulatorContractError, match="schema validation"):
+            _parse_http_result(payload, candidate, httpx.Headers(_result_headers()))
 
 
 class TestFixtureClient:
@@ -197,8 +229,16 @@ class TestFixtureClient:
         assert result.simulator_version.startswith("fixture:")
 
     def test_the_fixture_carries_what_the_model_cannot_see(self, candidate):
+        """The result contract reports coverage as counts plus warnings.
+
+        There is no per-card inert list on the wire: the simulator publishes
+        ``coverage.inert_cards``/``unauthored_cards`` as counts and names the
+        specific cards in ``warnings``. Both are surfaced, so the user still
+        sees that the figure was computed with cards invisible to the model.
+        """
         result = FixtureSimulatorClient().simulate(candidate)
-        assert result.inert_cards
+        assert result.inert_card_count > 0
+        assert result.unauthored_card_count > 0
         assert result.known_misclassifications
         assert result.unseen_card_count > 0
 
@@ -237,12 +277,14 @@ class TestHttpClient:
             seen["document"] = json.loads(request.content)
             seen["timeout"] = request.extensions["timeout"]
             return httpx.Response(
-                200, json=_v2_payload(candidate), headers=_v2_headers()
+                200, json=_result_payload(candidate), headers=_result_headers()
             )
 
         result = self._client(handler).simulate(candidate)
         assert isinstance(result, SimulationResult)
-        assert seen["document"]["candidate"] == candidate.to_document()
+        assert seen["document"] == simulation_request(candidate, games=20000, turn=3)
+        assert seen["document"]["schema_version"] == REQUEST_SCHEMA_ID
+        assert seen["document"]["candidate"] == candidate_document(candidate)
         assert seen["document"]["games"] == 20000
         assert seen["document"]["turn"] == 3
         assert seen["document"]["seed"] == int(candidate.deck_sha256[:16], 16)
@@ -297,7 +339,7 @@ class TestHttpClient:
                     headers={"Retry-After": "99"},
                 )
             return httpx.Response(
-                200, json=_v2_payload(candidate), headers=_v2_headers()
+                200, json=_result_payload(candidate), headers=_result_headers()
             )
 
         result = self._client(handler, sleeps).simulate(candidate)
@@ -315,7 +357,7 @@ class TestHttpClient:
             if calls == 1:
                 raise httpx.ConnectError("machine starting", request=request)
             return httpx.Response(
-                200, json=_v2_payload(candidate), headers=_v2_headers()
+                200, json=_result_payload(candidate), headers=_result_headers()
             )
 
         result = self._client(handler, sleeps).simulate(candidate)
@@ -330,11 +372,11 @@ class TestHttpClient:
         assert result.reason == "simulator_unavailable"
 
     def test_unsupported_result_schema_is_not_used(self, candidate):
-        headers = _v2_headers()
+        headers = _result_headers()
         headers["X-Sim-Result-Schema"] = "cedh-simulation-result.v99"
         transport = httpx.MockTransport(
             lambda request: httpx.Response(
-                200, json=_v2_payload(candidate), headers=headers
+                200, json=_result_payload(candidate), headers=headers
             )
         )
         result = HttpSimulatorClient("http://sim", transport=transport).simulate(
@@ -343,10 +385,10 @@ class TestHttpClient:
         assert result.reason == "unsupported_schema"
 
     def test_schema_validation_failure_is_not_used(self, candidate):
-        payload = _v2_payload(candidate)
+        payload = _result_payload(candidate)
         del payload["metric"]
         transport = httpx.MockTransport(
-            lambda request: httpx.Response(200, json=payload, headers=_v2_headers())
+            lambda request: httpx.Response(200, json=payload, headers=_result_headers())
         )
         result = HttpSimulatorClient("http://sim", transport=transport).simulate(
             candidate
@@ -354,10 +396,10 @@ class TestHttpClient:
         assert result.reason == "contract_violation"
 
     def test_deck_hash_mismatch_is_visible(self, candidate):
-        payload = _v2_payload(candidate)
-        payload["candidate"]["candidate_hash"] = f"sha256:{'0' * 64}"
+        payload = _result_payload(candidate)
+        payload["candidate"]["deck_sha256"] = f"sha256:{'0' * 64}"
         transport = httpx.MockTransport(
-            lambda request: httpx.Response(200, json=payload, headers=_v2_headers())
+            lambda request: httpx.Response(200, json=payload, headers=_result_headers())
         )
         result = HttpSimulatorClient("http://sim", transport=transport).simulate(
             candidate
@@ -366,7 +408,7 @@ class TestHttpClient:
 
     def test_non_json_200_is_contract_violation(self, candidate):
         transport = httpx.MockTransport(
-            lambda request: httpx.Response(200, text="not-json", headers=_v2_headers())
+            lambda request: httpx.Response(200, text="not-json", headers=_result_headers())
         )
         result = HttpSimulatorClient("http://sim", transport=transport).simulate(
             candidate
@@ -427,7 +469,7 @@ class TestSubprocessClient:
         assert result.reason == "simulator_unavailable"
 
     def test_valid_json_on_stdout_is_parsed(self, candidate, tmp_path):
-        payload = json.dumps(_payload(candidate))
+        payload = json.dumps(_result_payload(candidate))
         binary = _fake_binary(tmp_path, f"#!/bin/sh\ncat <<'EOF'\n{payload}\nEOF\n")
         result = SubprocessSimulatorClient(binary).simulate(candidate)
         assert result.status == "simulated"
@@ -452,7 +494,9 @@ class TestSubprocessClient:
         self, candidate, tmp_path
     ):
         """Never silently repair a malformed simulator result."""
-        payload = json.dumps(_payload(candidate, deck_sha256="f" * 64))
+        body = _result_payload(candidate)
+        body["candidate"]["deck_sha256"] = f"sha256:{'f' * 64}"
+        payload = json.dumps(body)
         binary = _fake_binary(tmp_path, f"#!/bin/sh\ncat <<'EOF'\n{payload}\nEOF\n")
         result = SubprocessSimulatorClient(binary).simulate(candidate)
         assert result.reason == "contract_violation"
@@ -477,8 +521,9 @@ class TestSubprocessClient:
         )
         SubprocessSimulatorClient(binary).simulate(candidate)
         document = json.loads(out.read_text())
-        assert document["candidate"] == candidate.to_document()
-        assert all(card["oracle_id"] for card in document["candidate"]["cards"])
+        assert document == candidate_document(candidate)
+        assert document["schema_version"] == CANDIDATE_SCHEMA_ID
+        assert all(card["oracle_id"] for card in document["library"])
 
     def test_uses_the_real_binary_flags(self, candidate, tmp_path):
         out = tmp_path / "args.txt"

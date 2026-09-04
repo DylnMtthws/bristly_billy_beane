@@ -82,6 +82,13 @@ class PackDefinition(BaseModel):
     source_url: str = ""
     curated_at: date | None = None
     version: str = "1"
+    #: Which strategy pack the *simulator* should run this list under. Its
+    #: pack namespace is not ours: our ``kinnan_basalt`` is the simulator's
+    #: ``kinnan-midrange-goldfish``, and nothing derives one from the other.
+    #: The default asks for explicit derived execution, so a pack nobody has
+    #: deliberately mapped is never run under commander-specific logic.
+    simulator_pack_id: str = "derived-generic"
+    simulator_pack_version: str = "1.0.0"
 
 
 class UnresolvedPack(BaseModel):
@@ -281,6 +288,8 @@ def resolve_pack(definition: PackDefinition, cards: CardRepository) -> StrategyP
         source_url=definition.source_url,
         curated_at=definition.curated_at,
         version=definition.version,
+        simulator_pack_id=definition.simulator_pack_id,
+        simulator_pack_version=definition.simulator_pack_version,
     )
 
 

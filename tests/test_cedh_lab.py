@@ -95,7 +95,7 @@ class TestHappyPath:
                 return result.model_copy(
                     update={
                         "simulator_version": "2.3.4",
-                        "result_schema": "cedh-simulation-result.v2",
+                        "result_schema": "cedh-simulation-result.v3",
                         "cards_sha256": "a" * 64,
                         "simulator_threads": "4",
                     }
@@ -106,7 +106,7 @@ class TestHappyPath:
         )
         provenance = result.candidate.provenance
         assert provenance.simulator_version == "2.3.4"
-        assert provenance.simulator_result_schema == "cedh-simulation-result.v2"
+        assert provenance.simulator_result_schema == "cedh-simulation-result.v3"
         assert provenance.simulator_cards_sha256 == "a" * 64
         assert provenance.simulator_threads == "4"
 

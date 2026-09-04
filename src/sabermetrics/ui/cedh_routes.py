@@ -352,7 +352,7 @@ def candidate(candidate_id: str):
 
 @bp.route("/candidate/<candidate_id>.json")
 def candidate_json(candidate_id: str):
-    """Download the ``cedh-deck-candidate.v1`` document."""
+    """Download the ``decklab-deck-candidate.v1`` document."""
     row = _load_owned(candidate_id)
     return Response(
         row["candidate_json"],

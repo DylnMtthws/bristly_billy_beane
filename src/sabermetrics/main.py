@@ -828,7 +828,7 @@ def cedh_packs() -> None:
     "--out",
     type=click.Path(dir_okay=False, path_type=Path),
     default=None,
-    help="Write the cedh-deck-candidate.v1 document here.",
+    help="Write the decklab-deck-candidate.v1 document here.",
 )
 def cedh_build(
     pack_id: str | None,
