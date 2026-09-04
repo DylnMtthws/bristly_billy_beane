@@ -32,6 +32,7 @@ def test_server_configuration_reads_environment(monkeypatch, tmp_path):
     assert captured["host"] == "0.0.0.0"
     assert captured["port"] == 8080
     assert captured["trusted_proxy"] == "*"
+    assert captured["trusted_proxy_count"] == 1
 
 
 def test_public_tailscale_auth_on_public_bind_is_fatal(monkeypatch):

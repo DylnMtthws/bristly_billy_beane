@@ -203,6 +203,7 @@ def run_server(
             port=port,
             threads=8,
             trusted_proxy=trusted_proxy,
+            trusted_proxy_count=1,
             trusted_proxy_headers={"x-forwarded-for", "x-forwarded-host"},
         )
     except ImportError:
