@@ -79,10 +79,12 @@ def create_app(db_path: Path | None = None) -> Flask:
 
     # --- Blueprints ---
     from sabermetrics.ui.admin_routes import bp as admin_bp
+    from sabermetrics.ui.cedh_routes import bp as cedh_bp
     from sabermetrics.ui.routes import bp as main_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(cedh_bp)
     app.register_blueprint(main_bp)
 
     logger.info("Flask app created, DB: %s", db_path)

@@ -467,6 +467,46 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def ensure_cedh_schema(conn: sqlite3.Connection) -> None:
+    """Idempotently create the cEDH Deck Lab tables.
+
+    Separate from ensure_portal_schema so the cEDH path can be added to an
+    existing database without touching the casual generator's tables. Safe to
+    run repeatedly.
+
+    The candidate document is stored as JSON rather than shredded into
+    columns: it is a versioned artifact handed to another repository, and the
+    thing that must survive a schema change here is the document itself.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cedh_candidates (
+            candidate_id TEXT PRIMARY KEY,
+            owner_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            pack_id TEXT NOT NULL,
+            commander_key TEXT NOT NULL,
+            commander_name TEXT NOT NULL,
+            deck_sha256 TEXT NOT NULL,
+            candidate_json TEXT NOT NULL,
+            evidence_hash TEXT,
+            meta_available INTEGER DEFAULT 0,
+            simulation_status TEXT,
+            simulation_json TEXT,
+            explanation_json TEXT,
+            warnings_json TEXT
+        )
+        """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cedh_owner "
+        "ON cedh_candidates(owner_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cedh_commander "
+        "ON cedh_candidates(commander_key)"
+    )
+    conn.commit()
+
+
 def setup_database(db_path: Path) -> None:
     """Create all tables and indexes in the database.
 
@@ -487,6 +527,7 @@ def setup_database(db_path: Path) -> None:
 
         # Idempotent column/view migrations for pre-existing databases
         ensure_portal_schema(conn)
+        ensure_cedh_schema(conn)
 
         # Insert initial schema version
         conn.execute(

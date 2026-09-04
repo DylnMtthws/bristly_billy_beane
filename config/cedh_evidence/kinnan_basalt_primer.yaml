@@ -1,0 +1,49 @@
+# Curated strategy material for the Kinnan Basalt pack.
+#
+# Authored and checked in, NOT scraped at generation time. The generation path
+# does not call EDHREC, Reddit, Moxfield or any deck-hosting site; strategy
+# material arrives here, through review, with its provenance attached.
+#
+# Every section below becomes one evidence chunk carrying this file's source,
+# locator and date. Keep sections short: the evidence bounds in
+# config/cedh.yaml truncate anything longer, and a truncated chunk is a chunk
+# whose second half the model never saw.
+
+title: "Kinnan, Bonder Prodigy — Basalt engine, authored notes"
+source: "Sabermetrics curated strategy notes"
+source_id: "curated:kinnan_basalt_primer"
+source_url: ""
+published_at: "2026-09-03"
+commander_names:
+  - "Kinnan, Bonder Prodigy"
+
+sections:
+  - >-
+    ENGINE. Kinnan's activated ability doubles the output of a nonland mana
+    source. Basalt Monolith taps for three colourless and untaps for three;
+    under Kinnan it taps for six, which pays the untap cost with three to
+    spare. The engine is two cards and the deck is built around protecting
+    them rather than around finding more of them.
+
+  - >-
+    THE TERMINAL STATE IS NOT A WIN. Nothing in this list reads "you win the
+    game". Unbounded colourless goes into Thrasios, Triton Hero, which draws
+    the deck; converting a drawn deck into a win is a pilot decision the model
+    does not make and the simulator does not measure. Language that names the
+    state ("assembled") rather than the outcome ("won") is deliberate and
+    should be preserved in any explanation.
+
+  - >-
+    INTERACTION DENSITY. A two-card engine in a format with free counterspells
+    loses to the first Swords to Plowshares if it is unprotected. The list runs
+    a dense free-interaction suite — Force of Will, Force of Negation, Fierce
+    Guardianship, Pact of Negation — and the clone package exists to rebuild
+    the engine after it is answered rather than to assemble a second line.
+
+  - >-
+    WHAT A GOLDFISH NUMBER CANNOT SEE. The interaction suite is the largest
+    part of this deck and it is exactly the part a no-opponent simulation
+    cannot evaluate: a counterspell with nothing to counter does nothing. A
+    simulated assembly turn for this list understates the interaction and
+    overstates the speed, and both directions should be stated whenever a
+    simulated figure is shown.

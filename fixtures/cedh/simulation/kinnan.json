@@ -1,0 +1,63 @@
+{
+  "_README": "REPRESENTATIVE FIXTURE, not a measurement of any candidate this repository builds. The probabilities are commander_simulator's published figures for its own authored list (STATE.md, 60,000 games, list A snapshot 2026-09-01). They are reproduced here so the consumer path has a realistic shape to develop against; the simulator_version is prefixed 'fixture:' on load so nothing renders it as a live run.",
+  "schema": "cedh-simulation-result.v1",
+  "commander_keys": [
+    "38d25a87-dcc1-5cc2-a086-48796e7cdced"
+  ],
+  "candidate_id": "placeholder",
+  "deck_sha256": "placeholder",
+  "simulator_version": "commander_simulator/phase-7",
+  "games": 60000,
+  "objective_turn": 3,
+  "metric": "goldfish_turns_to_assembly",
+  "measures": "turns until a declared pattern is assembled, playing alone with no opponents, no stack, no combat and no interaction",
+  "does_not_measure": "deck quality, matchups, or whether the deck wins. A faster number is not a better deck.",
+  "assembly": [
+    {
+      "turn": 3,
+      "probability": 0.0141,
+      "ci_low": 0.0132,
+      "ci_high": 0.015
+    },
+    {
+      "turn": 6,
+      "probability": 0.2086,
+      "ci_low": 0.2054,
+      "ci_high": 0.2118
+    },
+    {
+      "turn": 12,
+      "probability": 0.7682,
+      "ci_low": 0.7648,
+      "ci_high": 0.7716
+    }
+  ],
+  "censored_fraction": 0.2318,
+  "modeled_cards": 68,
+  "inert_cards": [
+    {
+      "name": "Force of Will",
+      "reason": "counters or removal with nothing to answer",
+      "category": "interaction"
+    },
+    {
+      "name": "Consecrated Sphinx",
+      "reason": "fires only when an opponent acts",
+      "category": "opponent_trigger"
+    },
+    {
+      "name": "Hullbreaker Horror",
+      "reason": "targets an opponent's permanent",
+      "category": "opponent_permanent"
+    }
+  ],
+  "known_misclassifications": [
+    "Hullbreaker Horror is filed inert and the classification is a misread by the simulator's author, left in place deliberately and reported rather than silently corrected."
+  ],
+  "unauthored_cards": [
+    "Sylvan Library",
+    "The One Ring",
+    "Valley Floodcaller",
+    "Thrasios, Triton Hero (activated ability)"
+  ]
+}

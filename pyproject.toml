@@ -27,6 +27,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The Postgres driver for the live mtg_v1 adapters. An extra, not a dependency:
+# the ordinary test suite runs against fixtures and must not need a database.
+postgres = ["psycopg[binary]>=3.1"]
+
 # Pinned exactly. These tools gate or report on CI, and an unpinned linter
 # turns main red on someone else's release day with no change to this repo.
 # Bump deliberately, not incidentally.
@@ -65,6 +69,26 @@ warn_unused_configs = true
 module = "pandas.*"
 ignore_missing_imports = true
 
+# psycopg is an optional extra (the "postgres" group). It is imported lazily so
+# the default test suite never needs it, which also means mypy will not find it
+# in a default install. Scoped rather than global, so every other untyped import
+# still surfaces.
+[[tool.mypy.overrides]]
+module = "psycopg.*"
+ignore_missing_imports = true
+
+# flask_login ships no py.typed marker.
+[[tool.mypy.overrides]]
+module = "flask_login.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+# Opt-in integration markers. Every test carrying one is skipped unless its
+# dependency is configured, and none of them runs in the default suite.
+markers = [
+    "postgres: hits a live mtg_v1 Postgres (needs MTG_V1_DSN)",
+    "model: hits the live model provider and spends money (needs HF_TOKEN)",
+    "simulator: runs the commander_simulator binary (needs CEDH_SIMULATOR_BIN)",
+]

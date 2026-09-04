@@ -710,3 +710,127 @@ def sync(source: str | None, full: bool) -> None:
 
 if __name__ == "__main__":
     cli()
+
+
+@cli.group()
+def cedh() -> None:
+    """cEDH Deck Lab: strategy packs, candidates, provenance."""
+
+
+@cedh.command("packs")
+def cedh_packs() -> None:
+    """List the authored strategy packs and whether each is supported."""
+    from sabermetrics.cedh.factory import build_default_lab
+
+    lab, modes = build_default_lab(db_path=str(_default_db_path()))
+    click.echo(
+        f"modes: cards={modes.cards} meta={modes.meta} "
+        f"model={modes.model} simulator={modes.simulator}"
+    )
+    for notice in modes.notices:
+        click.echo(f"  ! {notice}")
+    click.echo("")
+    for pack in lab.pack_summaries():
+        state = "supported" if pack.supported else "UNSUPPORTED"
+        sim = "sim:yes" if pack.simulator_supported else "sim:no"
+        click.echo(f"{pack.pack_id:<24} {state:<12} {sim:<8} {pack.name}")
+        if not pack.supported:
+            click.echo(f"    {pack.detail}")
+
+
+@cedh.command("build")
+@click.option("--pack", "pack_id", default=None, help="Strategy pack id.")
+@click.option("--intent", default="", help="Free-text intent (needs a model).")
+@click.option("--flex", type=int, default=0, help="Flex slots left open.")
+@click.option(
+    "--out",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Write the cedh-deck-candidate.v1 document here.",
+)
+def cedh_build(
+    pack_id: str | None,
+    intent: str,
+    flex: int,
+    out: Path | None,
+) -> None:
+    """Build a cEDH candidate and report its provenance.
+
+    CLI builds are unattributed: no user owns them, so they are not counted
+    against anyone's quota. The global cost ceiling still applies.
+    """
+    from sabermetrics.cedh.domain import BuildConstraints, LabRequest, MetagameWindow
+    from sabermetrics.cedh.factory import build_default_lab
+    from sabermetrics.cedh.settings import load_cedh_settings
+    from sabermetrics.cedh.simulator import SimulationResult
+
+    settings = load_cedh_settings()
+    lab, modes = build_default_lab(db_path=str(_default_db_path()))
+    for notice in modes.notices:
+        click.echo(f"! {notice}")
+
+    constraints = BuildConstraints(
+        flex_slots=flex,
+        metagame=MetagameWindow(
+            days=settings.meta.window_days,
+            min_event_size=settings.meta.min_event_size,
+        ),
+    )
+    result = lab.run(
+        LabRequest(raw_intent=intent, pack_id=pack_id, constraints=constraints)
+    )
+
+    if result.candidate is None:
+        click.echo(f"\nNo candidate: {result.unsupported_detail}")
+        for warning in result.warnings:
+            click.echo(f"  ! {warning}")
+        raise SystemExit(1)
+
+    candidate = result.candidate
+    click.echo(f"\n{candidate.commander.display_name} — {result.pack_name}")
+    click.echo(f"candidate: {candidate.candidate_id}")
+    click.echo(f"deck sha256: {candidate.deck_sha256}")
+    click.echo(f"cards: {sum(c.quantity for c in candidate.cards)}")
+    click.echo(
+        "roles: "
+        + ", ".join(f"{role} {n}" for role, n in sorted(candidate.role_counts.items()))
+    )
+    click.echo(f"card corpus: {candidate.provenance.card_snapshot}")
+    click.echo(
+        "tournament evidence: "
+        + (
+            candidate.provenance.meta_snapshot
+            if candidate.provenance.meta_available
+            else "NONE"
+        )
+    )
+
+    simulation = result.simulation
+    point = simulation.headline if simulation is not None else None
+    if isinstance(simulation, SimulationResult) and point is not None:
+        click.echo(
+            f"simulation: P(assembled by turn "
+            f"{simulation.objective_turn}) = "
+            f"{point.probability:.2%} over {simulation.games:,} games "
+            f"[{simulation.simulator_version}]"
+        )
+        click.echo(
+            "  a faster number is not a better deck; this measures "
+            f"{simulation.measures}"
+        )
+    else:
+        # A simulator that returned no assembly points is as unmeasured as an
+        # absent one; neither gets to become a number.
+        detail = getattr(simulation, "detail", "") or "no simulation result"
+        click.echo(f"simulation: NOT SIMULATED — {detail}")
+
+    click.echo(f"model cost: ${result.total_cost_usd:.4f}")
+    for warning in result.warnings:
+        click.echo(f"  ! {warning}")
+    for note in candidate.notes:
+        click.echo(f"  - {note}")
+
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(candidate.to_json(), encoding="utf-8")
+        click.echo(f"\nwrote {out}")

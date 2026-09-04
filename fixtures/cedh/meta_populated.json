@@ -1,0 +1,209 @@
+{
+  "_README": "SYNTHETIC. The shape the mtg_v1 tournament views are requested to provide (docs/integration-handoff.md), populated with plausible numbers so the evidence path can be exercised. The counts are made up; nothing in the product may present them as measurements.",
+  "available": true,
+  "snapshot": {
+    "source_view": "mtg_v1.tournament",
+    "row_count": 6,
+    "max_content_updated_at": "2026-08-30T00:00:00+00:00"
+  },
+  "commanders": [
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_ids": [
+        "38d25a87-dcc1-5cc2-a086-48796e7cdced"
+      ],
+      "names": [
+        "Kinnan, Bonder Prodigy"
+      ],
+      "entries": 42,
+      "events": 6,
+      "wins": 3,
+      "top_cuts": 14
+    }
+  ],
+  "events": [
+    {
+      "event_id": "evt-1",
+      "name": "Eminence Open 12",
+      "held_on": "2026-08-30",
+      "size": 128,
+      "source": "TopDeck.gg",
+      "source_url": "https://topdeck.gg/event/evt-1"
+    },
+    {
+      "event_id": "evt-2",
+      "name": "Spice Station Monthly",
+      "held_on": "2026-08-16",
+      "size": 64,
+      "source": "TopDeck.gg",
+      "source_url": "https://topdeck.gg/event/evt-2"
+    },
+    {
+      "event_id": "evt-3",
+      "name": "cEDH Grand Prix Trial",
+      "held_on": "2026-07-26",
+      "size": 96,
+      "source": "TopDeck.gg",
+      "source_url": "https://topdeck.gg/event/evt-3"
+    },
+    {
+      "event_id": "evt-4",
+      "name": "Regional Qualifier North",
+      "held_on": "2026-06-14",
+      "size": 48,
+      "source": "TopDeck.gg",
+      "source_url": "https://topdeck.gg/event/evt-4"
+    },
+    {
+      "event_id": "evt-5",
+      "name": "Small Locals",
+      "held_on": "2026-08-02",
+      "size": 12,
+      "source": "TopDeck.gg",
+      "source_url": "https://topdeck.gg/event/evt-5"
+    },
+    {
+      "event_id": "evt-6",
+      "name": "Eminence Open 11",
+      "held_on": "2026-05-03",
+      "size": 112,
+      "source": "TopDeck.gg",
+      "source_url": "https://topdeck.gg/event/evt-6"
+    }
+  ],
+  "entries": [
+    {
+      "entry_id": "ent-1",
+      "event_id": "evt-1",
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "standing": 2,
+      "wins": 5,
+      "losses": 1,
+      "draws": 1,
+      "decklist_id": "dl-1"
+    },
+    {
+      "entry_id": "ent-2",
+      "event_id": "evt-2",
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "standing": 1,
+      "wins": 6,
+      "losses": 0,
+      "draws": 0,
+      "decklist_id": "dl-2"
+    },
+    {
+      "entry_id": "ent-3",
+      "event_id": "evt-3",
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "standing": 9,
+      "wins": 4,
+      "losses": 2,
+      "draws": 0,
+      "decklist_id": "dl-3"
+    },
+    {
+      "entry_id": "ent-4",
+      "event_id": "evt-5",
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "standing": 1,
+      "wins": 3,
+      "losses": 0,
+      "draws": 0,
+      "decklist_id": "dl-4"
+    }
+  ],
+  "inclusions": [
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "7d556b35-62ab-5a43-bdb9-346c2dff694a",
+      "card_name": "Sol Ring",
+      "decks_including": 41,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "0efb9f5d-56a1-53a3-9357-9b244761b075",
+      "card_name": "Basalt Monolith",
+      "decks_including": 40,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "e272683f-a2cb-5599-85d4-90de2858e45f",
+      "card_name": "Force of Will",
+      "decks_including": 39,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "210f06b9-fc4b-55fd-8fcc-7fe267e69a46",
+      "card_name": "Thrasios, Triton Hero",
+      "decks_including": 38,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "a1fb9375-c93b-57a2-953f-c75473fa5898",
+      "card_name": "Rhystic Study",
+      "decks_including": 37,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "57e35965-1dea-5c00-9535-b6e9b6bdec6a",
+      "card_name": "Mystic Remora",
+      "decks_including": 35,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "1a9e5ed4-b8ab-5b87-b44c-e12f4717aaae",
+      "card_name": "Mana Vault",
+      "decks_including": 34,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "e8f4f2dd-630c-5228-b16c-f61d172b06a3",
+      "card_name": "Grim Monolith",
+      "decks_including": 33,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "6199841c-b35f-5e69-84fd-0fab6459f3b3",
+      "card_name": "Tropical Island",
+      "decks_including": 31,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "8d61ab14-627e-520c-83fc-e2aadac40133",
+      "card_name": "Fierce Guardianship",
+      "decks_including": 30,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "e4cbbb90-d472-5518-a14d-219830d8f1f2",
+      "card_name": "Consecrated Sphinx",
+      "decks_including": 11,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "01dda41f-89d9-5bfd-811b-6806fcea9804",
+      "card_name": "Emrakul, the Promised End",
+      "decks_including": 7,
+      "decks": 42
+    },
+    {
+      "identity_key": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "oracle_id": "5ff57642-cb4c-54b3-b0aa-dd349705ba5d",
+      "card_name": "Flash Photography",
+      "decks_including": 2,
+      "decks": 42
+    }
+  ]
+}

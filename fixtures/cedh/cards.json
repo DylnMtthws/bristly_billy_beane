@@ -1,0 +1,2599 @@
+{
+  "_README": "SYNTHETIC FIXTURE \u2014 NOT THE CORPUS. Oracle ids are uuid5 hashes of card names and oracle text is a placeholder. Card names and the 99-card list are real (see the pack's `source`). There are no prices: cEDH is proxy-normal, so CardFacts carries no price field and nothing in the engine could read one. Production reads mtg_v1.card_any_medium; this file exists so the test suite needs no Postgres.",
+  "snapshot": {
+    "source_view": "fixture:mtg_v1.card_any_medium",
+    "row_count": 100,
+    "max_content_updated_at": "2026-09-01T21:20:19+00:00",
+    "captured_at": "2026-09-04T03:11:05+00:00"
+  },
+  "cards": [
+    {
+      "oracle_id": "38d25a87-dcc1-5cc2-a086-48796e7cdced",
+      "name": "Kinnan, Bonder Prodigy",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Legendary Creature \u2014 Human Wizard",
+      "oracle_text": "[fixture paraphrase] Kinnan, Bonder Prodigy.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "69076e9d-5549-571e-85f7-b408e11aba63",
+      "name": "Ancient Tomb",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Ancient Tomb.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "78318e5e-a4c9-53f4-86a2-e2ced0a9cd77",
+      "name": "Boseiju, Who Endures",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Legendary Land",
+      "oracle_text": "[fixture paraphrase] Boseiju, Who Endures.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "5e6f3663-bc6d-5408-b409-8b574ee31cdf",
+      "name": "Botanical Sanctum",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Botanical Sanctum.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "94b6d21c-3f83-5219-a7b9-2544430da3ed",
+      "name": "Breeding Pool",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land \u2014 Forest Island",
+      "oracle_text": "[fixture paraphrase] Breeding Pool.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "b869b0ad-dbb6-57c9-93d5-2f3a961573d8",
+      "name": "City of Brass",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] City of Brass.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "5f60f71d-8bf3-51f9-8bf2-96f8b31aac6f",
+      "name": "Command Tower",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Command Tower.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "cc475d46-34d0-54ae-9a30-2b51b25effe0",
+      "name": "Exotic Orchard",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Exotic Orchard.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "8188c05e-cd8a-5728-82be-4de76c9c7e2a",
+      "name": "Flooded Strand",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Flooded Strand.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "f3f7e450-fa7c-5d18-83cb-d2db9791850f",
+      "name": "Forest",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Basic Land \u2014 Forest",
+      "oracle_text": "[fixture paraphrase] Forest.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "8f7ddbe6-34fd-5278-a19f-2778fecf91f3",
+      "name": "Gemstone Caverns",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Legendary Land",
+      "oracle_text": "[fixture paraphrase] Gemstone Caverns.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "a0b98382-95fe-5a7b-b28a-702b5e05c769",
+      "name": "Island",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Basic Land \u2014 Island",
+      "oracle_text": "[fixture paraphrase] Island.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "2dcd26cd-bea4-5044-8483-9e9fa4cf73c3",
+      "name": "Mana Confluence",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Mana Confluence.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "8ec554b9-8014-5e91-ad38-f2acde230d74",
+      "name": "Misty Rainforest",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Misty Rainforest.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "fe60fdd0-310c-5453-9800-4aede60cdd41",
+      "name": "Otawara, Soaring City",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Legendary Land",
+      "oracle_text": "[fixture paraphrase] Otawara, Soaring City.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "f65f4ada-5b43-56a2-a400-e8053443b0c0",
+      "name": "Polluted Delta",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Polluted Delta.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "772ca0d0-826c-5d67-bc26-c06cddbbff4a",
+      "name": "Rejuvenating Springs",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Rejuvenating Springs.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "dffd6b3d-129a-5164-b72c-5800985c346f",
+      "name": "Scalding Tarn",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Scalding Tarn.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "32a5dd78-f857-5692-b5f9-10702bc367f3",
+      "name": "Tarnished Citadel",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Tarnished Citadel.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "6199841c-b35f-5e69-84fd-0fab6459f3b3",
+      "name": "Tropical Island",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land \u2014 Forest Island",
+      "oracle_text": "[fixture paraphrase] Tropical Island.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "3270ffb3-6688-5cdc-85f2-b03de163d6a0",
+      "name": "Verdant Catacombs",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Verdant Catacombs.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "32c7d86a-0bdc-5bac-9dd9-0ba7ebc3097e",
+      "name": "Waterlogged Grove",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Waterlogged Grove.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "7fc6f169-36c0-50eb-ab1a-31633a6467e2",
+      "name": "Windswept Heath",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Windswept Heath.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "18811d97-9021-594c-90df-5c94aeb478ac",
+      "name": "Wooded Foothills",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Wooded Foothills.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "ad9a96d9-c4f0-53a8-9851-9e298d85fea9",
+      "name": "Yavimaya Coast",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "[fixture paraphrase] Yavimaya Coast.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "7d556b35-62ab-5a43-bdb9-346c2dff694a",
+      "name": "Sol Ring",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Sol Ring.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "1a9e5ed4-b8ab-5b87-b44c-e12f4717aaae",
+      "name": "Mana Vault",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Mana Vault.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "0efb9f5d-56a1-53a3-9357-9b244761b075",
+      "name": "Basalt Monolith",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Basalt Monolith.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "e8f4f2dd-630c-5228-b16c-f61d172b06a3",
+      "name": "Grim Monolith",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Legendary Artifact",
+      "oracle_text": "[fixture paraphrase] Grim Monolith.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "95d18e34-a715-5e4d-968f-9337add992c3",
+      "name": "Chrome Mox",
+      "layout": "normal",
+      "mana_cost": "{0}",
+      "mana_value": 0.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Chrome Mox.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        0.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "89dcb7b8-931a-57a2-91c5-063dd3b1ca67",
+      "name": "Mox Diamond",
+      "layout": "normal",
+      "mana_cost": "{0}",
+      "mana_value": 0.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Mox Diamond.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        0.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "9355acb2-fdee-5712-99e6-74a8bb96ade5",
+      "name": "Mox Opal",
+      "layout": "normal",
+      "mana_cost": "{0}",
+      "mana_value": 0.0,
+      "type_line": "Legendary Artifact",
+      "oracle_text": "[fixture paraphrase] Mox Opal.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        0.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "9468263e-f747-5b11-8bad-97cad0bc4a18",
+      "name": "Mox Amber",
+      "layout": "normal",
+      "mana_cost": "{0}",
+      "mana_value": 0.0,
+      "type_line": "Legendary Artifact",
+      "oracle_text": "[fixture paraphrase] Mox Amber.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        0.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "90e1eef5-4798-52d2-b6db-af1ca3f79702",
+      "name": "Lotus Petal",
+      "layout": "normal",
+      "mana_cost": "{0}",
+      "mana_value": 0.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Lotus Petal.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        0.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "2dec0954-d0e2-56e4-9de7-dcbec32353c5",
+      "name": "Delighted Halfling",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Creature \u2014 Halfling Citizen",
+      "oracle_text": "[fixture paraphrase] Delighted Halfling.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "90748a1e-5fc6-5996-84eb-afdd8ff2e50d",
+      "name": "Birds of Paradise",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Creature \u2014 Bird",
+      "oracle_text": "[fixture paraphrase] Birds of Paradise.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "6f7be947-5fef-5510-a94a-469839eb31f2",
+      "name": "Elvish Mystic",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Creature \u2014 Elf Druid",
+      "oracle_text": "[fixture paraphrase] Elvish Mystic.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "c1b4fbbd-d3ed-5d0b-87f2-59679424ed87",
+      "name": "Llanowar Elves",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Creature \u2014 Elf Druid",
+      "oracle_text": "[fixture paraphrase] Llanowar Elves.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "0fee529d-6515-5fe5-9b2b-36b3add47c61",
+      "name": "Fyndhorn Elves",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Creature \u2014 Elf Druid",
+      "oracle_text": "[fixture paraphrase] Fyndhorn Elves.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "850360bd-dd76-5adc-a559-0a53f7e43b2d",
+      "name": "Elvish Spirit Guide",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Creature \u2014 Elf Spirit",
+      "oracle_text": "[fixture paraphrase] Elvish Spirit Guide.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "05306eaa-0a5a-501f-9b1c-ec672c1fddde",
+      "name": "Arcane Signet",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Arcane Signet.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "1a94dcde-b1bf-5f0b-8dc1-60d12bbc9346",
+      "name": "Fellwar Stone",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Fellwar Stone.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "d7ced5e3-3fcc-5df5-b6c8-7fb744248d1b",
+      "name": "Talisman of Curiosity",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Talisman of Curiosity.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "12d0a193-a08c-5331-bd5b-f8e69ffce5bb",
+      "name": "Springleaf Drum",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Springleaf Drum.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "31b22550-50fc-5fd6-92a6-0aeb30886560",
+      "name": "Enduring Vitality",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Enchantment Creature \u2014 Elemental",
+      "oracle_text": "[fixture paraphrase] Enduring Vitality.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "71e6dee3-514f-58f5-9b9e-4599139dca70",
+      "name": "Transmute Artifact",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "[fixture paraphrase] Transmute Artifact.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "425fa23d-c8d6-5599-b019-42f8a9807b87",
+      "name": "Chord of Calling",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Chord of Calling.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "b3a21c5e-26bf-5fd0-976a-ef8630fbbdd4",
+      "name": "Finale of Devastation",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "[fixture paraphrase] Finale of Devastation.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "39c9c537-f46a-54dc-99b1-0861953f8187",
+      "name": "Drift of Phantasms",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Creature \u2014 Wall",
+      "oracle_text": "[fixture paraphrase] Drift of Phantasms.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "f4e1c1db-2da8-538a-a3e5-00d697822566",
+      "name": "Dizzy Spell",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Sorcery",
+      "oracle_text": "[fixture paraphrase] Dizzy Spell.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "d4a7ecca-504f-544c-9cf2-b011194b07b1",
+      "name": "Trophy Mage",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Creature \u2014 Human Wizard",
+      "oracle_text": "[fixture paraphrase] Trophy Mage.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "ba9d9106-f97a-509f-b813-76a57c26412f",
+      "name": "Nature's Rhythm",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Sorcery",
+      "oracle_text": "[fixture paraphrase] Nature's Rhythm.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "f952546c-463e-57dd-ba22-e7cc4e988f72",
+      "name": "Invasion of Ikoria",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Battle \u2014 Siege",
+      "oracle_text": "[fixture paraphrase] Invasion of Ikoria.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Battle"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "e272683f-a2cb-5599-85d4-90de2858e45f",
+      "name": "Force of Will",
+      "layout": "normal",
+      "mana_cost": "{5}",
+      "mana_value": 5.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Force of Will.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "ea86f7b9-a5ba-591a-aa51-b0db15061055",
+      "name": "Force of Negation",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Force of Negation.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "ad41b972-744d-5672-9070-3f61f9484089",
+      "name": "Flusterstorm",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Flusterstorm.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "dd0eb273-355e-5af9-aa43-81fd6c1d4040",
+      "name": "Mental Misstep",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Mental Misstep.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "9dc7fe8a-6908-552b-8078-333e54224f97",
+      "name": "Swan Song",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Swan Song.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "23e74987-574f-5021-8f1d-42adcc32a0d4",
+      "name": "An Offer You Can't Refuse",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] An Offer You Can't Refuse.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "fda47a59-3437-53f0-a7d7-3c9c07559257",
+      "name": "Dispel",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Dispel.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "064e1c4d-119b-5b36-b36c-c2a4096bf93a",
+      "name": "Mindbreak Trap",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Instant \u2014 Trap",
+      "oracle_text": "[fixture paraphrase] Mindbreak Trap.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "f97e4e93-0642-544a-8864-7921493692ba",
+      "name": "Misdirection",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Misdirection.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "ab6ff18c-ba2f-56df-8c09-aea5d1357dae",
+      "name": "Disrupting Shoal",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Instant \u2014 Arcane",
+      "oracle_text": "[fixture paraphrase] Disrupting Shoal.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "61204fc6-b20f-5e68-8fb0-2cb141e3d885",
+      "name": "Commandeer",
+      "layout": "normal",
+      "mana_cost": "{7}",
+      "mana_value": 7.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Commandeer.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "bc9f135e-cbc6-5097-8701-f4c32e83ada9",
+      "name": "Chain of Vapor",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Chain of Vapor.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "ff03c84c-7131-56ec-939e-7c0d94da441b",
+      "name": "Snapback",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Snapback.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "bf0b47d4-0624-5ddf-b225-0bdea0d73a10",
+      "name": "Sudden Substitution",
+      "layout": "normal",
+      "mana_cost": "{6}",
+      "mana_value": 6.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Sudden Substitution.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        6.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "9d01fd20-bdfc-5ed0-904f-c6d1109edc5e",
+      "name": "Volatile Stormdrake",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Creature \u2014 Drake",
+      "oracle_text": "[fixture paraphrase] Volatile Stormdrake.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "f9278be2-7dd5-590f-af15-6aafa3962a9e",
+      "name": "Sink into Stupor",
+      "layout": "modal_dfc",
+      "mana_cost": "",
+      "mana_value": 3.0,
+      "type_line": "Sorcery // Land",
+      "oracle_text": "",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 2,
+      "faces": [
+        {
+          "face_index": 0,
+          "name": "Sink into Stupor",
+          "mana_cost": "{3}",
+          "face_mana_value": 3.0,
+          "type_line": "Sorcery",
+          "oracle_text": "[fixture paraphrase] Sink into Stupor, front face."
+        },
+        {
+          "face_index": 1,
+          "name": "Sink into Stupor back face",
+          "mana_cost": "",
+          "face_mana_value": 0.0,
+          "type_line": "Land",
+          "oracle_text": "[fixture paraphrase] land back face."
+        }
+      ],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "8d61ab14-627e-520c-83fc-e2aadac40133",
+      "name": "Fierce Guardianship",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Fierce Guardianship.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "0f3e82c7-d12f-50cd-9bfa-d17b6fdb4f94",
+      "name": "Pact of Negation",
+      "layout": "normal",
+      "mana_cost": "{0}",
+      "mana_value": 0.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Pact of Negation.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        0.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "87bfe91a-5ef3-5b12-85ab-cb147b6646dc",
+      "name": "Borne Upon a Wind",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Borne Upon a Wind.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "f10d2704-4b90-5bdd-a953-4f4f9e46d808",
+      "name": "Endurance",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Creature \u2014 Elemental Incarnation",
+      "oracle_text": "[fixture paraphrase] Endurance.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "0ac75c1c-2f36-57e2-92b6-5703dce29637",
+      "name": "High Fae Trickster",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Creature \u2014 Faerie Rogue",
+      "oracle_text": "[fixture paraphrase] High Fae Trickster.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "a1fb9375-c93b-57a2-953f-c75473fa5898",
+      "name": "Rhystic Study",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Enchantment",
+      "oracle_text": "[fixture paraphrase] Rhystic Study.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Enchantment"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "57e35965-1dea-5c00-9535-b6e9b6bdec6a",
+      "name": "Mystic Remora",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Enchantment",
+      "oracle_text": "[fixture paraphrase] Mystic Remora.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Enchantment"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "67f4f119-352d-540e-adda-f4e8d8b192b5",
+      "name": "Sylvan Library",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Enchantment",
+      "oracle_text": "[fixture paraphrase] Sylvan Library.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Enchantment"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "f665b8df-e7ab-567c-89bd-ee5a60783da5",
+      "name": "The One Ring",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Legendary Artifact",
+      "oracle_text": "[fixture paraphrase] The One Ring.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "e4cbbb90-d472-5518-a14d-219830d8f1f2",
+      "name": "Consecrated Sphinx",
+      "layout": "normal",
+      "mana_cost": "{6}",
+      "mana_value": 6.0,
+      "type_line": "Creature \u2014 Sphinx",
+      "oracle_text": "[fixture paraphrase] Consecrated Sphinx.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        6.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "0aa7c571-9d1b-51fa-be87-5de1195b7023",
+      "name": "Faerie Mastermind",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Creature \u2014 Faerie Rogue",
+      "oracle_text": "[fixture paraphrase] Faerie Mastermind.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "bf96d409-6429-5b03-b78f-95b615b99ed4",
+      "name": "Wan Shi Tong, Librarian",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Legendary Creature \u2014 Spirit",
+      "oracle_text": "[fixture paraphrase] Wan Shi Tong, Librarian.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "210f06b9-fc4b-55fd-8fcc-7fe267e69a46",
+      "name": "Thrasios, Triton Hero",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Legendary Creature \u2014 Merfolk Wizard",
+      "oracle_text": "[fixture paraphrase] Thrasios, Triton Hero.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "ccc250da-3ef9-5759-b589-4eabe1bbcbbe",
+      "name": "Copy Artifact",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Enchantment",
+      "oracle_text": "[fixture paraphrase] Copy Artifact.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Enchantment"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "01948542-44b0-5f59-8d77-bef275e35557",
+      "name": "Clever Impersonator",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Creature \u2014 Shapeshifter",
+      "oracle_text": "[fixture paraphrase] Clever Impersonator.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "8033461f-4f86-5477-b28f-bc897658e2f1",
+      "name": "Mirrormade",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Enchantment",
+      "oracle_text": "[fixture paraphrase] Mirrormade.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Enchantment"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "cd84df19-9876-58a9-8474-393d8c5a255f",
+      "name": "Copy Enchantment",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Enchantment",
+      "oracle_text": "[fixture paraphrase] Copy Enchantment.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Enchantment"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "13d9a0fa-5156-5a24-ae26-fe47f2eca219",
+      "name": "Flesh Duplicate",
+      "layout": "normal",
+      "mana_cost": "{5}",
+      "mana_value": 5.0,
+      "type_line": "Creature \u2014 Shapeshifter",
+      "oracle_text": "[fixture paraphrase] Flesh Duplicate.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "be25a48c-b8ef-5f71-a7ac-4d49e29614d3",
+      "name": "Imposter Mech",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Artifact \u2014 Vehicle",
+      "oracle_text": "[fixture paraphrase] Imposter Mech.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "940243e0-68a1-5a43-adc8-94c4643aff27",
+      "name": "Mirage Mirror",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Artifact",
+      "oracle_text": "[fixture paraphrase] Mirage Mirror.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "3af61d27-3158-5526-a5b1-36986eec873d",
+      "name": "Mockingbird",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Creature \u2014 Bird",
+      "oracle_text": "[fixture paraphrase] Mockingbird.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "22138268-3680-5987-bbdb-80ee391e71c6",
+      "name": "Twincast",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Twincast.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "29d11c2e-7f16-576f-adab-dd9955f4a7f2",
+      "name": "Dramatic Reversal",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Dramatic Reversal.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "1f202825-e3bb-542a-83ed-3cc9ab9f7dbb",
+      "name": "Valley Floodcaller",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Creature \u2014 Otter Wizard",
+      "oracle_text": "[fixture paraphrase] Valley Floodcaller.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "3a036bc8-aa47-58dc-a879-81712a932a7c",
+      "name": "Hullbreaker Horror",
+      "layout": "normal",
+      "mana_cost": "{7}",
+      "mana_value": 7.0,
+      "type_line": "Creature \u2014 Kraken",
+      "oracle_text": "[fixture paraphrase] Hullbreaker Horror.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "01dda41f-89d9-5bfd-811b-6806fcea9804",
+      "name": "Emrakul, the Promised End",
+      "layout": "normal",
+      "mana_cost": "{13}",
+      "mana_value": 13.0,
+      "type_line": "Legendary Creature \u2014 Eldrazi",
+      "oracle_text": "[fixture paraphrase] Emrakul, the Promised End.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        13.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "1c04ff69-7cce-50ea-bc60-21912b6fe59b",
+      "name": "Gene Pollinator",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Creature \u2014 Mutant",
+      "oracle_text": "[fixture paraphrase] Gene Pollinator.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "044e3718-5bdb-5ccf-b506-4e7fca3b9840",
+      "name": "The Cabbage Merchant",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Legendary Creature \u2014 Human",
+      "oracle_text": "[fixture paraphrase] The Cabbage Merchant.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "1d980841-1994-5d48-9280-7e10d6b8c597",
+      "name": "Colossal Skyturtle",
+      "layout": "modal_dfc",
+      "mana_cost": "",
+      "mana_value": 5.0,
+      "type_line": "Creature \u2014 Turtle // Land",
+      "oracle_text": "",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "has_land_face": true,
+      "face_count": 2,
+      "faces": [
+        {
+          "face_index": 0,
+          "name": "Colossal Skyturtle",
+          "mana_cost": "{5}",
+          "face_mana_value": 5.0,
+          "type_line": "Creature \u2014 Turtle",
+          "oracle_text": "[fixture paraphrase] Colossal Skyturtle, front face."
+        },
+        {
+          "face_index": 1,
+          "name": "Colossal Skyturtle back face",
+          "mana_cost": "",
+          "face_mana_value": 0.0,
+          "type_line": "Land",
+          "oracle_text": "[fixture paraphrase] land back face."
+        }
+      ],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "00c4260d-5411-56e6-af96-4586a4275f41",
+      "name": "Hidden Strings",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "[fixture paraphrase] Hidden Strings.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    },
+    {
+      "oracle_id": "5ff57642-cb4c-54b3-b0aa-dd349705ba5d",
+      "name": "Flash Photography",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "[fixture paraphrase] Flash Photography.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "has_land_face": false,
+      "face_count": 0,
+      "faces": [],
+      "content_updated_at": "2026-09-01T21:20:19+00:00"
+    }
+  ],
+  "legality": {
+    "commander": {
+      "38d25a87-dcc1-5cc2-a086-48796e7cdced": "legal",
+      "69076e9d-5549-571e-85f7-b408e11aba63": "legal",
+      "78318e5e-a4c9-53f4-86a2-e2ced0a9cd77": "legal",
+      "5e6f3663-bc6d-5408-b409-8b574ee31cdf": "legal",
+      "94b6d21c-3f83-5219-a7b9-2544430da3ed": "legal",
+      "b869b0ad-dbb6-57c9-93d5-2f3a961573d8": "legal",
+      "5f60f71d-8bf3-51f9-8bf2-96f8b31aac6f": "legal",
+      "cc475d46-34d0-54ae-9a30-2b51b25effe0": "legal",
+      "8188c05e-cd8a-5728-82be-4de76c9c7e2a": "legal",
+      "f3f7e450-fa7c-5d18-83cb-d2db9791850f": "legal",
+      "8f7ddbe6-34fd-5278-a19f-2778fecf91f3": "legal",
+      "a0b98382-95fe-5a7b-b28a-702b5e05c769": "legal",
+      "2dcd26cd-bea4-5044-8483-9e9fa4cf73c3": "legal",
+      "8ec554b9-8014-5e91-ad38-f2acde230d74": "legal",
+      "fe60fdd0-310c-5453-9800-4aede60cdd41": "legal",
+      "f65f4ada-5b43-56a2-a400-e8053443b0c0": "legal",
+      "772ca0d0-826c-5d67-bc26-c06cddbbff4a": "legal",
+      "dffd6b3d-129a-5164-b72c-5800985c346f": "legal",
+      "32a5dd78-f857-5692-b5f9-10702bc367f3": "legal",
+      "6199841c-b35f-5e69-84fd-0fab6459f3b3": "legal",
+      "3270ffb3-6688-5cdc-85f2-b03de163d6a0": "legal",
+      "32c7d86a-0bdc-5bac-9dd9-0ba7ebc3097e": "legal",
+      "7fc6f169-36c0-50eb-ab1a-31633a6467e2": "legal",
+      "18811d97-9021-594c-90df-5c94aeb478ac": "legal",
+      "ad9a96d9-c4f0-53a8-9851-9e298d85fea9": "legal",
+      "7d556b35-62ab-5a43-bdb9-346c2dff694a": "legal",
+      "1a9e5ed4-b8ab-5b87-b44c-e12f4717aaae": "legal",
+      "0efb9f5d-56a1-53a3-9357-9b244761b075": "legal",
+      "e8f4f2dd-630c-5228-b16c-f61d172b06a3": "legal",
+      "95d18e34-a715-5e4d-968f-9337add992c3": "legal",
+      "89dcb7b8-931a-57a2-91c5-063dd3b1ca67": "legal",
+      "9355acb2-fdee-5712-99e6-74a8bb96ade5": "legal",
+      "9468263e-f747-5b11-8bad-97cad0bc4a18": "legal",
+      "90e1eef5-4798-52d2-b6db-af1ca3f79702": "legal",
+      "2dec0954-d0e2-56e4-9de7-dcbec32353c5": "legal",
+      "90748a1e-5fc6-5996-84eb-afdd8ff2e50d": "legal",
+      "6f7be947-5fef-5510-a94a-469839eb31f2": "legal",
+      "c1b4fbbd-d3ed-5d0b-87f2-59679424ed87": "legal",
+      "0fee529d-6515-5fe5-9b2b-36b3add47c61": "legal",
+      "850360bd-dd76-5adc-a559-0a53f7e43b2d": "legal",
+      "05306eaa-0a5a-501f-9b1c-ec672c1fddde": "legal",
+      "1a94dcde-b1bf-5f0b-8dc1-60d12bbc9346": "legal",
+      "d7ced5e3-3fcc-5df5-b6c8-7fb744248d1b": "legal",
+      "12d0a193-a08c-5331-bd5b-f8e69ffce5bb": "legal",
+      "31b22550-50fc-5fd6-92a6-0aeb30886560": "legal",
+      "71e6dee3-514f-58f5-9b9e-4599139dca70": "legal",
+      "425fa23d-c8d6-5599-b019-42f8a9807b87": "legal",
+      "b3a21c5e-26bf-5fd0-976a-ef8630fbbdd4": "legal",
+      "39c9c537-f46a-54dc-99b1-0861953f8187": "legal",
+      "f4e1c1db-2da8-538a-a3e5-00d697822566": "legal",
+      "d4a7ecca-504f-544c-9cf2-b011194b07b1": "legal",
+      "ba9d9106-f97a-509f-b813-76a57c26412f": "legal",
+      "f952546c-463e-57dd-ba22-e7cc4e988f72": "legal",
+      "e272683f-a2cb-5599-85d4-90de2858e45f": "legal",
+      "ea86f7b9-a5ba-591a-aa51-b0db15061055": "legal",
+      "ad41b972-744d-5672-9070-3f61f9484089": "legal",
+      "dd0eb273-355e-5af9-aa43-81fd6c1d4040": "legal",
+      "9dc7fe8a-6908-552b-8078-333e54224f97": "legal",
+      "23e74987-574f-5021-8f1d-42adcc32a0d4": "legal",
+      "fda47a59-3437-53f0-a7d7-3c9c07559257": "legal",
+      "064e1c4d-119b-5b36-b36c-c2a4096bf93a": "legal",
+      "f97e4e93-0642-544a-8864-7921493692ba": "legal",
+      "ab6ff18c-ba2f-56df-8c09-aea5d1357dae": "legal",
+      "61204fc6-b20f-5e68-8fb0-2cb141e3d885": "legal",
+      "bc9f135e-cbc6-5097-8701-f4c32e83ada9": "legal",
+      "ff03c84c-7131-56ec-939e-7c0d94da441b": "legal",
+      "bf0b47d4-0624-5ddf-b225-0bdea0d73a10": "legal",
+      "9d01fd20-bdfc-5ed0-904f-c6d1109edc5e": "legal",
+      "f9278be2-7dd5-590f-af15-6aafa3962a9e": "legal",
+      "8d61ab14-627e-520c-83fc-e2aadac40133": "legal",
+      "0f3e82c7-d12f-50cd-9bfa-d17b6fdb4f94": "legal",
+      "87bfe91a-5ef3-5b12-85ab-cb147b6646dc": "legal",
+      "f10d2704-4b90-5bdd-a953-4f4f9e46d808": "legal",
+      "0ac75c1c-2f36-57e2-92b6-5703dce29637": "legal",
+      "a1fb9375-c93b-57a2-953f-c75473fa5898": "legal",
+      "57e35965-1dea-5c00-9535-b6e9b6bdec6a": "legal",
+      "67f4f119-352d-540e-adda-f4e8d8b192b5": "legal",
+      "f665b8df-e7ab-567c-89bd-ee5a60783da5": "legal",
+      "e4cbbb90-d472-5518-a14d-219830d8f1f2": "legal",
+      "0aa7c571-9d1b-51fa-be87-5de1195b7023": "legal",
+      "bf96d409-6429-5b03-b78f-95b615b99ed4": "legal",
+      "210f06b9-fc4b-55fd-8fcc-7fe267e69a46": "legal",
+      "ccc250da-3ef9-5759-b589-4eabe1bbcbbe": "legal",
+      "01948542-44b0-5f59-8d77-bef275e35557": "legal",
+      "8033461f-4f86-5477-b28f-bc897658e2f1": "legal",
+      "cd84df19-9876-58a9-8474-393d8c5a255f": "legal",
+      "13d9a0fa-5156-5a24-ae26-fe47f2eca219": "legal",
+      "be25a48c-b8ef-5f71-a7ac-4d49e29614d3": "legal",
+      "940243e0-68a1-5a43-adc8-94c4643aff27": "legal",
+      "3af61d27-3158-5526-a5b1-36986eec873d": "legal",
+      "22138268-3680-5987-bbdb-80ee391e71c6": "legal",
+      "29d11c2e-7f16-576f-adab-dd9955f4a7f2": "legal",
+      "1f202825-e3bb-542a-83ed-3cc9ab9f7dbb": "legal",
+      "3a036bc8-aa47-58dc-a879-81712a932a7c": "legal",
+      "01dda41f-89d9-5bfd-811b-6806fcea9804": "legal",
+      "1c04ff69-7cce-50ea-bc60-21912b6fe59b": "legal",
+      "044e3718-5bdb-5ccf-b506-4e7fca3b9840": "legal",
+      "1d980841-1994-5d48-9280-7e10d6b8c597": "legal",
+      "00c4260d-5411-56e6-af96-4586a4275f41": "legal",
+      "5ff57642-cb4c-54b3-b0aa-dd349705ba5d": "legal"
+    }
+  }
+}

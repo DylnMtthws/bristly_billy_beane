@@ -11,11 +11,29 @@ This file is auto-loaded by Claude Code at the start of every session in this re
 ## Project Identity
 
 - **Name:** Sabermetrics for Magic
-- **Type:** Multi-user, self-hosted web app — currently a **closed beta** (owner-invited testers). Was a single-user personal tool through the P8 build; pivoted 2026-07 (see ADR-015..018).
+- **Type:** Multi-user, self-hosted web app — currently a **closed beta** (owner-invited testers). Was a single-user personal tool through the P8 build; pivoted 2026-07 (see ADR-015..018); pivoted again 2026-09 to a **cEDH Deck Lab** (see ADR-019..024).
+- **Product direction (2026-09):** The product is exclusively a **cEDH Deck Lab**. It is no longer a general casual Commander power-level generator. The casual generator still ships and still works, but it is legacy: new work goes into `src/sabermetrics/cedh/`.
 - **Owner / Admin:** Dylan Matthews (sole admin; provisions all accounts)
-- **Purpose:** Generate Commander/EDH decklists using LLM-driven reasoning over multiple data sources, and — in the current phase — collect structured, per-card feedback from deck-literate players to measure and improve generator quality. Budget is one optimization input among several, no longer the defining goal.
+- **Purpose:** Build competitive Commander (cEDH) deck candidates deterministically from curated strategy packs, ground them in tournament evidence with stated sample sizes, validate them against a goldfishing simulator, and explain them. **There is no budget and no price anywhere in the cEDH engine** — cEDH is proxy-normal, so the objective is performance (ADR-025).
 - **Phase 1 goal:** Invite trusted Magic players, let them generate decks and leave thumbs-up/down + comments per card (and a verdict per deck); the owner + Claude mine that feedback to improve the generator.
 - **Inspiration:** Sabermetric "moneyball" methodology in professional sports analytics — find cards with the best cost-to-impact ratio.
+
+### What this repository owns
+
+| Owned here | Owned elsewhere |
+|---|---|
+| Product workflow and UI | Scryfall / tournament ingestion (`ingestion_pipeline_mtg`) |
+| User intent and constraints | Physical ingestion tables (`mtg_internal`) |
+| cEDH commander and strategy selection | Simulation mechanics (`commander_simulator`) |
+| Evidence retrieval and ranking | Simulator strategy definitions |
+| Deterministic candidate construction | Card facts, prices, legality |
+| Model-provider integration | |
+| Simulator orchestration | |
+| Explanations and presentation | |
+
+**Never edit or import the sibling repositories.** Integrate through the
+`mtg_v1` Postgres schema and versioned JSON only. See
+`docs/integration-handoff.md` for the exact contracts.
 
 </context>
 
@@ -45,8 +63,21 @@ constraints:
   annual_cost_ceiling_usd: 100
   per_deck_cost_target_usd: 0.15
   per_deck_cost_ceiling_usd: 0.50
-  format_scope: "Commander (EDH) only"
-  ui_scope: "Desktop web UI; two portals — user-facing + admin (/admin, token-gated). No mobile."
+  format_scope: "Commander (EDH) only; the NEW path is competitive (cEDH) only"
+  ui_scope: "Desktop web UI; three portals — user-facing, admin (/admin), cEDH lab (/lab). No mobile."
+
+  # --- cEDH path (ADR-019..024). Non-negotiable. ---
+  cedh_data_boundary: "production repositories query mtg_v1 ONLY, as mtg_consumer. No query may name mtg_internal (assert_v1_only enforces it). The card view is card_any_medium, NEVER card — the default view silently drops 254 Reserved List cards including Tropical Island, Mox Diamond and Lotus Petal."
+  cedh_no_network_in_generation: "the cEDH generation path never calls EDHTop16, Scryfall, TopDeck or a deck-hosting site. Strategy material is curated in config/cedh_evidence/, reviewed and versioned."
+  cedh_no_legacy_ingestion: "no module under src/sabermetrics/cedh/ imports sabermetrics.ingestion, .pipeline, .reasoning or .analytics, or any vendor model SDK. Asserted by tests over the import graph."
+  llm_may_not: "decide legality; invent cards or oracle text; bypass candidate constraints; create simulator mechanics; silently repair a malformed simulator result; select from the whole card corpus without deterministic narrowing."
+  llm_may: "normalize free-text intent; select among supported strategy packs; summarize retrieved tournament evidence; compare deterministic alternatives; explain recommendations."
+  structured_output: "every machine-used model response uses provider structured output and is validated with Pydantic before use. A response that never validates raises; it is never partially accepted."
+  provider_pinning: "production pins the provider (model id ends ':deepinfra'). Dynamic ':cheapest' routing is refused — it makes the recorded model id a guess."
+  absence_is_visible: "no tournament data renders as 'no tournament evidence', never an empty result. No simulator renders as 'not simulated', NEVER an invented neutral score. An unsupported commander renders as unsupported."
+  popularity_is_not_quality: "an inclusion rate is displayed with its denominator, window and event-size floor, or not displayed."
+  no_price_in_the_engine: "the cEDH engine has NO budget and NO price. CardFacts carries no price field, adapters_postgres does not select rep_prices, BuildConstraints has no budget_usd (and sets extra='forbid' so a stale caller passing one FAILS rather than being silently ignored), the UI offers no budget input, and the prompts forbid the model from mentioning cost. Do not reintroduce price 'just for display' — a price field that exists becomes a tie-break. (ADR-025)"
+  no_collection_in_the_engine: "the engine does not know who is asking. NO owned-cards / collection input: BuildConstraints has no owned_oracle_ids, IntentClassification has no mentions_owned_cards, and _sort_key takes (oracle_id, pack, role) only. Acquiring or proxying cards for a new deck is the normal case. Consequence worth preserving: a build is reproducible from the pack alone, so the candidate deck_sha256 identifies a LIST, not a list-plus-requester. (ADR-025)"
 ```
 
 > **Charter note:** This project began as a strictly single-user, localhost-only, budget-focused tool (constraints `user_count: 1`, localhost-only, "no multi-user / no public hosting"). The owner deliberately pivoted it in 2026-07 to a multi-user feedback platform. The constraints above reflect the new charter; ADR-015..018 record the decision and rationale.
@@ -367,7 +398,17 @@ These decisions are settled. Do not relitigate in code; refer here for the "why.
 | ADR-017 | Per-user quota: 20 decks/calendar month (admin-overridable) + retained global $ ceiling | Caps token spend per tester while a global hard stop bounds total cost across everyone |
 | ADR-018 | Structured per-card (thumbs+comment) and per-deck (verdict+comment) feedback loop | Phase-1 product goal: harvest deck-literate players' judgments to measure and improve generator quality; this feedback is user input, distinct from the still-automated data corpus |
 
+| ADR-019 | cEDH only; casual power levels removed from the new path | The product is a cEDH Deck Lab. Power-level heuristics answer a different question than "does this list win a tournament round" |
+| ADR-020 | Card and tournament facts come from `mtg_v1` through repository interfaces; `card_any_medium`, never `card` | The schema is the contract and the boundary is one adapter. The default `card` view silently drops Reserved List staples, which is the worst failure mode: fewer rows and a success return |
+| ADR-021 | Provider-neutral `ModelGateway`; DeepSeek-V4-Flash on DeepInfra, structured output required | A vendor SDK in the generation path makes the provider a rewrite. Structured output plus Pydantic validation is what stops "explain this deck" becoming "invent a deck" |
+| ADR-022 | Deterministic construction from curated strategy packs; the model never selects a card | Selection finishes before the first model call, so a provider outage costs prose and nothing else. It is also the only mechanism that actually prevents corpus-wide hallucination |
+| ADR-023 | Simulator boundary is versioned JSON over a subprocess; absence is a visible "not simulated" | A neutral score is indistinguishable from a measured one once it is in a table. The simulator's own honesty fields are required, so the number cannot be rendered without them |
+| ADR-024 | One cost ledger and one monthly ceiling across both providers | A per-provider ceiling is two soft limits, not one hard stop |
+| ADR-025 | No budget, no card price, and no collection anywhere in the cEDH engine | cEDH is proxy-normal: expensive cards get proxied, so price is not a performance signal, and a budget would not trade money for power — it would just remove the best cards. Owned-cards preference is the same constraint wearing a different hat: building a new deck means acquiring or proxying cards, which is the normal case. Absence is enforced (no field to read, `extra="forbid"` on the constraints) because an available price or collection field always becomes a tie-break eventually. It also buys reproducibility: selection sees only the pack and the role, so the same pack yields the same 99 for everyone. NB: this is about *card* prices — the LLM **token** cost ceiling (ADR-024) is untouched |
+
 > **Charter pivot (2026-07):** ADR-015..018 supersede the original single-user / localhost-only / no-public-hosting posture. Where older ADRs or docs assume one user, the multi-user charter above wins.
+>
+> **Product pivot (2026-09):** ADR-019..024 make the product a cEDH Deck Lab. Where older ADRs describe casual power levels, budget-as-objective, or local ingestion as the source of card facts, they describe the **legacy** path only. `src/sabermetrics/cedh/` is the product.
 
 Full ADR text in `design.md` Section 11.
 
@@ -387,8 +428,14 @@ documents:
     purpose: "This file. Project context, auto-loaded."
     read_when: "Always, at session start"
 
+  - file: docs/integration-handoff.md
+    purpose: "The contracts with the two sibling repositories: what mtg_v1 must
+      publish, what the simulator must accept and emit, and the deprecation plan
+      for duplicate ingestion. Read before touching anything under cedh/."
+    read_when: "Before any cEDH boundary, repository or simulator work"
+
   - file: docs/project_plan/design.md
-    purpose: "High-level vision, goals, constraints, ADRs"
+    purpose: "High-level vision, goals, constraints, ADRs (LEGACY casual path)"
     read_when: "Before architectural changes"
 
   - file: docs/project_plan/SKILLS.md
@@ -425,12 +472,13 @@ Track progress here. Update as phases complete.
 ```yaml
 status:
   original_build: "Complete — P1..P8 (single-user generator). Refresh automation, launchd plists, JSON logging, Karsten mana analysis, deep statistical profiles."
-  current_initiative: "Multi-user + feedback beta (see ~/.claude/plans/imperative-giggling-pond.md; portal phases P0..P7)"
-  current_phase: "Portal-P6 — admin analytics (DONE)"
+  current_initiative: "cEDH Deck Lab (ADR-019..024). The multi-user + feedback beta (P0..P6) is complete and is now the legacy path."
+  current_phase: "cEDH-P1 — Kinnan vertical slice (DONE, offline against fixtures)"
   portal_completed: ["P0", "P1", "P2", "P3", "P4", "P5", "P6"]
   in_progress: []
   blocked: []
-  notes: "P0 schema; P1 auth (Flask-Login, invites, hardening, create-admin/invite-user CLI); P2 admin user mgmt (/admin, role-gated). Tailwind (PR#11) merged to main; portal branch rebased on it. P3: user portal — db.py FavoritesRepo (commanders+decks toggle/list/ids) + DecksRepo (list_for_owner, owner_of, set_owner, count_this_month) + UsersRepo.update_profile; ui/explore_filters.py (pure WHERE builder over commander_candidates: colors atmost/exactly, abilities=keywords LIKE, price/cmc ranges, sort, pagination); routes: home dashboard (quota meter, recent decks, fav shortcuts), /explore (filter sidebar + hearts + pagination), /favorites/commanders, /favorites/decks, /decks (owner-scoped, delete), /profile (edit + change password), favorite toggle endpoints (JSON, CSRF via X-CSRFToken). Owner-scoping: generate sets owner_id; view/delete/deck-fav authorized (owner or admin → else 403). Templates all Tailwind (home/explore/decks/favorites_*/profile + _macros.html + build form moved to profile_view). index.html DELETED. P4: quota ENFORCED in generate route — global $ ceiling pre-check (503) + per-user calendar-month count vs quota (429 with reset label); mid-build LLMCostCeilingExceeded handled. Cost attribution: contextvars + cost_attribution() CM in reasoning/client.py, _log_cost writes cost_log.user_id/deck_id; route wraps builder.build in cost_attribution(owner, deck_id) with a PRE-MINTED deck_id passed via new DeckBuildRequest.owner_id/deck_id fields (_build_deck_model uses request.deck_id). CLI builds unattributed. PR #12 (P0-P4) MERGED to main; P5+ on new branches. P5: feedback system (the Phase-1 payload). db.py FeedbackRepo (upsert_card ON CONFLICT user/deck/card, upsert_deck ON CONFLICT user/deck, card_map, deck read helpers). Routes: POST /deck/<id>/card/<card_id>/feedback and POST /deck/<id>/feedback — OWNER-ONLY (owner_of == current_user, else 403; admins viewing others' decks get read-only, can_feedback=False). deck_view.html: per-card thumbs+comment cell in the by-type table (prefilled from card_feedback map) + deck-level verdict(good/mixed/bad)+comment panel + feedback JS (autosave, CSRF X-CSRFToken); styles in style.css (.fb-thumb/.verdict-btn). Per-card feedback is ONLY in the by-type table view (default), not by-role/visual — deferred. P5 PR#13 MERGED to main. P6: admin analytics (db.py AdminAnalyticsRepo). Routes on /admin: enhanced overview (KPIs), users (per_user_stats: decks/spend/feedback + detail link), users/<id> drill-down, feedback explorer (card_feedback aggregated by card_name — up/down/net/total/comments, sortable) + feedback/card/<name> drill (all comments) + feedback/export?format=csv|json (CSV=card rows, JSON=card+deck), costs (totals + by call_type + by user, uses cost_log.user_id from P4), commanders (most-generated + most-favorited). Templates admin/feedback|feedback_card|costs|commanders|user_detail + enriched overview/users; admin nav gained Feedback/Costs/Commanders. NB: feedback rows are intentionally KEPT on deck delete (research data; aggregates group by card_name, LEFT JOIN decks). Tests: test_admin_analytics.py. NEXT: P7 deploy — waitress + Cloudflare Tunnel setup doc; set real SABER_SECRET_KEY; run /security-review BEFORE sharing the tunnel URL (release gate)."
+  cedh_notes: "src/sabermetrics/cedh/ holds the whole path. repositories.py = CardRepository/MetaRepository Protocols + assert_v1_only guard; adapters_postgres.py = live mtg_v1 (card_any_medium, card_face, card_legality; the four tournament views DO NOT EXIST yet, so PostgresMetaRepository probes and reports unavailable); adapters_fixture.py = the offline corpus every ordinary test uses. model_gateway.py = provider-neutral Protocol + strict JSON-Schema tightening; provider_deepseek.py = OpenAI-compatible over httpx (no vendor SDK); gateway_fixture.py = scripted fake that still validates through the real schema. cost_ledger.py writes the shared cost_log and reads the ONE ceiling. evidence.py = attributed chunks (source, locator, date, commander, snapshot, content hash) with hard bounds. packs.py = strategy packs authored BY NAME in config/cedh_packs/, resolved to oracle_ids at load; a name that does not resolve fails the pack loudly. builder.py = deterministic fill + legality repair (99, singleton, colour identity; basics capped at the land slot count, past which it REFUSES rather than returning a pile of Forests). NO price/affordability logic anywhere — ADR-025. simulator.py = SimulationResult | NotSimulated, no third state. candidate.py = cedh-deck-candidate.v1 by oracle_id. lab.py orchestrates and CROSS-CHECKS every model output against what was built. factory.py reports which mode each part is in; the UI renders those notices. UI at /lab (cedh_routes.py), CLI at `sabermetrics cedh`. Fixtures in fixtures/cedh/ regenerate via scripts/build_cedh_fixtures.py. The Kinnan pack's 99 ARE the list commander_simulator models. NEXT: waiting on the two contracts in docs/integration-handoff.md — mtg_v1 tournament views, and the simulator accepting cedh-deck-candidate.v1 / emitting cedh-simulation-result.v1."
+  legacy_notes: "P0 schema; P1 auth (Flask-Login, invites, hardening, create-admin/invite-user CLI); P2 admin user mgmt (/admin, role-gated). Tailwind (PR#11) merged to main; portal branch rebased on it. P3: user portal — db.py FavoritesRepo (commanders+decks toggle/list/ids) + DecksRepo (list_for_owner, owner_of, set_owner, count_this_month) + UsersRepo.update_profile; ui/explore_filters.py (pure WHERE builder over commander_candidates: colors atmost/exactly, abilities=keywords LIKE, price/cmc ranges, sort, pagination); routes: home dashboard (quota meter, recent decks, fav shortcuts), /explore (filter sidebar + hearts + pagination), /favorites/commanders, /favorites/decks, /decks (owner-scoped, delete), /profile (edit + change password), favorite toggle endpoints (JSON, CSRF via X-CSRFToken). Owner-scoping: generate sets owner_id; view/delete/deck-fav authorized (owner or admin → else 403). Templates all Tailwind (home/explore/decks/favorites_*/profile + _macros.html + build form moved to profile_view). index.html DELETED. P4: quota ENFORCED in generate route — global $ ceiling pre-check (503) + per-user calendar-month count vs quota (429 with reset label); mid-build LLMCostCeilingExceeded handled. Cost attribution: contextvars + cost_attribution() CM in reasoning/client.py, _log_cost writes cost_log.user_id/deck_id; route wraps builder.build in cost_attribution(owner, deck_id) with a PRE-MINTED deck_id passed via new DeckBuildRequest.owner_id/deck_id fields (_build_deck_model uses request.deck_id). CLI builds unattributed. PR #12 (P0-P4) MERGED to main; P5+ on new branches. P5: feedback system (the Phase-1 payload). db.py FeedbackRepo (upsert_card ON CONFLICT user/deck/card, upsert_deck ON CONFLICT user/deck, card_map, deck read helpers). Routes: POST /deck/<id>/card/<card_id>/feedback and POST /deck/<id>/feedback — OWNER-ONLY (owner_of == current_user, else 403; admins viewing others' decks get read-only, can_feedback=False). deck_view.html: per-card thumbs+comment cell in the by-type table (prefilled from card_feedback map) + deck-level verdict(good/mixed/bad)+comment panel + feedback JS (autosave, CSRF X-CSRFToken); styles in style.css (.fb-thumb/.verdict-btn). Per-card feedback is ONLY in the by-type table view (default), not by-role/visual — deferred. P5 PR#13 MERGED to main. P6: admin analytics (db.py AdminAnalyticsRepo). Routes on /admin: enhanced overview (KPIs), users (per_user_stats: decks/spend/feedback + detail link), users/<id> drill-down, feedback explorer (card_feedback aggregated by card_name — up/down/net/total/comments, sortable) + feedback/card/<name> drill (all comments) + feedback/export?format=csv|json (CSV=card rows, JSON=card+deck), costs (totals + by call_type + by user, uses cost_log.user_id from P4), commanders (most-generated + most-favorited). Templates admin/feedback|feedback_card|costs|commanders|user_detail + enriched overview/users; admin nav gained Feedback/Costs/Commanders. NB: feedback rows are intentionally KEPT on deck delete (research data; aggregates group by card_name, LEFT JOIN decks). Tests: test_admin_analytics.py. NEXT: P7 deploy — waitress + Cloudflare Tunnel setup doc; set real SABER_SECRET_KEY; run /security-review BEFORE sharing the tunnel URL (release gate)."
 ```
 
 </context>

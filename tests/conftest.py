@@ -98,3 +98,55 @@ def canned_profile():
         )
 
     return _make
+
+
+# --- cEDH Deck Lab fixtures ------------------------------------------------
+#
+# Every one of these is offline. No network, no Postgres, no model provider and
+# no simulator binary is required by any test that uses them.
+
+
+@pytest.fixture
+def cedh_cards():
+    """The synthetic card corpus covering the Kinnan pack."""
+    from sabermetrics.cedh.adapters_fixture import FixtureCardRepository
+
+    return FixtureCardRepository()
+
+
+@pytest.fixture
+def cedh_meta_absent():
+    """A meta repository in today's state: the tournament views do not exist."""
+    from sabermetrics.cedh.adapters_fixture import FixtureMetaRepository
+
+    return FixtureMetaRepository()
+
+
+@pytest.fixture
+def cedh_meta_populated():
+    """A meta repository in the state the mtg_v1 contract is asked to provide."""
+    from sabermetrics.cedh.adapters_fixture import FixtureMetaRepository
+
+    return FixtureMetaRepository(filename="meta_populated.json")
+
+
+@pytest.fixture
+def cedh_registry(cedh_cards):
+    """The pack registry resolved against the fixture corpus."""
+    from sabermetrics.cedh.packs import PackRegistry
+
+    return PackRegistry(cedh_cards)
+
+
+@pytest.fixture
+def kinnan_pack(cedh_registry):
+    """The resolved Kinnan strategy pack."""
+    return cedh_registry.get("kinnan_basalt")
+
+
+@pytest.fixture
+def cedh_simulator():
+    """The fixture simulator client."""
+    from sabermetrics.cedh.simulator import FixtureSimulatorClient
+
+    return FixtureSimulatorClient()

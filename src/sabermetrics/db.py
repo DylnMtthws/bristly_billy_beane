@@ -867,3 +867,106 @@ class AdminAnalyticsRepo:
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+
+class CedhCandidatesRepo:
+    """Persistence for cEDH Deck Lab candidates.
+
+    The candidate document is stored verbatim as JSON. It is a versioned
+    artifact handed to another repository, and shredding it into columns would
+    mean a schema change here could silently reshape what a downstream consumer
+    reads back. Everything else stored alongside it is an index onto that
+    document, not a second source of truth.
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = Path(db_path)
+
+    def save(
+        self,
+        *,
+        candidate_id: str,
+        owner_id: str | None,
+        pack_id: str,
+        commander_key: str,
+        commander_name: str,
+        deck_sha256: str,
+        candidate_json: str,
+        evidence_hash: str = "",
+        meta_available: bool = False,
+        simulation_status: str = "",
+        simulation_json: str | None = None,
+        explanation_json: str | None = None,
+        warnings: list[str] | None = None,
+    ) -> None:
+        """Insert or replace one candidate."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO cedh_candidates "
+                "(candidate_id, owner_id, pack_id, commander_key, "
+                "commander_name, deck_sha256, candidate_json, evidence_hash, "
+                "meta_available, simulation_status, simulation_json, "
+                "explanation_json, warnings_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    candidate_id,
+                    owner_id,
+                    pack_id,
+                    commander_key,
+                    commander_name,
+                    deck_sha256,
+                    candidate_json,
+                    evidence_hash,
+                    1 if meta_available else 0,
+                    simulation_status,
+                    simulation_json,
+                    explanation_json,
+                    json.dumps(warnings or []),
+                ),
+            )
+            conn.commit()
+
+    def get(self, candidate_id: str) -> dict | None:
+        """Fetch one candidate row, or None."""
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM cedh_candidates WHERE candidate_id = ?",
+                (candidate_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def owner_of(self, candidate_id: str) -> str | None:
+        """Return the owning user id, or None if unowned/absent."""
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT owner_id FROM cedh_candidates WHERE candidate_id = ?",
+                (candidate_id,),
+            ).fetchone()
+            return row["owner_id"] if row else None
+
+    def list_for_owner(self, user_id: str, *, limit: int = 50) -> list[dict]:
+        """Most recent candidates for one user."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT candidate_id, created_at, pack_id, commander_name, "
+                "simulation_status, meta_available "
+                "FROM cedh_candidates WHERE owner_id = ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def count_this_month(self, user_id: str) -> int:
+        """Candidates this user has built since the 1st of the month.
+
+        Counted against the same per-user quota as the casual generator: a lab
+        run spends tokens, and a quota that only counted one of the two paths
+        would not be a quota.
+        """
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM cedh_candidates WHERE owner_id = ? "
+                "AND created_at >= date('now', 'start of month')",
+                (user_id,),
+            ).fetchone()
+            return int(row[0] or 0)
