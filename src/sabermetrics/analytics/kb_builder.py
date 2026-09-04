@@ -73,9 +73,7 @@ class KnowledgeBaseBuilder:
             "when evaluating Commander deck construction."
         )
 
-    def _land_count_section(
-        self, patterns: DeckbuildingPatterns, articles: str
-    ) -> str:
+    def _land_count_section(self, patterns: DeckbuildingPatterns, articles: str) -> str:
         """Generate the Land Count section."""
         s = patterns.land_counts
         lines = [
@@ -87,7 +85,9 @@ class KnowledgeBaseBuilder:
             f"- Range: {s.min} - {s.max} lands",
             f"- Std dev: {s.std_dev}",
         ]
-        guidance = self._extract_guidance(articles, ["land count", "lands", "mana base"])
+        guidance = self._extract_guidance(
+            articles, ["land count", "lands", "mana base"]
+        )
         if guidance:
             lines.append("")
             lines.append("EDHREC guidance:")
@@ -108,9 +108,11 @@ class KnowledgeBaseBuilder:
         lines = [
             "## Mana Base Mathematics",
             "",
-            "This section uses Frank Karsten's hypergeometric probability framework, "
-            "adapted for 99-card Commander decks, to determine optimal color source "
-            "requirements for ~90% on-curve cast probability.",
+            (
+                "This section uses Frank Karsten's hypergeometric probability framework, "
+                "adapted for 99-card Commander decks, to determine optimal color source "
+                "requirements for ~90% on-curve cast probability."
+            ),
             "",
             "Karsten Source Requirements (99-card deck, ~36 lands):",
             "| Colored Pips | Cast by Turn | Sources Needed |",
@@ -174,28 +176,26 @@ class KnowledgeBaseBuilder:
                         )
         else:
             # Fallback static guidance when no analysis data
-            lines.extend([
-                "- Mono-color: 22+ sources of your color (virtually all lands produce it)",
-                "- Two-color: 17-19 sources of primary, 15-17 of secondary",
-                "- Three-color: 13-17 sources per color (heavy use of duals/tri-lands)",
-                "- Four/five-color: 11-13 per color; requires mana-fixing lands",
-            ])
+            lines.extend(
+                [
+                    "- Mono-color: 22+ sources of your color (virtually all lands produce it)",
+                    "- Two-color: 17-19 sources of primary, 15-17 of secondary",
+                    "- Three-color: 13-17 sources per color (heavy use of duals/tri-lands)",
+                    "- Four/five-color: 11-13 per color; requires mana-fixing lands",
+                ]
+            )
 
         # Observed quality from Game Knights data
         if mba and mba.quality_scores.mean > 0:
             lines.append("")
             lines.append("Game Knights observed mana base quality:")
-            lines.append(
-                f"- Mean quality score: {mba.quality_scores.mean} (scale 0-1)"
-            )
+            lines.append(f"- Mean quality score: {mba.quality_scores.mean} (scale 0-1)")
             if mba.color_source_counts:
                 avg_sources = [
                     s.mean for s in mba.color_source_counts.values() if s.mean > 0
                 ]
                 if avg_sources:
-                    overall_avg = round(
-                        sum(avg_sources) / len(avg_sources), 1
-                    )
+                    overall_avg = round(sum(avg_sources) / len(avg_sources), 1)
                     lines.append(
                         f"- Average color sources per commander color: {overall_avg}"
                     )
@@ -212,9 +212,7 @@ class KnowledgeBaseBuilder:
         )
         return "\n".join(lines)
 
-    def _ramp_section(
-        self, patterns: DeckbuildingPatterns, articles: str
-    ) -> str:
+    def _ramp_section(self, patterns: DeckbuildingPatterns, articles: str) -> str:
         """Generate the Ramp section."""
         s = patterns.ramp_counts
         lines = [
@@ -226,7 +224,9 @@ class KnowledgeBaseBuilder:
             f"- Range: {s.min} - {s.max}",
             f"- Std dev: {s.std_dev}",
         ]
-        guidance = self._extract_guidance(articles, ["ramp", "mana acceleration", "mana rock"])
+        guidance = self._extract_guidance(
+            articles, ["ramp", "mana acceleration", "mana rock"]
+        )
         if guidance:
             lines.append("")
             lines.append("EDHREC guidance:")
@@ -238,9 +238,7 @@ class KnowledgeBaseBuilder:
         )
         return "\n".join(lines)
 
-    def _card_draw_section(
-        self, patterns: DeckbuildingPatterns, articles: str
-    ) -> str:
+    def _card_draw_section(self, patterns: DeckbuildingPatterns, articles: str) -> str:
         """Generate the Card Draw section."""
         s = patterns.draw_counts
         lines = [
@@ -252,7 +250,9 @@ class KnowledgeBaseBuilder:
             f"- Range: {s.min} - {s.max}",
             f"- Std dev: {s.std_dev}",
         ]
-        guidance = self._extract_guidance(articles, ["card draw", "card advantage", "draw engine"])
+        guidance = self._extract_guidance(
+            articles, ["card draw", "card advantage", "draw engine"]
+        )
         if guidance:
             lines.append("")
             lines.append("EDHREC guidance:")
@@ -264,9 +264,7 @@ class KnowledgeBaseBuilder:
         )
         return "\n".join(lines)
 
-    def _removal_section(
-        self, patterns: DeckbuildingPatterns, articles: str
-    ) -> str:
+    def _removal_section(self, patterns: DeckbuildingPatterns, articles: str) -> str:
         """Generate the Removal & Interaction section."""
         r = patterns.removal_counts
         w = patterns.wipe_counts
@@ -279,7 +277,9 @@ class KnowledgeBaseBuilder:
             f"- Board wipes: mean {w.mean}, median {w.median} (range {w.min}-{w.max})",
             f"- Tutors: mean {t.mean}, median {t.median} (range {t.min}-{t.max})",
         ]
-        guidance = self._extract_guidance(articles, ["removal", "interaction", "board wipe"])
+        guidance = self._extract_guidance(
+            articles, ["removal", "interaction", "board wipe"]
+        )
         if guidance:
             lines.append("")
             lines.append("EDHREC guidance:")
@@ -291,9 +291,7 @@ class KnowledgeBaseBuilder:
         )
         return "\n".join(lines)
 
-    def _mana_curve_section(
-        self, patterns: DeckbuildingPatterns, articles: str
-    ) -> str:
+    def _mana_curve_section(self, patterns: DeckbuildingPatterns, articles: str) -> str:
         """Generate the Mana Curve section."""
         a = patterns.avg_cmc
         lines = [
@@ -325,10 +323,12 @@ class KnowledgeBaseBuilder:
         lines = [
             "## Power Level Context",
             "",
-            "Game Knights decks are built for entertainment and showcase play. "
-            "They typically target bracket 2-3 (mid-power) with splashy, "
-            "interactive game plans. These patterns reflect decks designed "
-            "for a fun viewing experience, not competitive optimization.",
+            (
+                "Game Knights decks are built for entertainment and showcase play. "
+                "They typically target bracket 2-3 (mid-power) with splashy, "
+                "interactive game plans. These patterns reflect decks designed "
+                "for a fun viewing experience, not competitive optimization."
+            ),
         ]
         if patterns.color_distribution:
             lines.append("")
@@ -346,8 +346,10 @@ class KnowledgeBaseBuilder:
         lines = [
             "## Most Popular Cards",
             "",
-            f"Non-land cards appearing in multiple Game Knights decks "
-            f"({patterns.deck_count} total):",
+            (
+                f"Non-land cards appearing in multiple Game Knights decks "
+                f"({patterns.deck_count} total):"
+            ),
         ]
         for entry in patterns.most_played_cards[:25]:
             lines.append(
@@ -358,17 +360,17 @@ class KnowledgeBaseBuilder:
             lines.append("- No cards appeared in multiple decks")
         return "\n".join(lines)
 
-    def _budget_section(
-        self, patterns: DeckbuildingPatterns, articles: str
-    ) -> str:
+    def _budget_section(self, patterns: DeckbuildingPatterns, articles: str) -> str:
         """Generate the Budget section."""
         lines = [
             "## Budget Considerations",
             "",
-            "Game Knights decks have access to premium cards but still "
-            "follow coherent deckbuilding principles. The patterns above "
-            "apply at any budget — the ratios (lands, ramp, draw, removal) "
-            "matter more than the specific cards chosen.",
+            (
+                "Game Knights decks have access to premium cards but still "
+                "follow coherent deckbuilding principles. The patterns above "
+                "apply at any budget — the ratios (lands, ramp, draw, removal) "
+                "matter more than the specific cards chosen."
+            ),
         ]
         guidance = self._extract_guidance(articles, ["budget", "price", "affordable"])
         if guidance:
@@ -394,9 +396,11 @@ class KnowledgeBaseBuilder:
             f"- Artifacts: mean {ctd.artifacts.mean}, median {ctd.artifacts.median} (range {ctd.artifacts.min}-{ctd.artifacts.max})",
             f"- Planeswalkers: mean {ctd.planeswalkers.mean}, median {ctd.planeswalkers.median} (range {ctd.planeswalkers.min}-{ctd.planeswalkers.max})",
             "",
-            "Guidance: Use these baselines to calibrate card type ratios. "
-            "Strategy-specific decks deviate significantly — see Archetype "
-            "Profiles for theme-conditioned distributions.",
+            (
+                "Guidance: Use these baselines to calibrate card type ratios. "
+                "Strategy-specific decks deviate significantly — see Archetype "
+                "Profiles for theme-conditioned distributions."
+            ),
         ]
         return "\n".join(lines)
 
@@ -409,8 +413,10 @@ class KnowledgeBaseBuilder:
         lines = [
             "## Deckbuilding Archetype Profiles",
             "",
-            "Strategy-conditioned composition breakdowns from Game Knights decks. "
-            "Use these to adjust baselines when building for a specific theme.",
+            (
+                "Strategy-conditioned composition breakdowns from Game Knights decks. "
+                "Use these to adjust baselines when building for a specific theme."
+            ),
         ]
 
         for profile in patterns.archetype_profiles:
@@ -443,8 +449,10 @@ class KnowledgeBaseBuilder:
         lines = [
             "## Theme Density Patterns",
             "",
-            "How frequently each mechanic theme appears across Game Knights decks "
-            f"({patterns.deck_count} total). Themes detected by oracle text pattern matching.",
+            (
+                "How frequently each mechanic theme appears across Game Knights decks "
+                f"({patterns.deck_count} total). Themes detected by oracle text pattern matching."
+            ),
             "",
             "| Theme | Avg Cards/Deck | Decks with 3+ | % of Decks |",
             "|---|---|---|---|",
@@ -464,9 +472,7 @@ class KnowledgeBaseBuilder:
             lines.append("")
             top_n = min(10, len(patterns.feature_correlations))
             for corr in patterns.feature_correlations[:top_n]:
-                lines.append(
-                    f"- {corr.description} (n={corr.sample_size})"
-                )
+                lines.append(f"- {corr.description} (n={corr.sample_size})")
 
         return "\n".join(lines)
 

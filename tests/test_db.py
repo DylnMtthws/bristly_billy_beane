@@ -4,20 +4,22 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
 import pytest
 
-from sabermetrics.db import SourceHealthRepo, connect, row_to_card
+from sabermetrics.db import FeedbackRepo, SourceHealthRepo, connect, row_to_card
 
 
 def _make_db(tmp_path: Path) -> Path:
     """Create a DB with source_health and cards tables."""
     db_path = tmp_path / "t.db"
     conn = sqlite3.connect(str(db_path))
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE source_health (
             source TEXT PRIMARY KEY,
             last_successful_sync TIMESTAMP,
@@ -42,8 +44,7 @@ def _make_db(tmp_path: Path) -> Path:
             image_uri TEXT,
             last_updated TIMESTAMP
         );
-        """
-    )
+        """)
     conn.commit()
     conn.close()
     return db_path
@@ -90,6 +91,51 @@ def test_connect_foreign_keys_opt_in(tmp_path: Path) -> None:
         assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 0
     with connect(db_path, foreign_keys=True) as conn:
         assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+
+
+def test_connect_enables_wal_and_busy_timeout(tmp_path: Path) -> None:
+    db_path = _make_db(tmp_path)
+    with connect(db_path) as conn:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+
+
+def test_eight_concurrent_feedback_writers_do_not_lock(tmp_path: Path) -> None:
+    from scripts.setup_db import setup_database
+
+    db_path = tmp_path / "concurrent.db"
+    setup_database(db_path)
+    stop = threading.Event()
+    locked_errors: list[str] = []
+
+    def write_feedback(worker: int) -> None:
+        repo = FeedbackRepo(db_path)
+        counter = 0
+        while not stop.is_set():
+            try:
+                repo.upsert_card(
+                    user_id=f"user-{worker}",
+                    deck_id=f"deck-{worker}",
+                    card_id=f"card-{counter % 8}",
+                    card_name=f"Card {counter % 8}",
+                    vote="up" if counter % 2 else "down",
+                    comment="contention test",
+                )
+            except sqlite3.OperationalError as exc:
+                if "locked" in str(exc).lower():
+                    locked_errors.append(str(exc))
+                else:
+                    raise
+            counter += 1
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(write_feedback, worker) for worker in range(8)]
+        time.sleep(2)
+        stop.set()
+        for future in futures:
+            future.result()
+
+    assert locked_errors == []
 
 
 # --- SourceHealthRepo ----------------------------------------------------

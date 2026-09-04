@@ -32,6 +32,7 @@
       };
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-ink text-body font-sans antialiased flex flex-col">
     {% block nav %}
@@ -47,6 +48,7 @@
                     ('main.index', 'Home', 'main.index'),
                     ('main.explore', 'Explore', 'main.explore'),
                     ('main.decks', 'Decks', 'main.decks'),
+                    ('cedh.index', 'cEDH Lab', 'cedh.'),
                     ('main.favorite_commanders', 'Favorites', 'main.favorite'),
                 ] %}
                 {% for endpoint, label, prefix in links %}

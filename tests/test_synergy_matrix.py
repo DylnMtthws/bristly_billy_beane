@@ -64,6 +64,7 @@ def _make_db(pairs=None):
 
 # --- Rule matching ---
 
+
 def test_rule_matching_tokens_with_sacrifice() -> None:
     """Token generator + sac outlet should match tokens_with_sacrifice_payoff rule."""
     token_maker = _make_card(
@@ -109,6 +110,7 @@ def test_card_matches_clause_keywords() -> None:
 
 # --- Co-occurrence signal removed (Option A criterion 3) ---
 
+
 def test_cooccurrence_data_is_ignored() -> None:
     """Co-occurrence rows in the DB must NOT influence synergy.
 
@@ -119,16 +121,20 @@ def test_cooccurrence_data_is_ignored() -> None:
     card_b = _make_card(card_id="b", name="Card B")
     card_c = _make_card(card_id="c", name="Card C")
 
-    db_path = _make_db(pairs=[
-        ("a", "b", "cmdr-1", 10, 0.8),
-    ])
+    db_path = _make_db(
+        pairs=[
+            ("a", "b", "cmdr-1", 10, 0.8),
+        ]
+    )
 
     with patch(
         "sabermetrics.analytics.synergy_matrix._compute_embedding_matrix"
     ) as mock_emb:
         mock_emb.return_value = (np.zeros((3, 3), dtype=np.float32), True)
         matrix = build_synergy_matrix(
-            [card_a, card_b, card_c], "cmdr-1", db_path,
+            [card_a, card_b, card_c],
+            "cmdr-1",
+            db_path,
         )
 
     # No rules match and embeddings are zeroed, so co-occurrence is the only
@@ -138,20 +144,24 @@ def test_cooccurrence_data_is_ignored() -> None:
 
 # --- Embedding cross-role filtering ---
 
+
 def test_embedding_same_role_filtered() -> None:
     """Two cards with the same primary role get 0 embedding contribution."""
     removal_a = _make_card(
-        card_id="r1", name="Swords to Plowshares",
+        card_id="r1",
+        name="Swords to Plowshares",
         oracle_text="Exile target creature",
         role_tags='["removal"]',
     )
     removal_b = _make_card(
-        card_id="r2", name="Path to Exile",
+        card_id="r2",
+        name="Path to Exile",
         oracle_text="Exile target creature",
         role_tags='["removal"]',
     )
     utility = _make_card(
-        card_id="u1", name="Utility Card",
+        card_id="u1",
+        name="Utility Card",
         oracle_text="Draw a card",
         role_tags='["draw"]',
     )
@@ -168,7 +178,9 @@ def test_embedding_same_role_filtered() -> None:
         mock_emb.return_value = (emb, True)
 
         matrix = build_synergy_matrix(
-            [removal_a, removal_b, utility], "cmdr-1", db_path,
+            [removal_a, removal_b, utility],
+            "cmdr-1",
+            db_path,
         )
 
     # Same-role pair should have 0 embedding contribution
@@ -182,6 +194,7 @@ def test_embedding_same_role_filtered() -> None:
 
 # --- Hybrid weights ---
 
+
 def test_hybrid_weights_sum_correctly() -> None:
     """RULE + EMBEDDING weights should sum to 1.0 (co-occurrence removed)."""
     total = RULE_WEIGHT + EMBEDDING_WEIGHT
@@ -190,14 +203,17 @@ def test_hybrid_weights_sum_correctly() -> None:
 
 # --- Matrix symmetry ---
 
+
 def test_matrix_is_symmetric() -> None:
     """synergy(A,B) == synergy(B,A)."""
     card_a = _make_card(
-        card_id="a", name="Card A",
+        card_id="a",
+        name="Card A",
         oracle_text="Create a token and sacrifice it",
     )
     card_b = _make_card(
-        card_id="b", name="Card B",
+        card_id="b",
+        name="Card B",
         oracle_text="Whenever you sacrifice, draw a card",
     )
     db_path = _make_db()

@@ -31,14 +31,20 @@ DETECTION_VERSION = "1.1.0"
 _POSITIVE_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("mana_production", re.compile(r"\badd\s+\{[WUBRGC]", re.IGNORECASE)),
     ("any_color", re.compile(r"\badd\s+(?:one\s+)?mana\s+of\s+any", re.IGNORECASE)),
-    ("land_search", re.compile(
-        r"search your library for.*land.*put.*(?:onto |on )?the battlefield",
-        re.IGNORECASE,
-    )),
-    ("land_to_play", re.compile(
-        r"put.*land.*(?:from|onto|on).*the battlefield",
-        re.IGNORECASE,
-    )),
+    (
+        "land_search",
+        re.compile(
+            r"search your library for.*land.*put.*(?:onto |on )?the battlefield",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "land_to_play",
+        re.compile(
+            r"put.*land.*(?:from|onto|on).*the battlefield",
+            re.IGNORECASE,
+        ),
+    ),
     ("treasure_gen", re.compile(r"\bcreate.*treasure", re.IGNORECASE)),
     ("generic_mana", re.compile(r"\badd\s+\{\d+\}", re.IGNORECASE)),
 ]
@@ -181,7 +187,9 @@ _CONDITIONAL_MANA = re.compile(
 
 _SUSPEND = re.compile(r"suspend (\d+)", re.IGNORECASE)
 _ADD_SYMBOLS = re.compile(r"\{([WUBRG])\}", re.IGNORECASE)
-_ANY_COLOR = re.compile(r"add (?:one mana of any|mana of any|.*mana in any combination of)", re.IGNORECASE)
+_ANY_COLOR = re.compile(
+    r"add (?:one mana of any|mana of any|.*mana in any combination of)", re.IGNORECASE
+)
 
 
 def _effective_cmc(card: dict, oracle: str) -> float:

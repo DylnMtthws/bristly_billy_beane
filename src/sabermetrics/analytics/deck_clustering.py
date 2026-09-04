@@ -140,12 +140,14 @@ def load_commander_decks(
             card_names = [r["name"] for r in card_rows]
             if not (min_cards <= len(card_names) <= max_cards):
                 continue  # implausible size: stub or collection — skip
-            records.append(DeckRecord(
-                deck_id=dr["id"],
-                card_names=card_names,
-                popularity_rank=dr["rank"],
-                creator_tags=tags,
-            ))
+            records.append(
+                DeckRecord(
+                    deck_id=dr["id"],
+                    card_names=card_names,
+                    popularity_rank=dr["rank"],
+                    creator_tags=tags,
+                )
+            )
         return records
     finally:
         conn.close()
@@ -368,16 +370,20 @@ def bootstrap_stability(
 
     if not aris:
         return StabilityResult(
-            n_bootstrap=0, mean_ari=0.0, median_ari=0.0,
-            p05_ari=0.0, p95_ari=0.0, verdict="not real at this N",
+            n_bootstrap=0,
+            mean_ari=0.0,
+            median_ari=0.0,
+            p05_ari=0.0,
+            p95_ari=0.0,
+            verdict="not real at this N",
         )
 
     arr = np.array(aris)
     mean_ari = float(arr.mean())
     verdict = (
-        "stable" if mean_ari >= 0.75
-        else "moderate" if mean_ari >= 0.5
-        else "not real at this N"
+        "stable"
+        if mean_ari >= 0.75
+        else "moderate" if mean_ari >= 0.5 else "not real at this N"
     )
     return StabilityResult(
         n_bootstrap=len(aris),
@@ -425,8 +431,13 @@ def run_clustering(
 
     if len(decks) < 2:
         return ClusterReport(
-            commander=commander, n_decks=len(decks), k=0, floor=floor,
-            normalize=normalize, clusters=[], stability=None,
+            commander=commander,
+            n_decks=len(decks),
+            k=0,
+            floor=floor,
+            normalize=normalize,
+            clusters=[],
+            stability=None,
             warnings=[f"Only {len(decks)} decks — clustering not meaningful."],
         )
 
@@ -454,14 +465,16 @@ def run_clustering(
         members = [i for i, lbl in enumerate(labels) if lbl == cid]
         size = len(members)
         top = centroid_ranks[cid]
-        clusters.append(ClusterSummary(
-            cluster_id=cid,
-            dominant_archetype=top[0][0],
-            size=size,
-            meets_floor=size >= floor,
-            centroid_top=top,
-            sample_deck_ids=[decks[i].deck_id for i in members[:5]],
-        ))
+        clusters.append(
+            ClusterSummary(
+                cluster_id=cid,
+                dominant_archetype=top[0][0],
+                size=size,
+                meets_floor=size >= floor,
+                centroid_top=top,
+                sample_deck_ids=[decks[i].deck_id for i in members[:5]],
+            )
+        )
     clusters.sort(key=lambda c: c.size, reverse=True)
 
     if not any(c.meets_floor for c in clusters):
@@ -476,8 +489,14 @@ def run_clustering(
         )
 
     return ClusterReport(
-        commander=commander, n_decks=len(decks), k=k, k_rationale=k_rationale,
-        floor=floor, normalize=normalize, clusters=clusters, stability=stability,
+        commander=commander,
+        n_decks=len(decks),
+        k=k,
+        k_rationale=k_rationale,
+        floor=floor,
+        normalize=normalize,
+        clusters=clusters,
+        stability=stability,
         warnings=warnings,
     )
 
@@ -486,8 +505,10 @@ def format_report(report: ClusterReport) -> str:
     """Render a :class:`ClusterReport` as readable text."""
     lines = [
         f"=== Macro-archetype clustering: {report.commander} ===",
-        f"decks: {report.n_decks}   k: {report.k} ({report.k_rationale})   "
-        f"floor: {report.floor}   normalized: {report.normalize}",
+        (
+            f"decks: {report.n_decks}   k: {report.k} ({report.k_rationale})   "
+            f"floor: {report.floor}   normalized: {report.normalize}"
+        ),
     ]
     if report.stability:
         s = report.stability
@@ -497,7 +518,9 @@ def format_report(report: ClusterReport) -> str:
             f"n={s.n_bootstrap}) -> {s.verdict.upper()}"
         )
     lines.append("")
-    lines.append(f"{'cluster':<9}{'archetype':<14}{'size':>5}{'floor?':>8}  top archetypes")
+    lines.append(
+        f"{'cluster':<9}{'archetype':<14}{'size':>5}{'floor?':>8}  top archetypes"
+    )
     lines.append("-" * 66)
     for c in report.clusters:
         top = ", ".join(f"{a}:{w}" for a, w in c.centroid_top)

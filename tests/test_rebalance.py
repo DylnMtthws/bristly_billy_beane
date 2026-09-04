@@ -18,17 +18,24 @@ from sabermetrics.pipeline.greedy_optimizer import (
 )
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
-
 # --- B2: price is not a quality signal ---
 
 
 def test_price_does_not_affect_composite_score(tmp_path) -> None:
     """Two identical cards at different prices get identical composites."""
     ctx = ScoringContext(
-        commander_id="x", commander_name="Cmdr", commander_colors=["B"],
+        commander_id="x",
+        commander_name="Cmdr",
+        commander_colors=["B"],
     )
-    base = {"name": "Test", "oracle_text": "Draw a card.", "keywords": "[]",
-            "color_identity": '["B"]', "type_line": "Sorcery", "cmc": 2}
+    base = {
+        "name": "Test",
+        "oracle_text": "Draw a card.",
+        "keywords": "[]",
+        "color_identity": '["B"]',
+        "type_line": "Sorcery",
+        "cmc": 2,
+    }
     cheap = compute_cvar(base | {"price_usd": 0.25}, ctx, tmp_path / "x.db")
     pricey = compute_cvar(base | {"price_usd": 40.0}, ctx, tmp_path / "x.db")
 
@@ -47,9 +54,15 @@ def test_default_weights_sum_to_one_with_zero_price() -> None:
 
 
 def _card(card_id, name, price, cvar=0.5):
-    return {"id": card_id, "name": name, "price_usd": price,
-            "_cvar_score": cvar, "type_line": "Creature",
-            "role_tags": '["utility"]', "cmc": 2}
+    return {
+        "id": card_id,
+        "name": name,
+        "price_usd": price,
+        "_cvar_score": cvar,
+        "type_line": "Creature",
+        "role_tags": '["utility"]',
+        "cmc": 2,
+    }
 
 
 def _matrix(cards):
@@ -74,8 +87,12 @@ def test_greedy_floor_reserves_budget_for_remaining_slots() -> None:
     cards = [expensive, cheap1, cheap2, cheap3]
 
     out = greedy_fill(
-        shell=[], candidates=cards, synergy=_matrix(cards),
-        role_targets={}, budget_remaining=10.0, slots_remaining=3,
+        shell=[],
+        candidates=cards,
+        synergy=_matrix(cards),
+        role_targets={},
+        budget_remaining=10.0,
+        slots_remaining=3,
     )
 
     names = {a.card["name"] for a in out}
@@ -91,8 +108,12 @@ def test_greedy_allows_expensive_pick_when_reserve_is_safe() -> None:
     cards = [expensive, cheap1, cheap2]
 
     out = greedy_fill(
-        shell=[], candidates=cards, synergy=_matrix(cards),
-        role_targets={}, budget_remaining=20.0, slots_remaining=3,
+        shell=[],
+        candidates=cards,
+        synergy=_matrix(cards),
+        role_targets={},
+        budget_remaining=20.0,
+        slots_remaining=3,
     )
 
     assert "Expensive" in {a.card["name"] for a in out}
@@ -102,8 +123,7 @@ def test_greedy_allows_expensive_pick_when_reserve_is_safe() -> None:
 
 
 def _assign(card, role="utility"):
-    return SlotAssignment(card=card, slot_role=role,
-                          score=card.get("_cvar_score", 0.5))
+    return SlotAssignment(card=card, slot_role=role, score=card.get("_cvar_score", 0.5))
 
 
 def _pair_matrix(cards, pairs):
@@ -115,7 +135,8 @@ def _pair_matrix(cards, pairs):
         m[idx[a], idx[b]] = v
         m[idx[b], idx[a]] = v
     return SynergyMatrix(
-        matrix=m, card_id_to_index=idx,
+        matrix=m,
+        card_id_to_index=idx,
         index_to_card_id={i: cid for cid, i in idx.items()},
     )
 
@@ -129,7 +150,11 @@ def test_upgrade_spends_slack_on_real_quality() -> None:
     cards = [weak, solid, premium]
 
     out, stats = rebalance_budget(
-        deck, cards, _pair_matrix(cards, []), {}, budget=100.0,
+        deck,
+        cards,
+        _pair_matrix(cards, []),
+        {},
+        budget=100.0,
     )
 
     assert stats["upgrades"] >= 1
@@ -151,7 +176,11 @@ def test_upgrade_stops_at_quality_threshold_not_utilization() -> None:
     cards = [a, b, barely]
 
     out, stats = rebalance_budget(
-        deck, cards, _pair_matrix(cards, []), {}, budget=200.0,
+        deck,
+        cards,
+        _pair_matrix(cards, []),
+        {},
+        budget=200.0,
     )
 
     assert stats["upgrades"] == 0
@@ -179,7 +208,11 @@ def test_unbundle_sells_low_contribution_expensive_card() -> None:
     # Budget exactly at current total: no slack, so only unbundling can act.
     budget = 40.0 + 0.20 * 3
     out, stats = rebalance_budget(
-        deck, cards, _pair_matrix(cards, []), {}, budget=budget,
+        deck,
+        cards,
+        _pair_matrix(cards, []),
+        {},
+        budget=budget,
     )
 
     names = {a.card["name"] for a in out}
@@ -220,7 +253,11 @@ def test_protected_names_are_never_sold() -> None:
     cards = [forty, w1, up1]
 
     out, stats = rebalance_budget(
-        deck, cards, _pair_matrix(cards, []), {}, budget=40.2,
+        deck,
+        cards,
+        _pair_matrix(cards, []),
+        {},
+        budget=40.2,
         protected_names={"Protected Forty"},
     )
 
@@ -237,7 +274,11 @@ def test_downgrade_safety_net_fixes_overrun() -> None:
     cards = [pricey, ok, cheap_alt]
 
     out, stats = rebalance_budget(
-        deck, cards, _pair_matrix(cards, []), {}, budget=10.0,
+        deck,
+        cards,
+        _pair_matrix(cards, []),
+        {},
+        budget=10.0,
     )
 
     assert sum(float(a.card["price_usd"]) for a in out) <= 10.0

@@ -12,10 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.setup_db import setup_database  # noqa: E402
-
-from sabermetrics import db  # noqa: E402
-from sabermetrics.ui.app import create_app  # noqa: E402
+from sabermetrics import db
+from sabermetrics.ui.app import create_app
+from scripts.setup_db import setup_database
 
 
 @pytest.fixture
@@ -161,9 +160,7 @@ def test_set_and_clear_quota(app, db_path) -> None:
 def test_reinvite_issues_new_token(app, db_path) -> None:
     client, _ = _admin_client(app, db_path)
     target = _seed(db_path, "reinv@local", role="user", status="invited")
-    resp = client.post(
-        f"/admin/users/{target}/reinvite", follow_redirects=True
-    )
+    resp = client.post(f"/admin/users/{target}/reinvite", follow_redirects=True)
     assert resp.status_code == 200
     assert b"/invite/" in resp.data
 
@@ -171,7 +168,5 @@ def test_reinvite_issues_new_token(app, db_path) -> None:
 def test_reinvite_rejected_for_active_user(app, db_path) -> None:
     client, _ = _admin_client(app, db_path)
     target = _seed(db_path, "act@local", role="user", status="active")
-    resp = client.post(
-        f"/admin/users/{target}/reinvite", follow_redirects=True
-    )
+    resp = client.post(f"/admin/users/{target}/reinvite", follow_redirects=True)
     assert b"already active" in resp.data

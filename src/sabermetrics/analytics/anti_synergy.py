@@ -26,8 +26,7 @@ _MASS_CLAUSE = re.compile(
     re.IGNORECASE,
 )
 _TYPE_WORD = {
-    t: re.compile(rf"\b{t}s?\b", re.IGNORECASE)
-    for t in ("enchantment", "artifact")
+    t: re.compile(rf"\b{t}s?\b", re.IGNORECASE) for t in ("enchantment", "artifact")
 }
 
 # Engine types eligible for the veto (see module docstring for why creatures
@@ -48,7 +47,8 @@ def engine_types(type_targets: dict[str, int] | None) -> set[str]:
     if not type_targets:
         return set()
     return {
-        t for t, target in type_targets.items()
+        t
+        for t, target in type_targets.items()
         if t in VETOABLE_TYPES and target >= ENGINE_TYPE_MIN_TARGET
     }
 

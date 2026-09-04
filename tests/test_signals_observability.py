@@ -14,8 +14,13 @@ import numpy as np
 
 def _min_card(cid, oracle="draw a card", role="utility"):
     return {
-        "id": cid, "name": cid, "oracle_text": oracle, "type_line": "Creature",
-        "keywords": "[]", "cmc": 2.0, "role_tags": f'["{role}"]',
+        "id": cid,
+        "name": cid,
+        "oracle_text": oracle,
+        "type_line": "Creature",
+        "keywords": "[]",
+        "cmc": 2.0,
+        "role_tags": f'["{role}"]',
     }
 
 
@@ -37,11 +42,19 @@ def test_generation_meta_has_signal_fields() -> None:
     from sabermetrics.models.deck import GenerationMeta
 
     meta = GenerationMeta(
-        generation_time_seconds=1.0, llm_cost_usd=0.0, source_profile_id="x",
-        signals_used=["rules"], signals_unavailable=["embeddings"],
+        generation_time_seconds=1.0,
+        llm_cost_usd=0.0,
+        source_profile_id="x",
+        signals_used=["rules"],
+        signals_unavailable=["embeddings"],
     )
     assert meta.signals_used == ["rules"]
     assert meta.signals_unavailable == ["embeddings"]
-    assert GenerationMeta(
-        generation_time_seconds=1.0, llm_cost_usd=0.0, source_profile_id="x",
-    ).signals_used == []
+    assert (
+        GenerationMeta(
+            generation_time_seconds=1.0,
+            llm_cost_usd=0.0,
+            source_profile_id="x",
+        ).signals_used
+        == []
+    )

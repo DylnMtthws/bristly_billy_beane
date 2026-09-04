@@ -13,16 +13,20 @@ from pathlib import Path
 
 import pytest
 
+from tests._populated_db import HAS_POPULATED_DB, SKIP_REASON
+
 DB = Path("data/sabermetrics.db")
 
 
-@pytest.mark.skipif(not DB.exists(), reason="needs card DB")
+@pytest.mark.skipif(not HAS_POPULATED_DB, reason=SKIP_REASON)
 def test_profile_cache_round_trips_for_real_commander(build_db, canned_profile) -> None:
     from sabermetrics.reasoning.profiler import ProfileManager, ProfileRequest
 
-    cid = sqlite3.connect(str(build_db)).execute(
-        "SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1"
-    ).fetchone()[0]
+    cid = (
+        sqlite3.connect(str(build_db))
+        .execute("SELECT id FROM cards WHERE is_legal_commander = 1 LIMIT 1")
+        .fetchone()[0]
+    )
 
     mgr = ProfileManager(build_db)
     # No real profile cached yet (the seed rows are orphaned fake UUIDs).

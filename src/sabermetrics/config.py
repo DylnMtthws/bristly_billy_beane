@@ -3,11 +3,19 @@
 Loads settings from config/settings.yaml and exposes typed access.
 """
 
+import os
 from pathlib import Path
 from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
+
+
+def resolve_db_path(path: Path | str | None = None) -> Path:
+    """Resolve the shared SQLite path from an override or the environment."""
+    if path is not None:
+        return Path(path)
+    return Path(os.environ.get("SABER_DB_PATH", "data/sabermetrics.db"))
 
 
 class UserSettings(BaseModel):
@@ -218,6 +226,61 @@ class Settings(BaseModel):
     output: OutputSettings = Field(default_factory=OutputSettings)
     knowledge_base: KnowledgeBaseSettings = Field(default_factory=KnowledgeBaseSettings)
     scoring: ScoringSettings = Field(default_factory=ScoringSettings)
+
+
+def load_env_file(path: Path | None = None, *, override: bool = False) -> int:
+    """Load ``KEY=value`` pairs from a ``.env`` file into ``os.environ``.
+
+    Called once from the CLI entry point. Deliberately not called from
+    :func:`sabermetrics.ui.app.create_app`, so the test suite never picks up a
+    developer's real secrets by importing the app factory.
+
+    Values already present in the environment win by default: an explicit
+    ``export`` on the command line should beat a file, not the other way round.
+
+    Args:
+        path: Explicit path; defaults to ``.env`` beside ``config/``.
+        override: Let file values replace existing environment variables.
+
+    Returns:
+        The number of variables set.
+
+    Notes:
+        A deliberately small parser, matching the format ``.env.example``
+        actually uses: ``KEY=value``, ``#`` comments, optional surrounding
+        quotes. It does not do interpolation or multi-line values, because a
+        loader that silently half-understands a richer syntax is worse than one
+        with a stated limit.
+    """
+    # Set by the test suite. Several tests invoke the CLI, and on a deployed
+    # machine `.env` holds that deployment's real configuration — loading it
+    # would silently change what those tests exercise.
+    if os.environ.get("SABER_SKIP_DOTENV"):
+        return 0
+
+    if path is None:
+        path = Path(__file__).resolve().parents[2] / ".env"
+        if not path.exists():
+            path = Path.cwd() / ".env"
+    if not path.exists():
+        return 0
+
+    loaded = 0
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not key:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if override or key not in os.environ:
+            os.environ[key] = value
+            loaded += 1
+    return loaded
 
 
 def _find_config_path() -> Path:

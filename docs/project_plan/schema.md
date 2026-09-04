@@ -281,6 +281,29 @@ CREATE TABLE source_health (
 );
 ```
 
+### 1.10 cEDH Build Jobs
+
+```sql
+-- Additive W5 migration. Candidates remain the quota-bearing completed artifact.
+CREATE TABLE build_jobs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    request_json TEXT NOT NULL,
+    candidate_id TEXT,
+    error_code TEXT,
+    error_detail TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (candidate_id) REFERENCES cedh_candidates(candidate_id)
+);
+CREATE INDEX idx_build_jobs_user_created
+    ON build_jobs(user_id, created_at DESC);
+CREATE INDEX idx_build_jobs_status ON build_jobs(status);
+```
+
 </context>
 
 ---
@@ -870,6 +893,9 @@ combos:
 - Established operational tables: cost_log, source_health, _schema_version
 
 ### Future Versions
-- Document each migration here with: version, date, description, migration script reference
+- **W5 (2026-09-04):** additive `build_jobs` lifecycle table and indexes;
+  idempotent migration in `scripts/migrate_build_jobs.py` and fresh-database DDL
+  in `scripts/setup_db.py`.
+- Document each later migration here with: version, date, description, migration script reference
 
 </context>

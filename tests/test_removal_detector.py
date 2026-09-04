@@ -70,7 +70,7 @@ def test_self_sacrifice_not_removal() -> None:
 def test_reminder_text_destruction_excluded() -> None:
     """Destruction keyword only in reminder text should not detect as removal."""
     card = {
-        "oracle_text": "Create a Treasure token. (It's an artifact with \"{T}, Sacrifice this artifact: Add one mana of any color.\")\nDestroy target creature you control.",
+        "oracle_text": 'Create a Treasure token. (It\'s an artifact with "{T}, Sacrifice this artifact: Add one mana of any color.")\nDestroy target creature you control.',
         "type_line": "Sorcery",
         "cmc": 2,
     }

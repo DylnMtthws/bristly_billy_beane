@@ -225,7 +225,15 @@ def feedback_export():
         )
 
     buf = io.StringIO()
-    fields = ["user", "deck_id", "commander", "card_name", "vote", "comment", "updated_at"]
+    fields = [
+        "user",
+        "deck_id",
+        "commander",
+        "card_name",
+        "vote",
+        "comment",
+        "updated_at",
+    ]
     writer = csv.DictWriter(buf, fieldnames=fields)
     writer.writeheader()
     for row in card_rows:

@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 _CONFIG_PATH = (
     Path(__file__).resolve().parent.parent.parent.parent
-    / "config" / "archetype_signatures.yaml"
+    / "config"
+    / "archetype_signatures.yaml"
 )
 
 
@@ -54,8 +55,8 @@ class DeckClassification(BaseModel):
     """Result of scoring one deck against the library."""
 
     scores: dict[str, float]
-    labels: list[str]           # every archetype at/above its min_score
-    dominant: str | None        # highest-scoring archetype clearing threshold
+    labels: list[str]  # every archetype at/above its min_score
+    dominant: str | None  # highest-scoring archetype clearing threshold
 
 
 def normalize_name(name: str) -> str:
@@ -177,9 +178,7 @@ def classify_deck(
     return DeckClassification(scores=scores, labels=labels, dominant=dominant)
 
 
-def tags_to_archetypes(
-    tags: Iterable[str], library: ArchetypeLibrary
-) -> set[str]:
+def tags_to_archetypes(tags: Iterable[str], library: ArchetypeLibrary) -> set[str]:
     """Map creator-assigned tags to the archetypes they alias (validation gold).
 
     Args:

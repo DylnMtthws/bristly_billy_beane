@@ -1,9 +1,11 @@
 """Tests for hypergeometric role targets (Step 1 of synergy optimizer)."""
 
+from datetime import datetime
+
 from sabermetrics.analytics.role_targets import (
     ROLE_TIMING,
-    copies_for_reliability,
     compute_role_targets,
+    copies_for_reliability,
     role_need_multiplier,
 )
 from sabermetrics.models.profile import (
@@ -22,7 +24,6 @@ from sabermetrics.models.profile import (
     WinCondition,
 )
 from sabermetrics.models.template import DeckTemplate
-from datetime import datetime
 
 
 def _make_profile(
@@ -107,6 +108,7 @@ def _make_template(**kwargs) -> DeckTemplate:
 
 # --- copies_for_reliability ---
 
+
 def test_copies_for_reliability_known_values() -> None:
     """Verify against hand-calculated hypergeometric values.
 
@@ -142,6 +144,7 @@ def test_copies_for_reliability_many_cards_seen() -> None:
 
 # --- role_need_multiplier ---
 
+
 def test_role_need_multiplier_curve() -> None:
     """Verify the sigmoid-like step function shape."""
     # Critically underserved
@@ -168,6 +171,7 @@ def test_role_need_multiplier_curve() -> None:
 
 
 # --- compute_role_targets ---
+
 
 def test_compute_role_targets_uses_template_floors() -> None:
     """Template ramp_count should be the floor for ramp target."""
@@ -206,9 +210,7 @@ def test_commander_draw_reduces_draw_target() -> None:
     # Commander without draw
     profile_no_draw = _make_profile()
     # Commander with draw
-    profile_draw = _make_profile(
-        triggered="Whenever a creature dies, draw a card"
-    )
+    profile_draw = _make_profile(triggered="Whenever a creature dies, draw a card")
 
     template = _make_template()
     targets_no_draw = compute_role_targets(profile_no_draw, template)

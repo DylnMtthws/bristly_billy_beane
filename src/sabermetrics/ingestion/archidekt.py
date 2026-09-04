@@ -287,7 +287,9 @@ class ArchidektIngestion(DecklistIngestionBase):
             if resp.status_code != 200:
                 logger.debug(
                     "[archidekt] search page %d for '%s' returned %d",
-                    page, exact_name, resp.status_code,
+                    page,
+                    exact_name,
+                    resp.status_code,
                 )
                 return [], False
             data = resp.json()
@@ -296,7 +298,9 @@ class ArchidektIngestion(DecklistIngestionBase):
         except (httpx.HTTPError, json.JSONDecodeError) as e:
             logger.warning(
                 "[archidekt] search page %d for '%s' failed: %s",
-                page, exact_name, e,
+                page,
+                exact_name,
+                e,
             )
             return [], False
 
@@ -337,12 +341,15 @@ class ArchidektIngestion(DecklistIngestionBase):
             if resp.status_code != 200:
                 logger.debug(
                     "[archidekt] detail for deck %s returned %d",
-                    deck_id, resp.status_code,
+                    deck_id,
+                    resp.status_code,
                 )
                 return False
             data = resp.json()
         except (httpx.HTTPError, json.JSONDecodeError) as e:
-            logger.warning("[archidekt] detail fetch for deck %s failed: %s", deck_id, e)
+            logger.warning(
+                "[archidekt] detail fetch for deck %s failed: %s", deck_id, e
+            )
             return False
 
         commander_names, cards = parse_deck_detail(data)
@@ -350,7 +357,9 @@ class ArchidektIngestion(DecklistIngestionBase):
             # The card is in the deck but not as the commander — reject.
             logger.debug(
                 "[archidekt] deck %s not commanded by '%s' (commanders=%s); skipping",
-                deck_id, intended_name, commander_names,
+                deck_id,
+                intended_name,
+                commander_names,
             )
             return False
         if not cards:
@@ -359,18 +368,20 @@ class ArchidektIngestion(DecklistIngestionBase):
         meta = extract_summary_metadata(summary)
         deck_name = summary.get("name") or data.get("name") or f"Deck {deck_id}"
 
-        raw_data = json.dumps({
-            "archidekt_deck_id": deck_id,
-            "sort_used": sort,
-            "popularity_rank": rank,
-            "view_count": meta["view_count"],
-            "power_bracket": meta["power_tier"],
-            "has_primer": meta["has_primer"],
-            "tags": meta["tags"],
-            "created_at": meta["created_at"],
-            "updated_at": meta["updated_at"],
-            "commanders": commander_names,
-        })
+        raw_data = json.dumps(
+            {
+                "archidekt_deck_id": deck_id,
+                "sort_used": sort,
+                "popularity_rank": rank,
+                "view_count": meta["view_count"],
+                "power_bracket": meta["power_tier"],
+                "has_primer": meta["has_primer"],
+                "tags": meta["tags"],
+                "created_at": meta["created_at"],
+                "updated_at": meta["updated_at"],
+                "commanders": commander_names,
+            }
+        )
 
         conn = sqlite3.connect(str(self.db_path))
         conn.execute("PRAGMA foreign_keys = ON")
@@ -383,9 +394,7 @@ class ArchidektIngestion(DecklistIngestionBase):
                 (self.source_name, url),
             ).fetchone()
             if existing is not None:
-                conn.execute(
-                    "DELETE FROM deck_cards WHERE deck_id = ?", (existing[0],)
-                )
+                conn.execute("DELETE FROM deck_cards WHERE deck_id = ?", (existing[0],))
                 conn.execute("DELETE FROM decks WHERE id = ?", (existing[0],))
 
             new_deck_id = str(uuid.uuid4())
@@ -423,7 +432,10 @@ class ArchidektIngestion(DecklistIngestionBase):
             conn.commit()
             logger.debug(
                 "[archidekt] stored deck %s (rank %d, %d/%d cards resolved)",
-                deck_id, rank, stored_cards, len(cards),
+                deck_id,
+                rank,
+                stored_cards,
+                len(cards),
             )
             return True
         except sqlite3.Error as e:
@@ -474,9 +486,7 @@ class ArchidektIngestion(DecklistIngestionBase):
         failed = 0
 
         if sort not in VALID_SORTS:
-            raise ValueError(
-                f"sort must be one of {sorted(VALID_SORTS)}, got {sort!r}"
-            )
+            raise ValueError(f"sort must be one of {sorted(VALID_SORTS)}, got {sort!r}")
 
         resolved = self._resolve_commander(commander)
         if resolved is None:
@@ -497,7 +507,9 @@ class ArchidektIngestion(DecklistIngestionBase):
         commander_id, exact_name = resolved
         logger.info(
             "[archidekt] ingesting up to %d '%s' decks by %s",
-            target, exact_name, sort,
+            target,
+            exact_name,
+            sort,
         )
 
         try:
@@ -552,16 +564,23 @@ class ArchidektIngestion(DecklistIngestionBase):
             logger.info(
                 "[archidekt] '%s': %d decks stored, %d rejected/failed "
                 "(examined %d/%d candidates over %d pages)",
-                exact_name, ingested, failed, candidates_examined,
-                max_candidates, page,
+                exact_name,
+                ingested,
+                failed,
+                candidates_examined,
+                max_candidates,
+                page,
             )
             if ingested < target and candidates_examined >= max_candidates:
                 logger.warning(
                     "[archidekt] '%s' hit the %d-candidate cap with only %d/%d "
                     "verified decks — likely lacks enough distinct popular decks",
-                    exact_name, max_candidates, ingested, target,
+                    exact_name,
+                    max_candidates,
+                    ingested,
+                    target,
                 )
-        except Exception as e:  # noqa: BLE001 — report, don't crash the run
+        except Exception as e:
             errors.append(str(e))
             self._update_source_health(success=False, error=str(e))
             success = False

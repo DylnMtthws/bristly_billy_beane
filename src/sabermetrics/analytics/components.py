@@ -62,9 +62,7 @@ def _is_ramp(card: dict) -> bool:
     if "creature" in type_line and _matches_any(oracle, _RAMP_RE):
         return True
     # Land ramp spells
-    if _matches_any(oracle, _RAMP_RE):
-        return True
-    return False
+    return bool(_matches_any(oracle, _RAMP_RE))
 
 
 def count_ramp_spells(cards: list[dict]) -> int:
@@ -116,7 +114,9 @@ def count_tutors(cards: list[dict]) -> int:
         # Exclude land search (that's ramp, not tutoring)
         if _matches_any(oracle, _TUTOR_RE):
             # Don't double-count basic land search as tutoring
-            if not re.search(r"search your library for a (?:basic )?land", oracle, re.IGNORECASE):
+            if not re.search(
+                r"search your library for a (?:basic )?land", oracle, re.IGNORECASE
+            ):
                 count += 1
     return count
 
@@ -148,8 +148,11 @@ def analyze_mana_base(cards: list[dict], commander_colors: list[str]) -> ManaBas
 
         # Basic land type detection
         land_color_map = {
-            "plains": "W", "island": "U", "swamp": "B",
-            "mountain": "R", "forest": "G",
+            "plains": "W",
+            "island": "U",
+            "swamp": "B",
+            "mountain": "R",
+            "forest": "G",
         }
         found_color = False
         for land_type, color in land_color_map.items():
@@ -183,11 +186,13 @@ def analyze_mana_base(cards: list[dict], commander_colors: list[str]) -> ManaBas
 
     # Count mana rocks and dorks
     mana_rocks = sum(
-        1 for c in non_lands
+        1
+        for c in non_lands
         if "artifact" in (c.get("type_line") or "").lower() and _is_ramp(c)
     )
     mana_dorks = sum(
-        1 for c in non_lands
+        1
+        for c in non_lands
         if "creature" in (c.get("type_line") or "").lower() and _is_ramp(c)
     )
     total_ramp = count_ramp_spells(non_lands)

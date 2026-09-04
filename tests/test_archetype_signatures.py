@@ -40,8 +40,11 @@ def test_classify_deck_multilabel_and_dominant() -> None:
     # Strong aristocrats + one sub-threshold token signal (Cathars' Crusade
     # is weight 0.8 for tokens, below the 1.0 min_score on its own).
     deck = [
-        "Blood Artist", "Zulaport Cutthroat", "Cruel Celebrant",
-        "Bastion of Remembrance", "Cathars' Crusade",
+        "Blood Artist",
+        "Zulaport Cutthroat",
+        "Cruel Celebrant",
+        "Bastion of Remembrance",
+        "Cathars' Crusade",
     ]
     result = classify_deck(deck, LIB)
     assert result.dominant == "aristocrats"

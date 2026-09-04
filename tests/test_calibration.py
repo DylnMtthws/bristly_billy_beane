@@ -13,13 +13,15 @@ from pathlib import Path
 
 import pytest
 
+from tests._populated_db import HAS_POPULATED_DB, SKIP_REASON
+
 DB = Path("data/sabermetrics.db")
 _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 
-@pytest.mark.skipif(not DB.exists(), reason="needs decklist DB")
+@pytest.mark.skipif(not HAS_POPULATED_DB, reason=SKIP_REASON)
 def test_cvar_scorer_beats_random_on_real_decks() -> None:
     from calibrate_scoring import calibrate
 

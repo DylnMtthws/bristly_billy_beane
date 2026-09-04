@@ -3,8 +3,62 @@
 
 {% block content %}
 <div class="mx-auto max-w-sm">
+{% if tailscale and not password %}
+    {# Tailnet auth: there is nothing to submit. Say which of the two things
+       went wrong, because "invalid login" would be false in both cases. #}
+    <h1 class="text-2xl font-bold tracking-tight">No access</h1>
+    {% if identity is none %}
+    <p class="mt-2 text-sm text-muted">
+        This app takes your identity from Tailscale, so there is no password to
+        enter. The request did not arrive through the tailnet.
+    </p>
+    <div class="mt-4 rounded-xl border border-line bg-panel p-4 text-sm text-body/90">
+        <p class="font-medium text-body">Reach it at the tailnet address</p>
+        <p class="mt-1 text-muted">
+            Connect to the tailnet, then open the
+            <code class="text-brand">.ts.net</code> address the admin gave you.
+            Opening <code>localhost</code> directly will always land here.
+        </p>
+    </div>
+    {% else %}
+    <p class="mt-2 text-sm text-muted">
+        Tailscale identified you as
+        <code class="text-brand">{{ identity.login }}</code>{% if identity.display_name %}
+        ({{ identity.display_name }}){% endif %}.
+    </p>
+    <div class="mt-4 rounded-xl border border-line bg-panel p-4 text-sm text-body/90">
+        {% if disabled %}
+        <p class="font-medium text-body">This account has been disabled.</p>
+        <p class="mt-1 text-muted">Ask the admin to re-enable it.</p>
+        {% else %}
+        <p class="font-medium text-body">That identity has no account here.</p>
+        <p class="mt-1 text-muted">
+            Being on the tailnet lets you reach the app; it does not grant an
+            account. Ask the admin to run:
+        </p>
+        <pre class="mt-2 overflow-x-auto rounded-lg bg-ink px-3 py-2 text-xs text-body/80">sabermetrics grant-access {{ identity.login }}</pre>
+        {% endif %}
+    </div>
+    {% endif %}
+{% else %}
     <h1 class="text-2xl font-bold tracking-tight">Sign In</h1>
     <p class="mt-1 text-sm text-muted">Accounts are invite-only. Ask the admin for a link.</p>
+
+    {% if identity %}
+    {# Hybrid: they are on the tailnet but that identity has no account, so the
+       password form is the one thing that can still help them. #}
+    <div class="mt-4 rounded-xl border border-line bg-panel p-4 text-sm">
+        <p class="text-body">
+            Tailscale knows you as <code class="text-brand">{{ identity.login }}</code>,
+            but that identity has no account here.
+        </p>
+        <p class="mt-1 text-muted">
+            Sign in below, or ask the admin to run
+            <code>sabermetrics grant-access {{ identity.login }}</code> so you
+            do not need a password on the tailnet.
+        </p>
+    </div>
+    {% endif %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
@@ -30,5 +84,6 @@
             Sign In
         </button>
     </form>
+{% endif %}
 </div>
 {% endblock %}

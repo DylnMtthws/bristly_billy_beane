@@ -58,27 +58,45 @@ def _make_synergy(cards, scores=None) -> SynergyMatrix:
                 matrix[ia, ib] = score
                 matrix[ib, ia] = score
 
-    return SynergyMatrix(matrix=matrix, card_id_to_index=id_to_idx, index_to_card_id=idx_to_id)
+    return SynergyMatrix(
+        matrix=matrix, card_id_to_index=id_to_idx, index_to_card_id=idx_to_id
+    )
 
 
 def _make_role_targets(**overrides) -> dict[str, RoleTarget]:
     """Build role targets with sensible defaults."""
     defaults = {
         "ramp": RoleTarget(
-            role="ramp", target_count=10, min_count=8,
-            max_count=14, need_by_turn=3, reliability=0.8,
+            role="ramp",
+            target_count=10,
+            min_count=8,
+            max_count=14,
+            need_by_turn=3,
+            reliability=0.8,
         ),
         "draw": RoleTarget(
-            role="draw", target_count=8, min_count=6,
-            max_count=12, need_by_turn=4, reliability=0.8,
+            role="draw",
+            target_count=8,
+            min_count=6,
+            max_count=12,
+            need_by_turn=4,
+            reliability=0.8,
         ),
         "removal": RoleTarget(
-            role="removal", target_count=7, min_count=5,
-            max_count=11, need_by_turn=5, reliability=0.75,
+            role="removal",
+            target_count=7,
+            min_count=5,
+            max_count=11,
+            need_by_turn=5,
+            reliability=0.75,
         ),
         "wincon": RoleTarget(
-            role="wincon", target_count=3, min_count=2,
-            max_count=6, need_by_turn=9, reliability=0.7,
+            role="wincon",
+            target_count=3,
+            min_count=2,
+            max_count=6,
+            need_by_turn=9,
+            reliability=0.7,
         ),
     }
     defaults.update(overrides)
@@ -101,15 +119,20 @@ def _make_template(**kwargs) -> DeckTemplate:
 
 # --- Greedy fill tests ---
 
+
 def test_greedy_fills_critical_roles_first() -> None:
     """With empty sac outlet role, greedy should prefer sac outlet over higher-CVAR utility."""
     sac_outlet = _make_card(
-        card_id="sac", name="Viscera Seer",
-        role_tags='["removal"]', cvar_score=0.4,
+        card_id="sac",
+        name="Viscera Seer",
+        role_tags='["removal"]',
+        cvar_score=0.4,
     )
     utility_card = _make_card(
-        card_id="util", name="Generic Good Card",
-        role_tags='["utility"]', cvar_score=0.7,
+        card_id="util",
+        name="Generic Good Card",
+        role_tags='["utility"]',
+        cvar_score=0.7,
     )
 
     all_cards = [sac_outlet, utility_card]
@@ -174,16 +197,22 @@ def test_greedy_respects_budget() -> None:
 def test_greedy_excludes_lands() -> None:
     """Greedy fill should not pick land cards (they're handled by infrastructure)."""
     land = _make_card(
-        card_id="land1", name="Forest", type_line="Basic Land — Forest",
-        role_tags='["land"]', cvar_score=0.9,
+        card_id="land1",
+        name="Forest",
+        type_line="Basic Land — Forest",
+        role_tags='["land"]',
+        cvar_score=0.9,
     )
     spell = _make_card(card_id="spell1", name="Spell", cvar_score=0.3)
     all_cards = [land, spell]
     synergy = _make_synergy(all_cards)
 
     assignments = greedy_fill(
-        shell=[], candidates=all_cards, synergy=synergy,
-        role_targets=_make_role_targets(), budget_remaining=100.0,
+        shell=[],
+        candidates=all_cards,
+        synergy=synergy,
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
         slots_remaining=2,
     )
     names = {a.card.get("name") for a in assignments}
@@ -191,6 +220,7 @@ def test_greedy_excludes_lands() -> None:
 
 
 # --- Swap refinement ---
+
 
 def test_swap_improves_objective() -> None:
     """After swap refinement, objective should be >= before."""
@@ -201,12 +231,17 @@ def test_swap_improves_objective() -> None:
     synergy = _make_synergy(all_cards)
     role_targets = _make_role_targets()
 
-    deck = [SlotAssignment(card=weak_card, slot_role="utility", score=0.1, alternatives=[])]
+    deck = [
+        SlotAssignment(card=weak_card, slot_role="utility", score=0.1, alternatives=[])
+    ]
     obj_before = deck_objective([a.card for a in deck], synergy, role_targets)
 
-    improved_deck, swaps = swap_refine(
-        deck=deck, candidates=all_cards, synergy=synergy,
-        role_targets=role_targets, budget=100.0,
+    improved_deck, _swaps = swap_refine(
+        deck=deck,
+        candidates=all_cards,
+        synergy=synergy,
+        role_targets=role_targets,
+        budget=100.0,
     )
     obj_after = deck_objective([a.card for a in improved_deck], synergy, role_targets)
     assert obj_after >= obj_before
@@ -215,7 +250,9 @@ def test_swap_improves_objective() -> None:
 def test_swap_preserves_lands() -> None:
     """Lands should not be swapped when protect_lands=True."""
     land = _make_card(
-        card_id="land", name="Forest", type_line="Basic Land — Forest",
+        card_id="land",
+        name="Forest",
+        type_line="Basic Land — Forest",
         role_tags='["land"]',
     )
     spell = _make_card(card_id="spell", name="Better Spell", cvar_score=0.9)
@@ -224,8 +261,12 @@ def test_swap_preserves_lands() -> None:
 
     deck = [SlotAssignment(card=land, slot_role="land", score=0.1, alternatives=[])]
     improved_deck, _ = swap_refine(
-        deck=deck, candidates=all_cards, synergy=synergy,
-        role_targets=_make_role_targets(), budget=100.0, protect_lands=True,
+        deck=deck,
+        candidates=all_cards,
+        synergy=synergy,
+        role_targets=_make_role_targets(),
+        budget=100.0,
+        protect_lands=True,
     )
     assert improved_deck[0].card.get("name") == "Forest"
 
@@ -233,12 +274,16 @@ def test_swap_preserves_lands() -> None:
 def test_swap_can_upgrade_infrastructure() -> None:
     """Generic ramp can be replaced by synergy-relevant ramp."""
     generic_ramp = _make_card(
-        card_id="gen", name="Generic Ramp",
-        role_tags='["ramp"]', cvar_score=0.3,
+        card_id="gen",
+        name="Generic Ramp",
+        role_tags='["ramp"]',
+        cvar_score=0.3,
     )
     synergy_ramp = _make_card(
-        card_id="syn", name="Synergy Ramp",
-        role_tags='["ramp"]', cvar_score=0.8,
+        card_id="syn",
+        name="Synergy Ramp",
+        role_tags='["ramp"]',
+        cvar_score=0.8,
     )
     # Synergy ramp has high synergy with a deck card
     deck_card = _make_card(card_id="deck1", name="Deck Card", cvar_score=0.5)
@@ -256,14 +301,21 @@ def test_swap_can_upgrade_infrastructure() -> None:
     # Set ramp min_count=1 so we don't block the swap
     role_targets = _make_role_targets(
         ramp=RoleTarget(
-            role="ramp", target_count=2, min_count=1,
-            max_count=5, need_by_turn=3, reliability=0.8,
+            role="ramp",
+            target_count=2,
+            min_count=1,
+            max_count=5,
+            need_by_turn=3,
+            reliability=0.8,
         ),
     )
 
     improved_deck, swaps = swap_refine(
-        deck=deck, candidates=all_cards, synergy=synergy,
-        role_targets=role_targets, budget=100.0,
+        deck=deck,
+        candidates=all_cards,
+        synergy=synergy,
+        role_targets=role_targets,
+        budget=100.0,
     )
     # The swap should have happened — synergy ramp replaces generic ramp
     names = {a.card.get("name") for a in improved_deck}
@@ -274,12 +326,16 @@ def test_swap_can_upgrade_infrastructure() -> None:
 def test_swap_respects_role_minimums() -> None:
     """Won't swap out last removal if that drops below min_count."""
     only_removal = _make_card(
-        card_id="rem", name="Only Removal",
-        role_tags='["removal"]', cvar_score=0.2,
+        card_id="rem",
+        name="Only Removal",
+        role_tags='["removal"]',
+        cvar_score=0.2,
     )
     better_utility = _make_card(
-        card_id="util", name="Better Utility",
-        role_tags='["utility"]', cvar_score=0.9,
+        card_id="util",
+        name="Better Utility",
+        role_tags='["utility"]',
+        cvar_score=0.9,
     )
     all_cards = [only_removal, better_utility]
     synergy = _make_synergy(all_cards)
@@ -287,10 +343,17 @@ def test_swap_respects_role_minimums() -> None:
     # min_count for removal is 5, and we only have 1
     role_targets = _make_role_targets()
 
-    deck = [SlotAssignment(card=only_removal, slot_role="removal", score=0.2, alternatives=[])]
+    deck = [
+        SlotAssignment(
+            card=only_removal, slot_role="removal", score=0.2, alternatives=[]
+        )
+    ]
     improved_deck, swaps = swap_refine(
-        deck=deck, candidates=all_cards, synergy=synergy,
-        role_targets=role_targets, budget=100.0,
+        deck=deck,
+        candidates=all_cards,
+        synergy=synergy,
+        role_targets=role_targets,
+        budget=100.0,
     )
     # Should NOT have swapped — would drop removal below min_count
     assert improved_deck[0].card.get("name") == "Only Removal"
@@ -298,6 +361,7 @@ def test_swap_respects_role_minimums() -> None:
 
 
 # --- Deck objective ---
+
 
 def test_deck_objective_rewards_synergy() -> None:
     """Deck with synergistic cards should score higher than random."""
@@ -322,12 +386,22 @@ def test_deck_objective_penalizes_missing_roles() -> None:
     """Deck missing removal should score lower."""
     # All utility, no removal
     cards_no_removal = [
-        _make_card(card_id=f"u{i}", name=f"Utility {i}", role_tags='["utility"]', cvar_score=0.5)
+        _make_card(
+            card_id=f"u{i}",
+            name=f"Utility {i}",
+            role_tags='["utility"]',
+            cvar_score=0.5,
+        )
         for i in range(5)
     ]
     # Some removal present
     cards_with_removal = [
-        _make_card(card_id=f"r{i}", name=f"Removal {i}", role_tags='["removal"]', cvar_score=0.5)
+        _make_card(
+            card_id=f"r{i}",
+            name=f"Removal {i}",
+            role_tags='["removal"]',
+            cvar_score=0.5,
+        )
         for i in range(5)
     ]
 
@@ -353,10 +427,15 @@ def test_marginal_value_prefers_synergistic_card() -> None:
     )
     role_targets = _make_role_targets()
 
-    shell = [SlotAssignment(card=deck_card, slot_role="utility", score=0.5, alternatives=[])]
+    shell = [
+        SlotAssignment(card=deck_card, slot_role="utility", score=0.5, alternatives=[])
+    ]
     assignments = greedy_fill(
-        shell=shell, candidates=all_cards, synergy=synergy,
-        role_targets=role_targets, budget_remaining=100.0,
+        shell=shell,
+        candidates=all_cards,
+        synergy=synergy,
+        role_targets=role_targets,
+        budget_remaining=100.0,
         slots_remaining=1,
     )
     assert len(assignments) == 1
@@ -373,12 +452,16 @@ def test_deck_objective_empty_deck() -> None:
 def test_swap_protects_named_cards() -> None:
     """Cards in protected_names should never be swapped out."""
     sol_ring = _make_card(
-        card_id="sol", name="Sol Ring",
-        role_tags='["ramp"]', cvar_score=0.3,  # Low CVAR to tempt swap
+        card_id="sol",
+        name="Sol Ring",
+        role_tags='["ramp"]',
+        cvar_score=0.3,  # Low CVAR to tempt swap
     )
     synergy_bomb = _make_card(
-        card_id="bomb", name="Synergy Bomb",
-        role_tags='["ramp"]', cvar_score=0.95,
+        card_id="bomb",
+        name="Synergy Bomb",
+        role_tags='["ramp"]',
+        cvar_score=0.95,
     )
     deck_card = _make_card(card_id="deck1", name="Deck Card", cvar_score=0.5)
 
@@ -389,8 +472,12 @@ def test_swap_protects_named_cards() -> None:
     )
     role_targets = _make_role_targets(
         ramp=RoleTarget(
-            role="ramp", target_count=2, min_count=1,
-            max_count=5, need_by_turn=3, reliability=0.8,
+            role="ramp",
+            target_count=2,
+            min_count=1,
+            max_count=5,
+            need_by_turn=3,
+            reliability=0.8,
         ),
     )
 
@@ -400,9 +487,12 @@ def test_swap_protects_named_cards() -> None:
     ]
 
     # Without protection, Sol Ring could be swapped for Synergy Bomb
-    improved_deck, swaps = swap_refine(
-        deck=deck, candidates=all_cards, synergy=synergy,
-        role_targets=role_targets, budget=100.0,
+    improved_deck, _swaps = swap_refine(
+        deck=deck,
+        candidates=all_cards,
+        synergy=synergy,
+        role_targets=role_targets,
+        budget=100.0,
         protected_names={"Sol Ring"},
     )
     # Sol Ring should still be in the deck
@@ -431,8 +521,11 @@ def test_full_optimizer_produces_correct_count() -> None:
     role_targets = _make_role_targets()
 
     assignments = greedy_fill(
-        shell=shell, candidates=all_cards, synergy=synergy,
-        role_targets=role_targets, budget_remaining=100.0,
+        shell=shell,
+        candidates=all_cards,
+        synergy=synergy,
+        role_targets=role_targets,
+        budget_remaining=100.0,
         slots_remaining=5,
     )
     total = len(shell) + len(assignments)
@@ -442,12 +535,16 @@ def test_full_optimizer_produces_correct_count() -> None:
 def test_swap_protects_removal_staples() -> None:
     """Removal staples in protected_names should not be swapped out."""
     swords = _make_card(
-        card_id="stp", name="Swords to Plowshares",
-        role_tags='["removal"]', cvar_score=0.3,  # Low CVAR to tempt swap
+        card_id="stp",
+        name="Swords to Plowshares",
+        role_tags='["removal"]',
+        cvar_score=0.3,  # Low CVAR to tempt swap
     )
     better_removal = _make_card(
-        card_id="better", name="Better Removal",
-        role_tags='["removal"]', cvar_score=0.95,
+        card_id="better",
+        name="Better Removal",
+        role_tags='["removal"]',
+        cvar_score=0.95,
     )
     deck_card = _make_card(card_id="deck1", name="Deck Card", cvar_score=0.5)
 
@@ -458,8 +555,12 @@ def test_swap_protects_removal_staples() -> None:
     )
     role_targets = _make_role_targets(
         removal=RoleTarget(
-            role="removal", target_count=2, min_count=1,
-            max_count=5, need_by_turn=5, reliability=0.75,
+            role="removal",
+            target_count=2,
+            min_count=1,
+            max_count=5,
+            need_by_turn=5,
+            reliability=0.75,
         ),
     )
 
@@ -468,9 +569,12 @@ def test_swap_protects_removal_staples() -> None:
         SlotAssignment(card=deck_card, slot_role="utility", score=0.5, alternatives=[]),
     ]
 
-    improved_deck, swaps = swap_refine(
-        deck=deck, candidates=all_cards, synergy=synergy,
-        role_targets=role_targets, budget=100.0,
+    improved_deck, _swaps = swap_refine(
+        deck=deck,
+        candidates=all_cards,
+        synergy=synergy,
+        role_targets=role_targets,
+        budget=100.0,
         protected_names={"Swords to Plowshares"},
     )
     names = {a.card.get("name") for a in improved_deck}
@@ -479,23 +583,30 @@ def test_swap_protects_removal_staples() -> None:
 
 # --- Profile alignment tests ---
 
+
 def test_deck_objective_with_profile_signals_boosts_aligned_deck() -> None:
     """Deck with cards matching profile keywords should score higher."""
     # Defender cards (matching Arcades profile signals)
     defender_cards = [
         _make_card(
-            card_id=f"def-{i}", name=f"Wall {i}",
-            oracle_text="defender", type_line="Creature — Wall",
-            role_tags='["utility"]', cvar_score=0.5,
+            card_id=f"def-{i}",
+            name=f"Wall {i}",
+            oracle_text="defender",
+            type_line="Creature — Wall",
+            role_tags='["utility"]',
+            cvar_score=0.5,
         )
         for i in range(5)
     ]
     # Generic cards (no defender match)
     generic_cards = [
         _make_card(
-            card_id=f"gen-{i}", name=f"Generic {i}",
-            oracle_text="draw a card", type_line="Creature",
-            role_tags='["utility"]', cvar_score=0.5,
+            card_id=f"gen-{i}",
+            name=f"Generic {i}",
+            oracle_text="draw a card",
+            type_line="Creature",
+            role_tags='["utility"]',
+            cvar_score=0.5,
         )
         for i in range(5)
     ]
@@ -510,23 +621,26 @@ def test_deck_objective_with_profile_signals_boosts_aligned_deck() -> None:
     )
 
     score_aligned = deck_objective(
-        defender_cards, synergy, role_targets,
+        defender_cards,
+        synergy,
+        role_targets,
         profile_signals=arcades_signals,
     )
     score_generic = deck_objective(
-        generic_cards, synergy, role_targets,
+        generic_cards,
+        synergy,
+        role_targets,
         profile_signals=arcades_signals,
     )
-    assert score_aligned > score_generic, (
-        f"Aligned deck ({score_aligned:.4f}) should beat generic ({score_generic:.4f})"
-    )
+    assert (
+        score_aligned > score_generic
+    ), f"Aligned deck ({score_aligned:.4f}) should beat generic ({score_generic:.4f})"
 
 
 def test_deck_objective_none_profile_signals_is_neutral() -> None:
     """With profile_signals=None, objective uses neutral alignment (0.5)."""
     cards = [
-        _make_card(card_id=f"c{i}", name=f"Card {i}", cvar_score=0.5)
-        for i in range(3)
+        _make_card(card_id=f"c{i}", name=f"Card {i}", cvar_score=0.5) for i in range(3)
     ]
     synergy = _make_synergy(cards)
     role_targets = _make_role_targets()
@@ -541,38 +655,50 @@ def test_deck_objective_none_profile_signals_is_neutral() -> None:
 class TestIsPlayableAsLand:
     """Tests for front-face land detection."""
 
-    @pytest.mark.parametrize("type_line", [
-        "Land — Plains",
-        "Basic Land — Forest",
-        "Land — Cave",
-        "Legendary Land",
-    ])
+    @pytest.mark.parametrize(
+        "type_line",
+        [
+            "Land — Plains",
+            "Basic Land — Forest",
+            "Land — Cave",
+            "Legendary Land",
+        ],
+    )
     def test_pure_lands(self, type_line):
         assert is_playable_as_land(type_line) is True
 
-    @pytest.mark.parametrize("type_line", [
-        "Land — Plains // Land — Swamp",
-        "Land — Forest // Land — Mountain",
-    ])
+    @pytest.mark.parametrize(
+        "type_line",
+        [
+            "Land — Plains // Land — Swamp",
+            "Land — Forest // Land — Mountain",
+        ],
+    )
     def test_mdfc_both_lands(self, type_line):
         assert is_playable_as_land(type_line) is True
 
-    @pytest.mark.parametrize("type_line", [
-        "Artifact // Land",
-        "Legendary Enchantment // Legendary Land",
-        "Legendary Artifact — Book // Legendary Land — Cave",
-        "Enchantment — Aura // Land",
-    ])
+    @pytest.mark.parametrize(
+        "type_line",
+        [
+            "Artifact // Land",
+            "Legendary Enchantment // Legendary Land",
+            "Legendary Artifact — Book // Legendary Land — Cave",
+            "Enchantment — Aura // Land",
+        ],
+    )
     def test_transform_cards_not_lands(self, type_line):
         assert is_playable_as_land(type_line) is False
 
-    @pytest.mark.parametrize("type_line", [
-        "Creature — Elf Warrior",
-        "Instant",
-        "Sorcery",
-        "Artifact — Equipment",
-        "Enchantment — Aura",
-    ])
+    @pytest.mark.parametrize(
+        "type_line",
+        [
+            "Creature — Elf Warrior",
+            "Instant",
+            "Sorcery",
+            "Artifact — Equipment",
+            "Enchantment — Aura",
+        ],
+    )
     def test_non_lands(self, type_line):
         assert is_playable_as_land(type_line) is False
 
@@ -599,10 +725,12 @@ def test_empirical_bonus_is_zero_without_corpus_data() -> None:
 def test_empirical_bonus_scales_with_inclusion_and_reliability() -> None:
     """Reliable inclusion is weighted above noisy inclusion at the same rate."""
     reliable = _make_card() | {
-        "_empirical_inclusion": 0.9, "_empirical_reliable": True,
+        "_empirical_inclusion": 0.9,
+        "_empirical_reliable": True,
     }
     noisy = _make_card() | {
-        "_empirical_inclusion": 0.9, "_empirical_reliable": False,
+        "_empirical_inclusion": 0.9,
+        "_empirical_reliable": False,
     }
 
     assert _empirical_bonus(reliable) == pytest.approx(0.25 * 0.9)
@@ -618,12 +746,16 @@ def test_greedy_picks_empirical_staple_over_cheaper_jank() -> None:
     term the jank wins on CVAR alone.
     """
     staple = _make_card(
-        card_id="staple", name="Pitiless Plunderer",
-        role_tags='["utility"]', cvar_score=0.50,
+        card_id="staple",
+        name="Pitiless Plunderer",
+        role_tags='["utility"]',
+        cvar_score=0.50,
     ) | {"_empirical_inclusion": 0.90, "_empirical_reliable": True}
     jank = _make_card(
-        card_id="jank", name="On-Theme Jank",
-        role_tags='["utility"]', cvar_score=0.60,
+        card_id="jank",
+        name="On-Theme Jank",
+        role_tags='["utility"]',
+        cvar_score=0.60,
     )
 
     all_cards = [staple, jank]
@@ -669,10 +801,14 @@ def test_type_need_boosts_undersupplied_type() -> None:
     slightly stronger non-enchantment (the Eriette failure: 21 enchantments
     built vs a 36 median in real decks)."""
     ench = _make_card(
-        card_id="e", name="Wanted Enchantment", cvar_score=0.50,
+        card_id="e",
+        name="Wanted Enchantment",
+        cvar_score=0.50,
     ) | {"type_line": "Enchantment — Aura"}
     creature = _make_card(
-        card_id="c", name="Slightly Better Creature", cvar_score=0.60,
+        card_id="c",
+        name="Slightly Better Creature",
+        cvar_score=0.60,
     ) | {"type_line": "Creature — Human"}
 
     all_cards = [ench, creature]
@@ -695,16 +831,18 @@ def test_type_need_damps_oversupplied_type() -> None:
     """Past the target, more of the same type is damped, not stacked."""
     shell = [
         SlotAssignment(
-            card={"id": f"s{i}", "name": f"Shell Ench {i}",
-                  "type_line": "Enchantment"},
-            slot_role="utility", score=0.5,
+            card={"id": f"s{i}", "name": f"Shell Ench {i}", "type_line": "Enchantment"},
+            slot_role="utility",
+            score=0.5,
         )
         for i in range(10)
     ]
-    ench = _make_card(card_id="e", name="Yet Another Enchantment",
-                      cvar_score=0.60) | {"type_line": "Enchantment"}
-    creature = _make_card(card_id="c", name="Needed Creature",
-                          cvar_score=0.55) | {"type_line": "Creature"}
+    ench = _make_card(card_id="e", name="Yet Another Enchantment", cvar_score=0.60) | {
+        "type_line": "Enchantment"
+    }
+    creature = _make_card(card_id="c", name="Needed Creature", cvar_score=0.55) | {
+        "type_line": "Creature"
+    }
 
     all_cards = [ench, creature]
     assignments = greedy_fill(
@@ -728,21 +866,30 @@ def test_no_type_targets_changes_nothing() -> None:
     all_cards = [low, high]
 
     a = greedy_fill(
-        shell=[], candidates=all_cards, synergy=_make_synergy(all_cards),
-        role_targets=_make_role_targets(), budget_remaining=100.0,
-        slots_remaining=1, type_targets=None,
+        shell=[],
+        candidates=all_cards,
+        synergy=_make_synergy(all_cards),
+        role_targets=_make_role_targets(),
+        budget_remaining=100.0,
+        slots_remaining=1,
+        type_targets=None,
     )
     assert a[0].card["name"] == "High"
 
 
 def test_type_coherence_component() -> None:
     """Objective rewards decks near their type targets, neutral without them."""
-    from sabermetrics.pipeline.greedy_optimizer import _compute_type_coherence
     from sabermetrics.models.template import DeckTemplate
+    from sabermetrics.pipeline.greedy_optimizer import _compute_type_coherence
 
     t = DeckTemplate(
-        land_count=36, ramp_count=10, draw_count=8, removal_count=6,
-        board_wipe_count=2, differentiator_slots=37, avg_cmc_target=3.0,
+        land_count=36,
+        ramp_count=10,
+        draw_count=8,
+        removal_count=6,
+        board_wipe_count=2,
+        differentiator_slots=37,
+        avg_cmc_target=3.0,
         type_targets={"enchantment": 10},
     )
     on_target = [{"type_line": "Enchantment"}] * 10
@@ -758,17 +905,33 @@ def test_greedy_fills_all_slots_with_cheap_filler_when_budget_is_tight():
     with 21 slots unfilled, and legality backfilled 21 basics. When nothing
     clears the per-slot reserve but real budget remains, greedy must take
     cheap filler instead of giving up -- spells beat basics."""
-    from sabermetrics.analytics.synergy_matrix import SynergyMatrix
     import numpy as np
 
-    cards = (
-        [{"id": f"exp{i}", "name": f"Expensive {i}", "type_line": "Creature",
-          "price_usd": 8.0, "_cvar_score": 0.9, "role_tags": '["utility"]',
-          "oracle_text": ""} for i in range(3)]
-        + [{"id": f"chp{i}", "name": f"Cheap {i}", "type_line": "Creature",
-            "price_usd": 0.25, "_cvar_score": 0.3, "role_tags": '["utility"]',
-            "oracle_text": ""} for i in range(10)]
-    )
+    from sabermetrics.analytics.synergy_matrix import SynergyMatrix
+
+    cards = [
+        {
+            "id": f"exp{i}",
+            "name": f"Expensive {i}",
+            "type_line": "Creature",
+            "price_usd": 8.0,
+            "_cvar_score": 0.9,
+            "role_tags": '["utility"]',
+            "oracle_text": "",
+        }
+        for i in range(3)
+    ] + [
+        {
+            "id": f"chp{i}",
+            "name": f"Cheap {i}",
+            "type_line": "Creature",
+            "price_usd": 0.25,
+            "_cvar_score": 0.3,
+            "role_tags": '["utility"]',
+            "oracle_text": "",
+        }
+        for i in range(10)
+    ]
     ids = [c["id"] for c in cards]
     synergy = SynergyMatrix(
         matrix=np.zeros((len(ids), len(ids))),
@@ -780,8 +943,12 @@ def test_greedy_fills_all_slots_with_cheap_filler_when_budget_is_tight():
     # everything, but $2 remains -- the last-resort path must fill remaining
     # slots with $0.25 filler until the budget is truly gone.
     assignments = greedy_fill(
-        candidates=cards, shell=[], synergy=synergy, role_targets={},
-        slots_remaining=10, budget_remaining=26.0,
+        candidates=cards,
+        shell=[],
+        synergy=synergy,
+        role_targets={},
+        slots_remaining=10,
+        budget_remaining=26.0,
     )
     total = sum(float(a.card.get("price_usd", 0) or 0) for a in assignments)
     assert total <= 26.0
@@ -801,24 +968,36 @@ def test_greedy_fills_to_99_when_infrastructure_underproduces():
     count -- otherwise the deck reaches ~78 cards and legality backfills the
     rest with basic lands.
     """
-    from sabermetrics.analytics.synergy_matrix import SynergyMatrix
     import numpy as np
+
+    from sabermetrics.analytics.synergy_matrix import SynergyMatrix
 
     # A 58-card shell (36 lands + 22 spells) stands in for under-produced
     # infrastructure; 41 slots remain to reach 99.
     shell = [
         SlotAssignment(
-            card={"id": f"shell{i}", "name": f"Shell {i}",
-                  "type_line": "Land" if i < 36 else "Creature",
-                  "price_usd": 0.0, "role_tags": '["land"]' if i < 36 else '["utility"]'},
-            slot_role="land" if i < 36 else "utility", score=0.5,
+            card={
+                "id": f"shell{i}",
+                "name": f"Shell {i}",
+                "type_line": "Land" if i < 36 else "Creature",
+                "price_usd": 0.0,
+                "role_tags": '["land"]' if i < 36 else '["utility"]',
+            },
+            slot_role="land" if i < 36 else "utility",
+            score=0.5,
         )
         for i in range(58)
     ]
     cands = [
-        {"id": f"c{i}", "name": f"Cand {i}", "type_line": "Creature",
-         "price_usd": 0.5, "_cvar_score": 0.5, "role_tags": '["utility"]',
-         "oracle_text": ""}
+        {
+            "id": f"c{i}",
+            "name": f"Cand {i}",
+            "type_line": "Creature",
+            "price_usd": 0.5,
+            "_cvar_score": 0.5,
+            "role_tags": '["utility"]',
+            "oracle_text": "",
+        }
         for i in range(200)
     ]
     ids = [c["id"] for c in cands]
@@ -830,8 +1009,12 @@ def test_greedy_fills_to_99_when_infrastructure_underproduces():
 
     slots_remaining = 99 - len(shell)  # the pipeline's new formula
     out = greedy_fill(
-        candidates=cands, shell=shell, synergy=synergy, role_targets={},
-        slots_remaining=slots_remaining, budget_remaining=200.0,
+        candidates=cands,
+        shell=shell,
+        synergy=synergy,
+        role_targets={},
+        slots_remaining=slots_remaining,
+        budget_remaining=200.0,
     )
     assert len(out) == 41
     assert len(shell) + len(out) == 99
@@ -846,17 +1029,24 @@ def test_last_resort_fill_with_tracer_does_not_crash():
     assigned inside the scoring loop -- so with a tracer attached the build
     crashed with UnboundLocalError. Drives that exact path.
     """
+    import numpy as np
+
     from sabermetrics.analytics.synergy_matrix import SynergyMatrix
     from sabermetrics.pipeline.trace import GenerationTracer
-    import numpy as np
 
     # One eligible card, priced so it clears the actual budget but NOT the
     # per-slot reserve (reserve = $1/slot * many slots), forcing last-resort.
-    cards = [{
-        "id": "filler", "name": "Cheap Filler", "type_line": "Creature",
-        "price_usd": 0.50, "_cvar_score": 0.3, "role_tags": '["utility"]',
-        "oracle_text": "",
-    }]
+    cards = [
+        {
+            "id": "filler",
+            "name": "Cheap Filler",
+            "type_line": "Creature",
+            "price_usd": 0.50,
+            "_cvar_score": 0.3,
+            "role_tags": '["utility"]',
+            "oracle_text": "",
+        }
+    ]
     synergy = SynergyMatrix(
         matrix=np.zeros((1, 1)),
         card_id_to_index={"filler": 0},
@@ -868,8 +1058,13 @@ def test_last_resort_fill_with_tracer_does_not_crash():
     # 10 slots, $0.50 budget: reserve blocks the card in the scoring loop
     # (spendable = 0.5 - 9*1.0 < 0), but budget_left (0.5) fits it.
     out = greedy_fill(
-        candidates=cards, shell=[], synergy=synergy, role_targets={},
-        slots_remaining=10, budget_remaining=0.50, tracer=tracer,
+        candidates=cards,
+        shell=[],
+        synergy=synergy,
+        role_targets={},
+        slots_remaining=10,
+        budget_remaining=0.50,
+        tracer=tracer,
     )
     assert len(out) == 1
     assert out[0].card["name"] == "Cheap Filler"

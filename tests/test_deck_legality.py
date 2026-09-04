@@ -13,8 +13,8 @@ from types import SimpleNamespace
 import pytest
 
 from sabermetrics.pipeline.deck_builder import (
-    DeckBuilder,
     _BASIC_LAND_NAMES,
+    DeckBuilder,
     _make_basic_lands,
 )
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
@@ -96,8 +96,10 @@ def test_protected_cards_survive_trim() -> None:
 
 def test_duplicate_nonbasics_collapsed_keeping_best() -> None:
     cmd = _commander(colors=("B",))
-    deck = [_mk("Dup", score=0.2, ci=["B"], cid="lo"),
-            _mk("Dup", score=0.9, ci=["B"], cid="hi")]
+    deck = [
+        _mk("Dup", score=0.2, ci=["B"], cid="lo"),
+        _mk("Dup", score=0.9, ci=["B"], cid="hi"),
+    ]
     deck += [_mk(f"X{i}", ci=["B"]) for i in range(100)]
     out = _builder()._enforce_legality(deck, cmd)
     _assert_legal(out, cmd)
@@ -107,8 +109,8 @@ def test_duplicate_nonbasics_collapsed_keeping_best() -> None:
 
 def test_out_of_identity_and_commander_dropped() -> None:
     cmd = _commander(name="Cmdr", colors=("W",))
-    deck = [_mk("Cmdr", ci=["W"])]                       # commander itself
-    deck += [_mk("OffColor", ci=["B"])]                  # out of identity
+    deck = [_mk("Cmdr", ci=["W"])]  # commander itself
+    deck += [_mk("OffColor", ci=["B"])]  # out of identity
     deck += [_mk(f"OK{i}", ci=["W"]) for i in range(50)]
     out = _builder()._enforce_legality(deck, cmd)
     _assert_legal(out, cmd)

@@ -18,7 +18,9 @@ from sabermetrics.utils.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-COMPREHENSIVE_RULES_URL = "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
+COMPREHENSIVE_RULES_URL = (
+    "https://media.wizards.com/2026/downloads/MagicCompRules%2020260227.txt"
+)
 COMMANDER_RULES_URL = "https://mtgcommander.net/index.php/rules/"
 
 
@@ -55,9 +57,7 @@ class ReferenceIngestion:
                 resp = httpx.get(url, timeout=60, follow_redirects=True)
                 if resp.status_code == 200 and len(resp.text) > 10000:
                     output_path.write_text(resp.text, encoding="utf-8")
-                    logger.info(
-                        "Comprehensive Rules saved (%d bytes)", len(resp.text)
-                    )
+                    logger.info("Comprehensive Rules saved (%d bytes)", len(resp.text))
                     return output_path
             except httpx.HTTPError:
                 continue
@@ -153,9 +153,7 @@ class ReferenceIngestion:
             List of paths to saved article files.
         """
         if not config_path.exists():
-            logger.warning(
-                "No set_mechanics_articles.yaml found at %s", config_path
-            )
+            logger.warning("No set_mechanics_articles.yaml found at %s", config_path)
             return []
 
         with open(config_path) as f:
@@ -188,9 +186,7 @@ class ReferenceIngestion:
                     },
                 )
                 if resp.status_code == 404:
-                    logger.warning(
-                        "Mechanics article not found (404): %s", slug
-                    )
+                    logger.warning("Mechanics article not found (404): %s", slug)
                     failed.append(slug)
                     continue
                 resp.raise_for_status()
@@ -198,25 +194,20 @@ class ReferenceIngestion:
 
                 # Prepend set name header for context in RAG chunks
                 header = (
-                    f"Set Mechanics Article: {set_name}\n"
-                    f"Source: {url}\n"
-                    f"---\n\n"
+                    f"Set Mechanics Article: {set_name}\n" f"Source: {url}\n" f"---\n\n"
                 )
                 output_path.write_text(header + text, encoding="utf-8")
                 saved.append(output_path)
                 logger.info(
                     "Saved mechanics article '%s' (%d bytes)",
-                    slug, len(text),
+                    slug,
+                    len(text),
                 )
             except Exception as e:
-                logger.warning(
-                    "Failed to fetch mechanics article '%s': %s", slug, e
-                )
+                logger.warning("Failed to fetch mechanics article '%s': %s", slug, e)
                 failed.append(slug)
 
-        logger.info(
-            "Mechanics articles: %d saved, %d failed", len(saved), len(failed)
-        )
+        logger.info("Mechanics articles: %d saved, %d failed", len(saved), len(failed))
         if failed:
             logger.warning("Failed slugs: %s", ", ".join(failed))
 
@@ -232,9 +223,7 @@ class ReferenceIngestion:
         # Remove non-content structural elements
         text = html
         for tag in ("nav", "header", "footer", "aside"):
-            text = re.sub(
-                rf"<{tag}[^>]*>.*?</{tag}>", "", text, flags=re.DOTALL
-            )
+            text = re.sub(rf"<{tag}[^>]*>.*?</{tag}>", "", text, flags=re.DOTALL)
         # Remove script and style elements
         text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)

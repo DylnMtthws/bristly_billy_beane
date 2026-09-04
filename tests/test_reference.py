@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from sabermetrics.reference_layer.chunker import DocumentChunker, Chunk
+from sabermetrics.reference_layer.chunker import Chunk, DocumentChunker
 from sabermetrics.reference_layer.retriever import ReferenceQuery, RetrievedChunk
 
 
@@ -96,7 +96,9 @@ def test_chunker_game_changers() -> None:
 
 def test_synergy_rules_valid() -> None:
     """synergy_rules.yaml validates against expected schema (A3.4)."""
-    config_path = Path(__file__).resolve().parent.parent / "config" / "synergy_rules.yaml"
+    config_path = (
+        Path(__file__).resolve().parent.parent / "config" / "synergy_rules.yaml"
+    )
     with open(config_path) as f:
         data = yaml.safe_load(f)
 
@@ -109,9 +111,9 @@ def test_synergy_rules_valid() -> None:
         assert "payoff" in rule, f"Rule {rule['id']} missing payoff"
         assert "strength" in rule, f"Rule {rule['id']} missing strength"
         assert "description" in rule, f"Rule {rule['id']} missing description"
-        assert 0.0 <= rule["strength"] <= 1.0, (
-            f"Rule {rule['id']} strength {rule['strength']} out of range"
-        )
+        assert (
+            0.0 <= rule["strength"] <= 1.0
+        ), f"Rule {rule['id']} strength {rule['strength']} out of range"
 
 
 def test_reference_query_model() -> None:

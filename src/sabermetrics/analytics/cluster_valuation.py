@@ -42,9 +42,18 @@ logger = logging.getLogger(__name__)
 
 # Basic lands carry no valuation signal (present in ~every deck).
 _BASICS = {
-    "plains", "island", "swamp", "mountain", "forest", "wastes",
-    "snow-covered plains", "snow-covered island", "snow-covered swamp",
-    "snow-covered mountain", "snow-covered forest", "snow-covered wastes",
+    "plains",
+    "island",
+    "swamp",
+    "mountain",
+    "forest",
+    "wastes",
+    "snow-covered plains",
+    "snow-covered island",
+    "snow-covered swamp",
+    "snow-covered mountain",
+    "snow-covered forest",
+    "snow-covered wastes",
 }
 
 
@@ -58,8 +67,8 @@ class CardInclusion(BaseModel):
     ci_low: float
     ci_high: float
     margin_of_error: float
-    reliable: bool          # CI tight enough to trust the point estimate
-    lift_vs_rest: float     # inclusion here minus inclusion in all other clusters
+    reliable: bool  # CI tight enough to trust the point estimate
+    lift_vs_rest: float  # inclusion here minus inclusion in all other clusters
 
 
 class ClusterValuation(BaseModel):
@@ -69,9 +78,9 @@ class ClusterValuation(BaseModel):
     dominant_archetype: str
     size: int
     meets_floor: bool
-    staples: list[CardInclusion] = Field(default_factory=list)       # high + reliable
-    distinctive: list[CardInclusion] = Field(default_factory=list)   # high lift vs rest
-    low_confidence_count: int = 0   # cards whose rate is present but untrustworthy
+    staples: list[CardInclusion] = Field(default_factory=list)  # high + reliable
+    distinctive: list[CardInclusion] = Field(default_factory=list)  # high lift vs rest
+    low_confidence_count: int = 0  # cards whose rate is present but untrustworthy
 
 
 class CommanderValuation(BaseModel):
@@ -156,8 +165,12 @@ def compute_cluster_valuation(
 
     if len(decks) < 2:
         return CommanderValuation(
-            commander=commander, n_decks=len(decks), k=0, floor=floor,
-            clusters=[], caveats=[f"Only {len(decks)} decks — cannot value."],
+            commander=commander,
+            n_decks=len(decks),
+            k=0,
+            floor=floor,
+            clusters=[],
+            caveats=[f"Only {len(decks)} decks — cannot value."],
         )
 
     features, archetype_names = build_feature_matrix(decks, library, normalize)
@@ -192,39 +205,54 @@ def compute_cluster_valuation(
             moe = (hi - lo) / 2
             reliable = moe <= moe_threshold
             rest_rate = (rest_counts.get(name, 0) / rest_size) if rest_size else 0.0
-            cards.append(CardInclusion(
-                card_name=name, count=count, cluster_size=size,
-                inclusion_rate=round(rate, 3),
-                ci_low=round(lo, 3), ci_high=round(hi, 3),
-                margin_of_error=round(moe, 3), reliable=reliable,
-                lift_vs_rest=round(rate - rest_rate, 3),
-            ))
+            cards.append(
+                CardInclusion(
+                    card_name=name,
+                    count=count,
+                    cluster_size=size,
+                    inclusion_rate=round(rate, 3),
+                    ci_low=round(lo, 3),
+                    ci_high=round(hi, 3),
+                    margin_of_error=round(moe, 3),
+                    reliable=reliable,
+                    lift_vs_rest=round(rate - rest_rate, 3),
+                )
+            )
             if not reliable:
                 low_conf += 1
 
         staples = sorted(
-            (c for c in cards if c.reliable and c.inclusion_rate >= staple_min_inclusion),
-            key=lambda c: c.inclusion_rate, reverse=True,
+            (
+                c
+                for c in cards
+                if c.reliable and c.inclusion_rate >= staple_min_inclusion
+            ),
+            key=lambda c: c.inclusion_rate,
+            reverse=True,
         )
         distinctive = sorted(
             (
-                c for c in cards
+                c
+                for c in cards
                 if c.inclusion_rate >= distinctive_min_inclusion
                 and c.lift_vs_rest >= distinctive_min_lift
             ),
-            key=lambda c: c.lift_vs_rest, reverse=True,
+            key=lambda c: c.lift_vs_rest,
+            reverse=True,
         )
 
         top = centroid_ranks[cid]
-        clusters.append(ClusterValuation(
-            cluster_id=cid,
-            dominant_archetype=top[0][0],
-            size=size,
-            meets_floor=size >= floor,
-            staples=staples,
-            distinctive=distinctive[:15],
-            low_confidence_count=low_conf,
-        ))
+        clusters.append(
+            ClusterValuation(
+                cluster_id=cid,
+                dominant_archetype=top[0][0],
+                size=size,
+                meets_floor=size >= floor,
+                staples=staples,
+                distinctive=distinctive[:15],
+                low_confidence_count=low_conf,
+            )
+        )
 
     clusters.sort(key=lambda c: c.size, reverse=True)
 
@@ -242,8 +270,12 @@ def compute_cluster_valuation(
         )
 
     return CommanderValuation(
-        commander=commander, n_decks=len(decks), k=k, floor=floor,
-        clusters=clusters, caveats=caveats,
+        commander=commander,
+        n_decks=len(decks),
+        k=k,
+        floor=floor,
+        clusters=clusters,
+        caveats=caveats,
     )
 
 
@@ -251,8 +283,10 @@ def format_valuation(valuation: CommanderValuation, top_n: int = 12) -> str:
     """Render a :class:`CommanderValuation` as readable text."""
     lines = [
         f"=== Per-cluster card valuation: {valuation.commander} ===",
-        f"decks: {valuation.n_decks}   clusters (k): {valuation.k}   "
-        f"floor: {valuation.floor}",
+        (
+            f"decks: {valuation.n_decks}   clusters (k): {valuation.k}   "
+            f"floor: {valuation.floor}"
+        ),
     ]
     for c in valuation.clusters:
         floor_flag = "" if c.meets_floor else "  [BELOW FLOOR — provisional]"

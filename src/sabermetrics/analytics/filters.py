@@ -97,9 +97,7 @@ def filter_by_color_identity(
     return result
 
 
-def filter_by_legality(
-    rows: list[dict], format_key: str = "commander"
-) -> list[dict]:
+def filter_by_legality(rows: list[dict], format_key: str = "commander") -> list[dict]:
     """Keep only cards legal in the specified format.
 
     Args:
@@ -164,10 +162,19 @@ def filter_singleton_legal(rows: list[dict]) -> list[dict]:
     Returns:
         Deduplicated list of card dicts.
     """
-    basic_lands = {"Plains", "Island", "Swamp", "Mountain", "Forest",
-                   "Wastes", "Snow-Covered Plains", "Snow-Covered Island",
-                   "Snow-Covered Swamp", "Snow-Covered Mountain",
-                   "Snow-Covered Forest"}
+    basic_lands = {
+        "Plains",
+        "Island",
+        "Swamp",
+        "Mountain",
+        "Forest",
+        "Wastes",
+        "Snow-Covered Plains",
+        "Snow-Covered Island",
+        "Snow-Covered Swamp",
+        "Snow-Covered Mountain",
+        "Snow-Covered Forest",
+    }
 
     # Group by name, collecting the cheapest known price per card name
     cheapest_price: dict[str, float | None] = {}
@@ -203,9 +210,7 @@ def filter_singleton_legal(rows: list[dict]) -> list[dict]:
     return result
 
 
-def filter_by_banned_list(
-    rows: list[dict], db_path: Path | None = None
-) -> list[dict]:
+def filter_by_banned_list(rows: list[dict], db_path: Path | None = None) -> list[dict]:
     """Remove banned cards.
 
     Args:
@@ -243,9 +248,7 @@ def apply_hard_filters(
     conn.row_factory = sqlite3.Row
     try:
         # Get commander data
-        cursor = conn.execute(
-            "SELECT * FROM cards WHERE id = ?", (commander_id,)
-        )
+        cursor = conn.execute("SELECT * FROM cards WHERE id = ?", (commander_id,))
         cmdr_row = cursor.fetchone()
         if cmdr_row is None:
             raise ValueError(f"Commander not found: {commander_id}")
@@ -279,16 +282,18 @@ def apply_hard_filters(
             front, _, back = name.partition(" // ")
             if front == back:
                 c["name"] = front
-    # Renormalized names can collide with the real card's row: keep the
-    # cheaper printing per name (mirrors the view's dedupe rule).
+        # Renormalized names can collide with the real card's row: keep the
+        # cheaper printing per name (mirrors the view's dedupe rule).
         cleaned.append(c)
     by_name: dict[str, dict] = {}
     for c in cleaned:
         prev = by_name.get(c.get("name", ""))
         if prev is None or (
             (c.get("price_usd") is not None)
-            and (prev.get("price_usd") is None
-                 or float(c["price_usd"]) < float(prev["price_usd"]))
+            and (
+                prev.get("price_usd") is None
+                or float(c["price_usd"]) < float(prev["price_usd"])
+            )
         ):
             by_name[c.get("name", "")] = c
     all_cards = list(by_name.values())
@@ -304,7 +309,8 @@ def apply_hard_filters(
     cmdr_oracle = cmdr.get("oracle_id")
     cmdr_name = cmdr.get("name", "")
     all_cards = [
-        c for c in all_cards
+        c
+        for c in all_cards
         if not (
             c["id"] == commander_id
             or (cmdr_oracle and c.get("oracle_id") == cmdr_oracle)

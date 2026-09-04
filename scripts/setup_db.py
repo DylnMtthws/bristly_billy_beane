@@ -326,6 +326,9 @@ DDL_STATEMENTS = [
         display_name TEXT,
         avatar_emoji TEXT,
         password_hash TEXT,
+        tailscale_login TEXT,
+        failed_login_count INTEGER DEFAULT 0,
+        locked_until TIMESTAMP,
         role TEXT NOT NULL DEFAULT 'user',
         status TEXT NOT NULL DEFAULT 'invited',
         monthly_deck_quota INTEGER,
@@ -449,6 +452,17 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
     column_migrations = {
         "generated_decks": [("owner_id", "TEXT"), ("deck_name", "TEXT")],
         "cost_log": [("user_id", "TEXT"), ("deck_id", "TEXT")],
+        # Tailnet identity (ADR-026). Its own column rather than reuse of
+        # `email`, because a Tailscale login is not always an email address:
+        # GitHub SSO renders as "someone@github".
+        "users": [
+            ("tailscale_login", "TEXT"),
+            # Per-account lockout (ADR-027). IP rate limiting alone is weak
+            # once /login faces the internet: an attacker rotates addresses,
+            # and Funnel traffic may share one.
+            ("failed_login_count", "INTEGER"),
+            ("locked_until", "TIMESTAMP"),
+        ],
     }
     for table, cols in column_migrations.items():
         cursor = conn.execute(f"PRAGMA table_info({table})")
@@ -462,8 +476,77 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_generated_decks_owner "
         "ON generated_decks(owner_id)"
     )
+    # UNIQUE so one tailnet identity cannot map to two accounts. Partial, so
+    # any number of password-only accounts may have a NULL login.
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tailscale_login "
+        "ON users(tailscale_login) WHERE tailscale_login IS NOT NULL"
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_user ON cost_log(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_deck ON cost_log(deck_id)")
+    conn.commit()
+
+
+def ensure_cedh_schema(conn: sqlite3.Connection) -> None:
+    """Idempotently create the cEDH Deck Lab tables.
+
+    Separate from ensure_portal_schema so the cEDH path can be added to an
+    existing database without touching the casual generator's tables. Safe to
+    run repeatedly.
+
+    The candidate document is stored as JSON rather than shredded into
+    columns: it is a versioned artifact handed to another repository, and the
+    thing that must survive a schema change here is the document itself.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cedh_candidates (
+            candidate_id TEXT PRIMARY KEY,
+            owner_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            pack_id TEXT NOT NULL,
+            commander_key TEXT NOT NULL,
+            commander_name TEXT NOT NULL,
+            deck_sha256 TEXT NOT NULL,
+            candidate_json TEXT NOT NULL,
+            evidence_hash TEXT,
+            meta_available INTEGER DEFAULT 0,
+            simulation_status TEXT,
+            simulation_json TEXT,
+            explanation_json TEXT,
+            warnings_json TEXT
+        )
+        """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cedh_owner "
+        "ON cedh_candidates(owner_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cedh_commander "
+        "ON cedh_candidates(commander_key)"
+    )
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS build_jobs (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            request_json TEXT NOT NULL,
+            candidate_id TEXT,
+            error_code TEXT,
+            error_detail TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            started_at TIMESTAMP,
+            finished_at TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (candidate_id) REFERENCES cedh_candidates(candidate_id)
+        )
+        """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_build_jobs_user_created "
+        "ON build_jobs(user_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_build_jobs_status ON build_jobs(status)"
+    )
     conn.commit()
 
 
@@ -477,6 +560,7 @@ def setup_database(db_path: Path) -> None:
 
     conn = sqlite3.connect(str(db_path))
     try:
+        conn.execute("PRAGMA busy_timeout=5000")
         # Enable WAL mode for better concurrent read performance
         conn.execute("PRAGMA journal_mode=WAL")
         # Enable foreign keys
@@ -487,6 +571,7 @@ def setup_database(db_path: Path) -> None:
 
         # Idempotent column/view migrations for pre-existing databases
         ensure_portal_schema(conn)
+        ensure_cedh_schema(conn)
 
         # Insert initial schema version
         conn.execute(

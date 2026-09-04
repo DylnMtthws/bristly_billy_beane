@@ -1,7 +1,7 @@
 """Generated deck models."""
 
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -34,7 +34,7 @@ class CardSubScores(BaseModel):
     mana_efficiency: float
     replacement_value: float
     price_efficiency: float
-    card_win_equity: Optional[float] = None
+    card_win_equity: float | None = None
 
 
 class LLMFit(BaseModel):
@@ -54,7 +54,7 @@ class DeckCard(BaseModel):
     cvar_score: float
     sub_scores: CardSubScores
     llm_fit: LLMFit
-    alternatives: List[str]  # card_ids
+    alternatives: list[str]  # card_ids
 
 
 class DeckParameters(BaseModel):
@@ -62,9 +62,9 @@ class DeckParameters(BaseModel):
 
     budget_usd: float
     power_target: int
-    strategy: Optional[str] = None
+    strategy: str | None = None
     weights: CVARWeights
-    deck_name: Optional[str] = None
+    deck_name: str | None = None
 
 
 class ComponentCounts(BaseModel):
@@ -83,12 +83,12 @@ class DeckComposition(BaseModel):
 
     total_price_usd: float
     average_cmc: float
-    color_distribution: Dict[str, int]
-    type_distribution: Dict[str, int]
-    mana_curve: List[int]  # Index = CMC, value = count
+    color_distribution: dict[str, int]
+    type_distribution: dict[str, int]
+    mana_curve: list[int]  # Index = CMC, value = count
     component_counts: ComponentCounts
-    game_changers_present: List[str]  # card_ids
-    detected_combos: List[str]  # combo_ids
+    game_changers_present: list[str]  # card_ids
+    detected_combos: list[str]  # combo_ids
 
 
 class DeckClassification(BaseModel):
@@ -102,8 +102,8 @@ class DeckNarrative(BaseModel):
     """LLM-generated narrative about the deck."""
 
     game_plan: str
-    key_synergies: List[str]
-    weaknesses: List[str]
+    key_synergies: list[str]
+    weaknesses: list[str]
     suggested_play_pattern: str
 
 
@@ -127,7 +127,7 @@ class GeneratedDeck(BaseModel):
     commander: Card
     generated_at: datetime
     parameters: DeckParameters
-    cards: List[DeckCard]  # Should be exactly 99
+    cards: list[DeckCard]  # Should be exactly 99
     composition: DeckComposition
     classification: DeckClassification
     narrative: DeckNarrative

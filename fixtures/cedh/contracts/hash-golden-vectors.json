@@ -1,0 +1,514 @@
+{
+  "schema_version": "cedh-hash-golden-vectors.v1",
+  "description": "Cross-language golden vectors for the two cEDH simulation hashes. Every implementation of deck_sha256 and simulation_input_sha256 -- Python in this repository's exporter, C++ in the simulator, Python in the Deck Lab -- must reproduce these digests exactly. Libraries here are deliberately tiny: these vectors pin the hash algorithms, not the 99-card candidate invariant.",
+  "deck_sha256_preimage": "sha256 over the concatenation of 'C:<oracle_id>\\n' for each commander oracle_id in sorted order, then '<oracle_id>:<quantity>\\n' for each library entry sorted by oracle_id. Rendered 'sha256:<lowercase hex>'. The strategy pack, requester, simulator and corpus are excluded by design (ADR-025).",
+  "simulation_input_sha256_preimage": "sha256 over compact UTF-8 JSON (separators ',' and ':') with lexicographically sorted object keys, of the execution object plus deck_sha256 and schema_version 'cedh-simulation-input.v1'. Rendered 'sha256:<lowercase hex>'.",
+  "assertions": [
+    {
+      "requirement": "ordering does not affect deck_sha256",
+      "equal_deck_sha256": [
+        "base",
+        "reordered_inputs"
+      ]
+    },
+    {
+      "requirement": "commander order does not affect deck_sha256",
+      "equal_deck_sha256": [
+        "two_commanders",
+        "two_commanders_reordered"
+      ]
+    },
+    {
+      "requirement": "changing the commander changes deck_sha256",
+      "different_deck_sha256": [
+        "base",
+        "commander_changed"
+      ]
+    },
+    {
+      "requirement": "changing a card changes deck_sha256",
+      "different_deck_sha256": [
+        "base",
+        "card_changed"
+      ]
+    },
+    {
+      "requirement": "changing a quantity changes deck_sha256",
+      "different_deck_sha256": [
+        "base",
+        "quantity_changed"
+      ]
+    },
+    {
+      "requirement": "changing the strategy pack does NOT change deck_sha256",
+      "equal_deck_sha256": [
+        "base",
+        "pack_changed"
+      ]
+    },
+    {
+      "requirement": "changing the strategy pack DOES change simulation_input_sha256",
+      "different_simulation_input_sha256": [
+        "base",
+        "pack_changed"
+      ]
+    },
+    {
+      "requirement": "changing the seed changes simulation_input_sha256 only",
+      "equal_deck_sha256": [
+        "base",
+        "seed_changed"
+      ],
+      "different_simulation_input_sha256": [
+        "base",
+        "seed_changed"
+      ]
+    },
+    {
+      "requirement": "ablation order does not affect simulation_input_sha256",
+      "equal_simulation_input_sha256": [
+        "ablations_sorted",
+        "ablations_reordered"
+      ]
+    }
+  ],
+  "vectors": [
+    {
+      "name": "base",
+      "note": "The reference deck and execution context every other vector varies from.",
+      "commander_oracle_ids": [
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 2
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": []
+      },
+      "deck_sha256": "sha256:f5c53d7d615b56ee0db392c3ca6d5c28674e41c096b25f47cb6b05c250052623",
+      "simulation_input_sha256": "sha256:da6525b6e0ff9b775f84c845a4cadf1aa6a898855e1cfd40a56cc99ab84d53a8"
+    },
+    {
+      "name": "reordered_inputs",
+      "note": "Same deck, every list submitted in a different order. Both hashes must equal 'base': ordering is a serialisation accident, not a property of a deck.",
+      "commander_oracle_ids": [
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
+      ],
+      "library": [
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 2
+        },
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": []
+      },
+      "deck_sha256": "sha256:f5c53d7d615b56ee0db392c3ca6d5c28674e41c096b25f47cb6b05c250052623",
+      "simulation_input_sha256": "sha256:da6525b6e0ff9b775f84c845a4cadf1aa6a898855e1cfd40a56cc99ab84d53a8"
+    },
+    {
+      "name": "two_commanders_reordered",
+      "note": "A partner pair addressed in either order is one deck.",
+      "commander_oracle_ids": [
+        "11111111-2222-4333-8444-555555555555",
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 2
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": []
+      },
+      "deck_sha256": "sha256:9e1aff351d5c621a092b3c3292ca5783991d160b3b3f2a8adf58f9401ecd67c4",
+      "simulation_input_sha256": "sha256:c6db21f94a4815f1e9f742000306d279bdf50a9768d72733126c57a38a1fdfc2"
+    },
+    {
+      "name": "two_commanders",
+      "note": "The same pair, sorted. Must equal two_commanders_reordered.",
+      "commander_oracle_ids": [
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416",
+        "11111111-2222-4333-8444-555555555555"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 2
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": []
+      },
+      "deck_sha256": "sha256:9e1aff351d5c621a092b3c3292ca5783991d160b3b3f2a8adf58f9401ecd67c4",
+      "simulation_input_sha256": "sha256:c6db21f94a4815f1e9f742000306d279bdf50a9768d72733126c57a38a1fdfc2"
+    },
+    {
+      "name": "commander_changed",
+      "note": "A different commander is a different deck.",
+      "commander_oracle_ids": [
+        "3f2d1c4a-5b6e-4f70-8192-a3b4c5d6e7f8"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 2
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": []
+      },
+      "deck_sha256": "sha256:760cdc1c120c5ac2f3cde3b46f6df8aadfa0620c4e6462046a598205c8e13194",
+      "simulation_input_sha256": "sha256:c0544a9ce8328f6617452680a8d7b3577318d7160728428693f07d2988034398"
+    },
+    {
+      "name": "card_changed",
+      "note": "Swapping one library card is a different deck.",
+      "commander_oracle_ids": [
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "fedcba98-7654-4321-8fed-cba987654321",
+          "quantity": 2
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": []
+      },
+      "deck_sha256": "sha256:af44792c78e605b8b95a0f1e89f81dd84a464dcf93cb4964d78fd213aa9ad73c",
+      "simulation_input_sha256": "sha256:121e281dc5aa53db7f6fc6e1425ed4c7ae52f1fc30217c4bf1a6b08f71c55eec"
+    },
+    {
+      "name": "quantity_changed",
+      "note": "Changing one quantity is a different deck.",
+      "commander_oracle_ids": [
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 3
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": []
+      },
+      "deck_sha256": "sha256:627b91ec34240ddaeafc376a24968c5397f3150b44c215482e42f5ac17525654",
+      "simulation_input_sha256": "sha256:275ab34f685cea681894e955a712eb4725b73325a6831a11838b3dfdbd9e3ef5"
+    },
+    {
+      "name": "pack_changed",
+      "note": "THE LOAD-BEARING VECTOR. Identical deck, different strategy pack. deck_sha256 must equal 'base' (ADR-025: a deck hash identifies a list, not a list-plus-pack). simulation_input_sha256 must differ from 'base' (a different pack produces different numbers).",
+      "commander_oracle_ids": [
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 2
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "derived-generic",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "strategy_pack_derived": true,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": []
+      },
+      "deck_sha256": "sha256:f5c53d7d615b56ee0db392c3ca6d5c28674e41c096b25f47cb6b05c250052623",
+      "simulation_input_sha256": "sha256:171167c096a6d64771bd46555464e753db93ce2792f4802a7a8060c4401bfcc5"
+    },
+    {
+      "name": "seed_changed",
+      "note": "Deck unchanged; a run parameter moved. Only the input fingerprint moves.",
+      "commander_oracle_ids": [
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 2
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 999,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": []
+      },
+      "deck_sha256": "sha256:f5c53d7d615b56ee0db392c3ca6d5c28674e41c096b25f47cb6b05c250052623",
+      "simulation_input_sha256": "sha256:54cf83d43e50df29b2267e4737172e4c14a00644ae90a299a7362b7b8390ee9a"
+    },
+    {
+      "name": "ablations_reordered",
+      "note": "Ablation order is not meaningful; the fingerprint sorts them.",
+      "commander_oracle_ids": [
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 2
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": [
+          "Sol Ring",
+          "Basalt Monolith"
+        ]
+      },
+      "deck_sha256": "sha256:f5c53d7d615b56ee0db392c3ca6d5c28674e41c096b25f47cb6b05c250052623",
+      "simulation_input_sha256": "sha256:dd43cfaf5134b3e432d6634ef9a4eb02fb7a119a451c46a83deee03818580257"
+    },
+    {
+      "name": "ablations_sorted",
+      "note": "Must equal ablations_reordered.",
+      "commander_oracle_ids": [
+        "8d11aa49-d4cd-48b1-aa0f-8548fa733416"
+      ],
+      "library": [
+        {
+          "oracle_id": "0259f063-3e3f-4e07-9066-f748d4819829",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+          "quantity": 1
+        },
+        {
+          "oracle_id": "08afc0d7-192f-4ab6-b6a0-c4265cf5e225",
+          "quantity": 2
+        }
+      ],
+      "execution": {
+        "strategy_pack_id": "kinnan-midrange-goldfish",
+        "strategy_pack_version": "1.0.0",
+        "strategy_pack_content_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "strategy_pack_derived": false,
+        "simulator_version": "0.2.0",
+        "card_data_manifest_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cards_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "scenario_id": "goldfish_assembly",
+        "scenario_version": "1.0.0",
+        "seed": 12345,
+        "games": 20000,
+        "objective_turn": 3,
+        "sweep": false,
+        "ablations": [
+          "Basalt Monolith",
+          "Sol Ring"
+        ]
+      },
+      "deck_sha256": "sha256:f5c53d7d615b56ee0db392c3ca6d5c28674e41c096b25f47cb6b05c250052623",
+      "simulation_input_sha256": "sha256:dd43cfaf5134b3e432d6634ef9a4eb02fb7a119a451c46a83deee03818580257"
+    }
+  ]
+}

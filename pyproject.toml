@@ -16,17 +16,25 @@ dependencies = [
     "flask-login",
     "flask-wtf",
     "httpx",
+    "jsonschema>=4.23",
     "mtg-parser",
     "mtgsdk",
     "numpy",
-    "pandas",
     "pydantic>=2.0",
     "pyyaml",
-    "sentence-transformers",
     "waitress",
 ]
 
 [project.optional-dependencies]
+# The Postgres driver for the live mtg_v1 adapters. An extra, not a dependency:
+# the ordinary test suite runs against fixtures and must not need a database.
+postgres = ["psycopg[binary]>=3.1"]
+
+# The shipped cEDH path does not import the embedding/data-science stack.
+# Keep it available for the legacy casual generator and refresh jobs without
+# carrying PyTorch and scikit-learn into the production container.
+legacy = ["pandas", "sentence-transformers"]
+
 # Pinned exactly. These tools gate or report on CI, and an unpinned linter
 # turns main red on someone else's release day with no change to this repo.
 # Bump deliberately, not incidentally.
@@ -47,11 +55,26 @@ sabermetrics = "sabermetrics.main:cli"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+sabermetrics = ["ui/templates/**/*.html", "ui/static/*"]
+
 [tool.black]
 line-length = 88
+target-version = ["py311"]
 
 [tool.ruff]
 line-length = 88
+
+[tool.ruff.lint]
+# These are the repository's pre-existing semantic/style debt. The mechanical
+# formatter and safe Ruff fixes are now applied; keep the remaining baseline
+# visible in this explicit list while core correctness/import rules gate every
+# file, including new cloud-alignment code.
+ignore = [
+    "B017", "B023", "BLE001", "C408", "DTZ001", "DTZ005", "DTZ006",
+    "DTZ011", "ISC004", "PERF102", "PLC0206", "RUF012", "S110", "S112",
+    "SIM102", "SIM115", "SIM222", "TRY401",
+]
 
 [tool.mypy]
 python_version = "3.11"
@@ -65,6 +88,54 @@ warn_unused_configs = true
 module = "pandas.*"
 ignore_missing_imports = true
 
+# psycopg is an optional extra (the "postgres" group). It is imported lazily so
+# the default test suite never needs it, which also means mypy will not find it
+# in a default install. Scoped rather than global, so every other untyped import
+# still surfaces.
+[[tool.mypy.overrides]]
+module = "psycopg.*"
+ignore_missing_imports = true
+
+# flask_login ships no py.typed marker.
+[[tool.mypy.overrides]]
+module = "flask_login.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["flask_wtf.*", "jsonschema.*", "mtg_parser.*", "sklearn.*"]
+ignore_missing_imports = true
+
+# The legacy generator carried these findings while mypy was report-only.
+# Cloud-alignment code, the entire cEDH package, shared DB/auth, and all other
+# modules remain checked; this scoped baseline makes the requested command a
+# real gate without hiding errors in newly introduced modules.
+[[tool.mypy.overrides]]
+module = [
+    "sabermetrics.analytics.deck_clustering",
+    "sabermetrics.analytics.deck_stats",
+    "sabermetrics.analytics.effective_cost",
+    "sabermetrics.analytics.empirical_valuation",
+    "sabermetrics.analytics.role_tagger",
+    "sabermetrics.analytics.synergy_matrix",
+    "sabermetrics.ingestion._decklist_base",
+    "sabermetrics.ingestion.edhrec",
+    "sabermetrics.ingestion.game_knights",
+    "sabermetrics.ingestion.reddit",
+    "sabermetrics.ingestion.scryfall",
+    "sabermetrics.pipeline.deck_builder",
+    "sabermetrics.pipeline.greedy_optimizer",
+    "sabermetrics.pipeline.slot_assigner",
+    "sabermetrics.reasoning.client",
+]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+# Opt-in integration markers. Every test carrying one is skipped unless its
+# dependency is configured, and none of them runs in the default suite.
+markers = [
+    "postgres: hits a live mtg_v1 Postgres (needs MTG_V1_DSN)",
+    "model: hits the live model provider and spends money (needs HF_TOKEN)",
+    "simulator: runs the commander_simulator binary (needs CEDH_SIMULATOR_BIN)",
+]

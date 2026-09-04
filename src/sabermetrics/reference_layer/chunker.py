@@ -68,7 +68,9 @@ class DocumentChunker:
             if not part.strip():
                 continue
 
-            section_label = f"CR {current_section}" if current_section != "preamble" else "preamble"
+            section_label = (
+                f"CR {current_section}" if current_section != "preamble" else "preamble"
+            )
 
             # Further split large sections into sub-chunks
             sub_chunks = self._split_by_size(part, section_label)
@@ -83,9 +85,7 @@ class DocumentChunker:
                     )
                 )
 
-        logger.info(
-            "Chunked Comprehensive Rules into %d chunks", len(chunks)
-        )
+        logger.info("Chunked Comprehensive Rules into %d chunks", len(chunks))
         return chunks
 
     def chunk_commander_rules(self, rules_path: Path) -> list[Chunk]:
@@ -146,9 +146,7 @@ class DocumentChunker:
         logger.info("Chunked Commander rules into %d chunks", len(chunks))
         return chunks
 
-    def chunk_article(
-        self, article_path: Path, tier: int = 3
-    ) -> list[Chunk]:
+    def chunk_article(self, article_path: Path, tier: int = 3) -> list[Chunk]:
         """Chunk a strategic article by paragraph clusters with overlap.
 
         Args:
@@ -208,9 +206,7 @@ class DocumentChunker:
                 )
             )
 
-        logger.info(
-            "Chunked article '%s' into %d chunks", doc_name, len(chunks)
-        )
+        logger.info("Chunked article '%s' into %d chunks", doc_name, len(chunks))
         return chunks
 
     def chunk_mechanics_article(self, article_path: Path) -> list[Chunk]:
@@ -247,16 +243,12 @@ class DocumentChunker:
         sections = self._split_mechanics_by_heading(text)
 
         if len(sections) > 1:
-            return self._chunk_mechanic_sections(
-                sections, doc_name, set_name
-            )
+            return self._chunk_mechanic_sections(sections, doc_name, set_name)
 
         # Fallback: use standard article chunking at tier 2
         return self.chunk_article(article_path, tier=2)
 
-    def _split_mechanics_by_heading(
-        self, text: str
-    ) -> list[tuple[str, str]]:
+    def _split_mechanics_by_heading(self, text: str) -> list[tuple[str, str]]:
         """Split mechanics article text into (heading, body) pairs.
 
         Detects headings by looking for short lines (< 60 chars) that
@@ -377,7 +369,8 @@ class DocumentChunker:
 
         logger.info(
             "Chunked mechanics article '%s' into %d chunks",
-            doc_name, len(chunks),
+            doc_name,
+            len(chunks),
         )
         return chunks
 
@@ -419,9 +412,7 @@ class DocumentChunker:
             )
         ]
 
-    def _split_by_size(
-        self, text: str, section_label: str
-    ) -> list[tuple[str, str]]:
+    def _split_by_size(self, text: str, section_label: str) -> list[tuple[str, str]]:
         """Split text into chunks of approximately TARGET_CHUNK_TOKENS tokens.
 
         Returns:

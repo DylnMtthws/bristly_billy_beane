@@ -36,12 +36,13 @@ class EmbeddingIndexer:
     def _get_model(self):  # type: ignore[no-untyped-def]
         """Lazy-load the sentence-transformers model."""
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError as exc:
+                raise RuntimeError("install sabermetrics[legacy]") from exc
 
             logger.info("Loading embedding model: %s", self.model_name)
-            self._model = SentenceTransformer(
-                self.model_name, device=self.device
-            )
+            self._model = SentenceTransformer(self.model_name, device=self.device)
         return self._model
 
     def index_chunks(self, chunks: list[Chunk], batch_size: int = 64) -> int:

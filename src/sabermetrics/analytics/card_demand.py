@@ -55,13 +55,15 @@ def compute_card_demand(db_path: Path) -> list[dict]:
             price = float(row["price_usd"])
             demand = price * inclusion_rate
 
-            results.append({
-                "card_id": row["card_id"],
-                "name": row["name"],
-                "price_usd": price,
-                "inclusion_rate": round(inclusion_rate, 4),
-                "demand_index": round(demand, 4),
-            })
+            results.append(
+                {
+                    "card_id": row["card_id"],
+                    "name": row["name"],
+                    "price_usd": price,
+                    "inclusion_rate": round(inclusion_rate, 4),
+                    "demand_index": round(demand, 4),
+                }
+            )
 
         results.sort(key=lambda x: x["demand_index"], reverse=True)
         logger.info("Computed demand index for %d cards", len(results))
@@ -94,7 +96,11 @@ def _compute_demand_from_edhrec(conn: sqlite3.Connection) -> list[dict]:
         deck_count = row["deck_count"] or 0
         total_weighted_decks += deck_count
 
-        top_cards = json.loads(top_cards_json) if isinstance(top_cards_json, str) else top_cards_json
+        top_cards = (
+            json.loads(top_cards_json)
+            if isinstance(top_cards_json, str)
+            else top_cards_json
+        )
         for tc in top_cards:
             name = tc.get("card_name") or tc.get("name", "")
             if name:
@@ -117,13 +123,15 @@ def _compute_demand_from_edhrec(conn: sqlite3.Connection) -> list[dict]:
         if price_row and price_row[1]:
             inclusion_rate = appearances / total_weighted_decks
             price = float(price_row[1])
-            results.append({
-                "card_id": price_row[0],
-                "name": name,
-                "price_usd": price,
-                "inclusion_rate": round(inclusion_rate, 4),
-                "demand_index": round(price * inclusion_rate, 4),
-            })
+            results.append(
+                {
+                    "card_id": price_row[0],
+                    "name": name,
+                    "price_usd": price,
+                    "inclusion_rate": round(inclusion_rate, 4),
+                    "demand_index": round(price * inclusion_rate, 4),
+                }
+            )
 
     results.sort(key=lambda x: x["demand_index"], reverse=True)
     logger.info("Computed demand index for %d cards (EDHREC fallback)", len(results))

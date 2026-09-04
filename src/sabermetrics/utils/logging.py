@@ -28,12 +28,20 @@ class JSONFormatter(logging.Formatter):
 
         if record.exc_info and record.exc_info[1]:
             log_entry["exception"] = {
-                "type": record.exc_info[0].__name__ if record.exc_info[0] else "Unknown",
+                "type": (
+                    record.exc_info[0].__name__ if record.exc_info[0] else "Unknown"
+                ),
                 "message": str(record.exc_info[1]),
             }
 
         # Include extra fields if present
-        for key in ("job_name", "source", "items_processed", "duration_seconds", "cost_usd"):
+        for key in (
+            "job_name",
+            "source",
+            "items_processed",
+            "duration_seconds",
+            "cost_usd",
+        ):
             if hasattr(record, key):
                 log_entry[key] = getattr(record, key)
 

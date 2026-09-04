@@ -51,7 +51,9 @@ _NEGATIVE_PATTERNS: list[re.Pattern] = [
 _PHASING = re.compile(r"phase(?:s)? out", re.IGNORECASE)
 _HEXPROOF = re.compile(r"\bhexproof\b|can't be the target", re.IGNORECASE)
 _INDESTRUCTIBLE = re.compile(r"\bindestructible\b|can't be destroyed", re.IGNORECASE)
-_REDIRECT = re.compile(r"change the target|choose new targets|changes? its target", re.IGNORECASE)
+_REDIRECT = re.compile(
+    r"change the target|choose new targets|changes? its target", re.IGNORECASE
+)
 _WARD = re.compile(r"\bward\b", re.IGNORECASE)
 _SHROUD = re.compile(r"\bshroud\b", re.IGNORECASE)
 _PROTECTION_FROM = re.compile(r"protection from", re.IGNORECASE)

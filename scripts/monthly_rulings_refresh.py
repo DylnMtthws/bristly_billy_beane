@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Monthly rulings refresh script (D8.3).
+"""Monthly rulings refresh script (D8.3), for the legacy path only.
+
+Not used by the cEDH container or its managed ``mtg_v1`` data boundary.
 
 Runs 1st Sunday 4am via launchd.
 Actions:

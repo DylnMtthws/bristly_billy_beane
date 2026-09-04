@@ -144,9 +144,7 @@ class SpellbookIngestion(SourceHealthMixin):
 
         return items_ingested, items_failed, errors
 
-    def _store_combo(
-        self, conn: sqlite3.Connection, combo: dict[str, Any]
-    ) -> None:
+    def _store_combo(self, conn: sqlite3.Connection, combo: dict[str, Any]) -> None:
         """Parse and store a single combo."""
         combo_id = str(combo.get("id", ""))
 
@@ -174,7 +172,9 @@ class SpellbookIngestion(SourceHealthMixin):
         color_identity = list(identity_str) if identity_str else []
 
         description = combo.get("description", "")
-        prerequisites = combo.get("prerequisites", "") or combo.get("easyPrerequisites", "")
+        prerequisites = combo.get("prerequisites", "") or combo.get(
+            "easyPrerequisites", ""
+        )
 
         conn.execute(
             """INSERT OR REPLACE INTO combos

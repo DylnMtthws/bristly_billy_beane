@@ -35,6 +35,7 @@ from sabermetrics.analytics.filters import (
 
 # --- Filter tests (A4.1) ---
 
+
 def test_color_identity_filter() -> None:
     """Color identity filter keeps only cards within commander colors."""
     cards = [
@@ -141,6 +142,7 @@ def test_apply_hard_filters_integration() -> None:
 
 # --- CVAR tests (A4.2) ---
 
+
 def test_cvar_scoring_speed() -> None:
     """CVAR scoring runs in <100ms per card (A4.2)."""
     context = ScoringContext(
@@ -155,7 +157,7 @@ def test_cvar_scoring_speed() -> None:
         "id": "test-card",
         "name": "Blood Artist",
         "oracle_text": "Whenever a creature dies, target player loses 1 life "
-                       "and you gain 1 life.",
+        "and you gain 1 life.",
         "cmc": 2,
         "mana_cost": "{1}{B}",
         "color_identity": '["B"]',
@@ -186,21 +188,27 @@ def test_cvar_synergy_scoring() -> None:
         commander_colors=["B", "R", "G"],
         commander_keywords=["Flying"],
         commander_oracle_text="Whenever you sacrifice a permanent, draw a card "
-                              "and put a +1/+1 counter on Korvold.",
+        "and put a +1/+1 counter on Korvold.",
     )
 
     # Good synergy: sacrifice outlet
     good_card = {
         "oracle_text": "Sacrifice a creature: add one mana of any color.",
-        "keywords": "[]", "color_identity": '["B","G"]',
-        "type_line": "Creature", "cmc": 2, "rarity": "uncommon",
+        "keywords": "[]",
+        "color_identity": '["B","G"]',
+        "type_line": "Creature",
+        "cmc": 2,
+        "rarity": "uncommon",
     }
 
     # Poor synergy: no meaningful overlap with sacrifice theme
     bad_card = {
         "oracle_text": "Vigilance. When this enters the battlefield, gain 3 life.",
-        "keywords": '["Vigilance"]', "color_identity": '["W"]',
-        "type_line": "Creature", "cmc": 3, "rarity": "common",
+        "keywords": '["Vigilance"]',
+        "color_identity": '["W"]',
+        "type_line": "Creature",
+        "cmc": 3,
+        "rarity": "common",
     }
 
     good_score = compute_synergy_score(good_card, context)
@@ -275,12 +283,21 @@ def test_price_efficiency_zero_uses_floor() -> None:
 
 # --- Component tests (A4.6) ---
 
+
 def test_count_ramp_spells() -> None:
     """Ramp counter detects mana acceleration cards."""
     cards = [
         {"type_line": "Artifact", "oracle_text": "{T}: Add {G}.", "keywords": "[]"},
-        {"type_line": "Creature", "oracle_text": "{T}: Add one mana of any color.", "keywords": "[]"},
-        {"type_line": "Sorcery", "oracle_text": "Search your library for a basic land card and put it onto the battlefield.", "keywords": "[]"},
+        {
+            "type_line": "Creature",
+            "oracle_text": "{T}: Add one mana of any color.",
+            "keywords": "[]",
+        },
+        {
+            "type_line": "Sorcery",
+            "oracle_text": "Search your library for a basic land card and put it onto the battlefield.",
+            "keywords": "[]",
+        },
         {"type_line": "Creature", "oracle_text": "Flying", "keywords": '["Flying"]'},
     ]
     assert count_ramp_spells(cards) >= 3
@@ -290,7 +307,10 @@ def test_count_card_draw() -> None:
     """Draw counter detects card draw effects."""
     cards = [
         {"type_line": "Instant", "oracle_text": "Draw two cards."},
-        {"type_line": "Enchantment", "oracle_text": "Whenever a creature enters the battlefield, draw a card."},
+        {
+            "type_line": "Enchantment",
+            "oracle_text": "Whenever a creature enters the battlefield, draw a card.",
+        },
         {"type_line": "Creature", "oracle_text": "Flying, vigilance"},
     ]
     assert count_card_draw(cards) >= 2
@@ -300,7 +320,10 @@ def test_count_removal() -> None:
     """Removal counter detects targeted removal."""
     cards = [
         {"type_line": "Instant", "oracle_text": "Destroy target creature."},
-        {"type_line": "Instant", "oracle_text": "Exile target artifact or enchantment."},
+        {
+            "type_line": "Instant",
+            "oracle_text": "Exile target artifact or enchantment.",
+        },
         {"type_line": "Instant", "oracle_text": "Counter target spell."},
         {"type_line": "Creature", "oracle_text": "Haste"},
     ]
@@ -311,7 +334,10 @@ def test_count_board_wipes() -> None:
     """Board wipe counter detects mass removal."""
     cards = [
         {"type_line": "Sorcery", "oracle_text": "Destroy all creatures."},
-        {"type_line": "Sorcery", "oracle_text": "Exile all artifacts and enchantments."},
+        {
+            "type_line": "Sorcery",
+            "oracle_text": "Exile all artifacts and enchantments.",
+        },
         {"type_line": "Creature", "oracle_text": "Trample"},
     ]
     assert count_board_wipes(cards) >= 2
@@ -322,19 +348,43 @@ def test_analyze_mana_base() -> None:
     cards = []
     # 36 lands
     for _ in range(12):
-        cards.append({"type_line": "Basic Land — Forest", "name": "Forest",
-                       "oracle_text": "{T}: Add {G}.", "cmc": 0})
+        cards.append(
+            {
+                "type_line": "Basic Land — Forest",
+                "name": "Forest",
+                "oracle_text": "{T}: Add {G}.",
+                "cmc": 0,
+            }
+        )
     for _ in range(12):
-        cards.append({"type_line": "Basic Land — Swamp", "name": "Swamp",
-                       "oracle_text": "{T}: Add {B}.", "cmc": 0})
+        cards.append(
+            {
+                "type_line": "Basic Land — Swamp",
+                "name": "Swamp",
+                "oracle_text": "{T}: Add {B}.",
+                "cmc": 0,
+            }
+        )
     for _ in range(12):
-        cards.append({"type_line": "Basic Land — Mountain", "name": "Mountain",
-                       "oracle_text": "{T}: Add {R}.", "cmc": 0})
+        cards.append(
+            {
+                "type_line": "Basic Land — Mountain",
+                "name": "Mountain",
+                "oracle_text": "{T}: Add {R}.",
+                "cmc": 0,
+            }
+        )
     # Some ramp
     for _ in range(10):
-        cards.append({"type_line": "Artifact", "name": "Sol Ring",
-                       "oracle_text": "{T}: Add {C}{C}.", "cmc": 1,
-                       "keywords": "[]"})
+        cards.append(
+            {
+                "type_line": "Artifact",
+                "name": "Sol Ring",
+                "oracle_text": "{T}: Add {C}{C}.",
+                "cmc": 1,
+                "keywords": "[]",
+            }
+        )
 
     result = analyze_mana_base(cards, ["B", "R", "G"])
     assert isinstance(result, ManaBaseScore)
@@ -344,26 +394,31 @@ def test_analyze_mana_base() -> None:
 
 # --- Bracket tests (A4.5) ---
 
+
 def test_bracket_precon() -> None:
     """Precon-like deck should classify as bracket 1 or 2."""
     cards = []
     for i in range(60):
-        cards.append({
-            "name": f"Vanilla Creature {i}",
-            "type_line": "Creature",
-            "oracle_text": "",
-            "cmc": 4,
-            "keywords": "[]",
-            "color_identity": '["G"]',
-        })
+        cards.append(
+            {
+                "name": f"Vanilla Creature {i}",
+                "type_line": "Creature",
+                "oracle_text": "",
+                "cmc": 4,
+                "keywords": "[]",
+                "color_identity": '["G"]',
+            }
+        )
     for i in range(40):
-        cards.append({
-            "name": "Forest",
-            "type_line": "Basic Land — Forest",
-            "oracle_text": "{T}: Add {G}.",
-            "cmc": 0,
-            "keywords": "[]",
-        })
+        cards.append(
+            {
+                "name": "Forest",
+                "type_line": "Basic Land — Forest",
+                "oracle_text": "{T}: Add {G}.",
+                "cmc": 0,
+                "keywords": "[]",
+            }
+        )
 
     result = classify_bracket(cards)
     assert isinstance(result, BracketResult)
@@ -373,28 +428,67 @@ def test_bracket_precon() -> None:
 def test_bracket_high_power() -> None:
     """Deck with fast mana + tutors should classify as bracket 4+."""
     cards = [
-        {"name": "Sol Ring", "type_line": "Artifact", "oracle_text": "{T}: Add {C}{C}.", "cmc": 1, "keywords": "[]"},
-        {"name": "Mana Crypt", "type_line": "Artifact", "oracle_text": "{T}: Add {C}{C}.", "cmc": 0, "keywords": "[]"},
-        {"name": "Mana Vault", "type_line": "Artifact", "oracle_text": "{T}: Add {C}{C}{C}.", "cmc": 1, "keywords": "[]"},
-        {"name": "Demonic Tutor", "type_line": "Sorcery", "oracle_text": "Search your library for a card, put it into your hand.", "cmc": 2, "keywords": "[]"},
-        {"name": "Vampiric Tutor", "type_line": "Instant", "oracle_text": "Search your library for a card, put it on top.", "cmc": 1, "keywords": "[]"},
-        {"name": "Mystical Tutor", "type_line": "Instant", "oracle_text": "Search your library for an instant or sorcery card.", "cmc": 1, "keywords": "[]"},
+        {
+            "name": "Sol Ring",
+            "type_line": "Artifact",
+            "oracle_text": "{T}: Add {C}{C}.",
+            "cmc": 1,
+            "keywords": "[]",
+        },
+        {
+            "name": "Mana Crypt",
+            "type_line": "Artifact",
+            "oracle_text": "{T}: Add {C}{C}.",
+            "cmc": 0,
+            "keywords": "[]",
+        },
+        {
+            "name": "Mana Vault",
+            "type_line": "Artifact",
+            "oracle_text": "{T}: Add {C}{C}{C}.",
+            "cmc": 1,
+            "keywords": "[]",
+        },
+        {
+            "name": "Demonic Tutor",
+            "type_line": "Sorcery",
+            "oracle_text": "Search your library for a card, put it into your hand.",
+            "cmc": 2,
+            "keywords": "[]",
+        },
+        {
+            "name": "Vampiric Tutor",
+            "type_line": "Instant",
+            "oracle_text": "Search your library for a card, put it on top.",
+            "cmc": 1,
+            "keywords": "[]",
+        },
+        {
+            "name": "Mystical Tutor",
+            "type_line": "Instant",
+            "oracle_text": "Search your library for an instant or sorcery card.",
+            "cmc": 1,
+            "keywords": "[]",
+        },
     ]
     # Add filler
     for i in range(94):
-        cards.append({
-            "name": f"Card {i}",
-            "type_line": "Creature",
-            "oracle_text": "",
-            "cmc": 2,
-            "keywords": "[]",
-        })
+        cards.append(
+            {
+                "name": f"Card {i}",
+                "type_line": "Creature",
+                "oracle_text": "",
+                "cmc": 2,
+                "keywords": "[]",
+            }
+        )
 
     result = classify_bracket(cards)
     assert result.bracket >= 4, f"High power deck got bracket {result.bracket}"
 
 
 # --- Wilson CI test (A4.4) ---
+
 
 def test_wilson_lower_bound() -> None:
     """Wilson confidence interval computes correctly."""
@@ -412,6 +506,7 @@ def test_wilson_lower_bound() -> None:
 
 
 # --- Embedding cache test (D4.8) ---
+
 
 def test_embedding_cache() -> None:
     """Embedding cache respects max size and LRU eviction."""
@@ -432,6 +527,7 @@ def test_embedding_cache() -> None:
 
 # --- Mana efficiency impact tests ---
 
+
 def test_mana_efficiency_impact_beats_vanilla() -> None:
     """A 6-CMC board wipe scores higher than a 2-CMC vanilla creature."""
     board_wipe = {
@@ -446,9 +542,9 @@ def test_mana_efficiency_impact_beats_vanilla() -> None:
     }
     wipe_score = compute_mana_efficiency_score(board_wipe)
     vanilla_score = compute_mana_efficiency_score(vanilla)
-    assert wipe_score > vanilla_score, (
-        f"Board wipe ({wipe_score:.2f}) should beat vanilla ({vanilla_score:.2f})"
-    )
+    assert (
+        wipe_score > vanilla_score
+    ), f"Board wipe ({wipe_score:.2f}) should beat vanilla ({vanilla_score:.2f})"
 
 
 def test_mana_efficiency_role_tags_used() -> None:
@@ -457,21 +553,23 @@ def test_mana_efficiency_role_tags_used() -> None:
         "cmc": 3,
         "type_line": "Enchantment",
         "oracle_text": "Whenever an opponent casts a spell, you may pay {1}. "
-                       "If you don't, that player draws a card.",
+        "If you don't, that player draws a card.",
         "role_tags": '["draw"]',
     }
     # With draw role tag -> 1.3 multiplier, CMC 3 base 0.70 -> 0.91
     score = compute_mana_efficiency_score(draw_engine)
-    assert score > 0.85, f"Draw engine with role tag should score >0.85, got {score:.2f}"
+    assert (
+        score > 0.85
+    ), f"Draw engine with role tag should score >0.85, got {score:.2f}"
 
     # Same card without role tags falls back to oracle text
     no_tags = dict(draw_engine)
     no_tags.pop("role_tags")
     score_no_tags = compute_mana_efficiency_score(no_tags)
     # "draws a card" in oracle text -> medium-high 1.3 fallback
-    assert score_no_tags > 0.80, (
-        f"Draw engine via text fallback should score >0.80, got {score_no_tags:.2f}"
-    )
+    assert (
+        score_no_tags > 0.80
+    ), f"Draw engine via text fallback should score >0.80, got {score_no_tags:.2f}"
 
 
 def test_mana_efficiency_cheap_instant_premium() -> None:
@@ -485,14 +583,14 @@ def test_mana_efficiency_cheap_instant_premium() -> None:
         "cmc": 1,
         "type_line": "Instant",
         "oracle_text": "Exile target creature. Its controller gains life "
-                       "equal to its power.",
+        "equal to its power.",
     }
     # Same effect as sorcery
     sorcery_exile = {
         "cmc": 1,
         "type_line": "Sorcery",
         "oracle_text": "Exile target creature. Its controller gains life "
-                       "equal to its power.",
+        "equal to its power.",
     }
     # Cheap instant without impact
     weak_instant = {
@@ -506,17 +604,17 @@ def test_mana_efficiency_cheap_instant_premium() -> None:
     weak_score = compute_mana_efficiency_score(weak_instant)
 
     # Swords should beat the sorcery version (instant premium)
-    assert swords_score > sorcery_score, (
-        f"Swords ({swords_score:.2f}) should beat sorcery ({sorcery_score:.2f})"
-    )
+    assert (
+        swords_score > sorcery_score
+    ), f"Swords ({swords_score:.2f}) should beat sorcery ({sorcery_score:.2f})"
     # Swords should beat weak instant (impact matters)
-    assert swords_score > weak_score, (
-        f"Swords ({swords_score:.2f}) should beat weak instant ({weak_score:.2f})"
-    )
+    assert (
+        swords_score > weak_score
+    ), f"Swords ({swords_score:.2f}) should beat weak instant ({weak_score:.2f})"
     # The sorcery version still benefits from impact multiplier
-    assert sorcery_score > weak_score, (
-        f"Sorcery exile ({sorcery_score:.2f}) should beat weak instant ({weak_score:.2f})"
-    )
+    assert (
+        sorcery_score > weak_score
+    ), f"Sorcery exile ({sorcery_score:.2f}) should beat weak instant ({weak_score:.2f})"
 
 
 def test_counter_archetype_rules_fire():
@@ -535,8 +633,12 @@ def test_counter_archetype_rules_fire():
     scaling = rules["counter_sources_with_scaling"]
 
     producer = {"oracle_text": "Put a +1/+1 counter on target creature."}
-    hardened = {"oracle_text": "If one or more +1/+1 counters would be put on a creature you control, that many plus one +1/+1 counters are put on it instead."}
-    branching = {"oracle_text": "If one or more +1/+1 counters would be put on a creature you control, twice that many +1/+1 counters are put on that creature instead."}
+    hardened = {
+        "oracle_text": "If one or more +1/+1 counters would be put on a creature you control, that many plus one +1/+1 counters are put on it instead."
+    }
+    branching = {
+        "oracle_text": "If one or more +1/+1 counters would be put on a creature you control, twice that many +1/+1 counters are put on that creature instead."
+    }
     unrelated = {"oracle_text": "Counter target spell."}
 
     assert _card_matches_clause(producer, scaling["trigger"])
@@ -571,14 +673,21 @@ def test_ability_cost_reduction_is_not_generic_cost_reduction():
     assert "ability_cost_reduction" in mechs
     assert "cost_reduction" not in mechs  # superseded, not additive
 
-    invoker = {"oracle_text": "{7}{R}: This creature deals 5 damage to any target.",
-               "keywords": "[]", "type_line": "Creature", "cmc": 3}
-    morph_only = {"oracle_text": "Flying\nMorph {6}{R}{R} (You may cast this "
-                  "card face down as a 2/2 creature for {3}. Turn it face up "
-                  "any time for its morph cost.)\nWhen this creature is "
-                  "turned face up, search your library for a Dragon card.",
-                  "keywords": '["Morph"]', "type_line": "Creature — Dragon",
-                  "cmc": 7}
+    invoker = {
+        "oracle_text": "{7}{R}: This creature deals 5 damage to any target.",
+        "keywords": "[]",
+        "type_line": "Creature",
+        "cmc": 3,
+    }
+    morph_only = {
+        "oracle_text": "Flying\nMorph {6}{R}{R} (You may cast this "
+        "card face down as a 2/2 creature for {3}. Turn it face up "
+        "any time for its morph cost.)\nWhen this creature is "
+        "turned face up, search your library for a Dragon card.",
+        "keywords": '["Morph"]',
+        "type_line": "Creature — Dragon",
+        "cmc": 7,
+    }
     assert card_matches_referenced_keywords(invoker, [], ["ability_cost_reduction"])
     assert not card_matches_referenced_keywords(
         morph_only, [], ["ability_cost_reduction"]
@@ -598,9 +707,14 @@ def test_ability_cost_reduction_requires_a_mana_cost():
 
     def match(oracle):
         return card_matches_referenced_keywords(
-            {"oracle_text": oracle, "keywords": "[]", "type_line": "Creature",
-             "cmc": 2},
-            [], ["ability_cost_reduction"],
+            {
+                "oracle_text": oracle,
+                "keywords": "[]",
+                "type_line": "Creature",
+                "cmc": 2,
+            },
+            [],
+            ["ability_cost_reduction"],
         )
 
     assert not match("{T}: Add {G}.")
@@ -625,14 +739,16 @@ def test_granted_keywords_are_not_sought():
         extract_referenced_keywords,
     )
 
-    yarus = ("Other creatures you control have haste.\n"
-             "Whenever one or more face-down creatures you control deal "
-             "combat damage to a player, draw a card.")
+    yarus = (
+        "Other creatures you control have haste.\n"
+        "Whenever one or more face-down creatures you control deal "
+        "combat damage to a player, draw a card."
+    )
     assert extract_referenced_keywords(yarus) == []
     assert "haste" in extract_granted_keywords(yarus)
 
     # Arcades is the canonical SOUGHT case and must be unaffected.
-    arcades = ("Whenever a creature you control with defender enters, draw a card.")
+    arcades = "Whenever a creature you control with defender enters, draw a card."
     assert "defender" in extract_referenced_keywords(arcades)
 
 
@@ -642,16 +758,24 @@ def test_match_strength_is_graded_by_signal_quality():
 
     morph_creature = {
         "oracle_text": "Morph {1}{G} (You may cast this card face down...)",
-        "keywords": '["Morph"]', "type_line": "Creature — Human",
+        "keywords": '["Morph"]',
+        "type_line": "Creature — Human",
     }
-    has_kw = {"oracle_text": "", "keywords": '["Defender"]',
-              "type_line": "Creature — Wall"}
-    grants_kw = {"oracle_text": "Creatures you control have defender.",
-                 "keywords": "[]", "type_line": "Enchantment"}
+    has_kw = {
+        "oracle_text": "",
+        "keywords": '["Defender"]',
+        "type_line": "Creature — Wall",
+    }
+    grants_kw = {
+        "oracle_text": "Creatures you control have defender.",
+        "keywords": "[]",
+        "type_line": "Enchantment",
+    }
     mentions_only = {
         "oracle_text": "-6: Gain control of all creatures until end of turn. "
-                       "Untap them. They gain haste until end of turn.",
-        "keywords": "[]", "type_line": "Legendary Planeswalker — Tibalt",
+        "Untap them. They gain haste until end of turn.",
+        "keywords": "[]",
+        "type_line": "Legendary Planeswalker — Tibalt",
     }
 
     assert referenced_match_strength(morph_creature, [], ["face_down_synergy"]) == 1.0
@@ -670,19 +794,27 @@ def test_real_payload_outranks_incidental_mention_for_yarus():
         referenced_match_strength,
     )
 
-    yarus = ("Other creatures you control have haste.\n"
-             "Whenever one or more face-down creatures you control deal "
-             "combat damage to a player, draw a card.\n"
-             "Whenever a face-down creature you control dies, return it to "
-             "the battlefield face down.")
+    yarus = (
+        "Other creatures you control have haste.\n"
+        "Whenever one or more face-down creatures you control deal "
+        "combat damage to a player, draw a card.\n"
+        "Whenever a face-down creature you control dies, return it to "
+        "the battlefield face down."
+    )
     kws = extract_referenced_keywords(yarus)
     mechs = extract_referenced_mechanics(yarus)
 
-    morph = {"oracle_text": "Megamorph {4}{G}", "keywords": '["Megamorph"]',
-             "type_line": "Creature — Human Warrior"}
-    tibalt = {"oracle_text": "-6: Gain control of all creatures until end of "
-                             "turn. They gain haste until end of turn.",
-              "keywords": "[]", "type_line": "Legendary Planeswalker"}
+    morph = {
+        "oracle_text": "Megamorph {4}{G}",
+        "keywords": '["Megamorph"]',
+        "type_line": "Creature — Human Warrior",
+    }
+    tibalt = {
+        "oracle_text": "-6: Gain control of all creatures until end of "
+        "turn. They gain haste until end of turn.",
+        "keywords": "[]",
+        "type_line": "Legendary Planeswalker",
+    }
 
     assert referenced_match_strength(morph, kws, mechs) > referenced_match_strength(
         tibalt, kws, mechs

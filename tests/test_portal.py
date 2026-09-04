@@ -14,10 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.setup_db import setup_database  # noqa: E402
-
-from sabermetrics import db  # noqa: E402
-from sabermetrics.ui.app import create_app  # noqa: E402
+from sabermetrics import db
+from sabermetrics.ui.app import create_app
+from scripts.setup_db import setup_database
 
 
 @pytest.fixture
@@ -218,16 +217,28 @@ def test_change_password_flow(app, db_path) -> None:
     # wrong current password -> unchanged
     client.post(
         "/profile/password",
-        data={"current_password": "nope", "new_password": "newpassword", "confirm_password": "newpassword"},
+        data={
+            "current_password": "nope",
+            "new_password": "newpassword",
+            "confirm_password": "newpassword",
+        },
     )
-    assert db.verify_password(db.UsersRepo(db_path).get(uid)["password_hash"], "password123")
+    assert db.verify_password(
+        db.UsersRepo(db_path).get(uid)["password_hash"], "password123"
+    )
 
     # correct -> changed
     client.post(
         "/profile/password",
-        data={"current_password": "password123", "new_password": "newpassword", "confirm_password": "newpassword"},
+        data={
+            "current_password": "password123",
+            "new_password": "newpassword",
+            "confirm_password": "newpassword",
+        },
     )
-    assert db.verify_password(db.UsersRepo(db_path).get(uid)["password_hash"], "newpassword")
+    assert db.verify_password(
+        db.UsersRepo(db_path).get(uid)["password_hash"], "newpassword"
+    )
 
 
 def test_quota_meter_counts_month(app, db_path) -> None:

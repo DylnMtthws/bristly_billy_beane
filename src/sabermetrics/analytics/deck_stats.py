@@ -178,9 +178,7 @@ class GameKnightsAnalyzer:
             Aggregated DeckbuildingPatterns.
         """
         # Fetch all deck IDs for this source
-        cursor = conn.execute(
-            "SELECT id FROM decks WHERE source = ?", (source_filter,)
-        )
+        cursor = conn.execute("SELECT id FROM decks WHERE source = ?", (source_filter,))
         deck_ids = [row["id"] for row in cursor.fetchall()]
 
         if not deck_ids:
@@ -214,7 +212,9 @@ class GameKnightsAnalyzer:
 
             # Separate lands and non-lands
             lands = [c for c in cards if "land" in (c.get("type_line") or "").lower()]
-            non_lands = [c for c in cards if "land" not in (c.get("type_line") or "").lower()]
+            non_lands = [
+                c for c in cards if "land" not in (c.get("type_line") or "").lower()
+            ]
 
             land_val = float(len(lands))
             ramp_val = float(count_ramp_spells(cards))
@@ -389,12 +389,13 @@ class GameKnightsAnalyzer:
             # ETB-tapped ratio
             if mana_score.total_lands > 0:
                 lands = [
-                    c for c in cards
-                    if "land" in (c.get("type_line") or "").lower()
+                    c for c in cards if "land" in (c.get("type_line") or "").lower()
                 ]
                 tapped = sum(
-                    1 for c in lands
-                    if "enters the battlefield tapped" in (c.get("oracle_text") or "").lower()
+                    1
+                    for c in lands
+                    if "enters the battlefield tapped"
+                    in (c.get("oracle_text") or "").lower()
                 )
                 etb_tapped_ratios.append(tapped / mana_score.total_lands)
 
@@ -543,7 +544,14 @@ class GameKnightsAnalyzer:
         if not type_counts_per_deck:
             return CardTypeDistribution()
 
-        type_names = ["creatures", "instants", "sorceries", "enchantments", "artifacts", "planeswalkers"]
+        type_names = [
+            "creatures",
+            "instants",
+            "sorceries",
+            "enchantments",
+            "artifacts",
+            "planeswalkers",
+        ]
         stats: dict[str, ComponentStats] = {}
         for t in type_names:
             values = [float(d.get(t, 0)) for d in type_counts_per_deck]
@@ -668,9 +676,11 @@ class GameKnightsAnalyzer:
                     wipe_counts=_compute_stats(wipes),
                     creature_counts=_compute_stats(creatures),
                     avg_cmc=_compute_stats(cmcs),
-                    avg_theme_density=round(
-                        statistics.mean(theme_densities), 2
-                    ) if theme_densities else 0.0,
+                    avg_theme_density=(
+                        round(statistics.mean(theme_densities), 2)
+                        if theme_densities
+                        else 0.0
+                    ),
                     top_cards=top_cards,
                 )
             )
@@ -769,9 +779,7 @@ class GameKnightsAnalyzer:
             f"{strength} {direction} correlated (r={round(r, 2)})"
         )
 
-    def _load_deck_cards(
-        self, conn: sqlite3.Connection, deck_id: str
-    ) -> list[dict]:
+    def _load_deck_cards(self, conn: sqlite3.Connection, deck_id: str) -> list[dict]:
         """Load all card data for a single deck, expanded by quantity.
 
         Each card is repeated according to its quantity in the deck,
@@ -800,5 +808,3 @@ class GameKnightsAnalyzer:
             for _ in range(qty):
                 cards.append(card)
         return cards
-
-

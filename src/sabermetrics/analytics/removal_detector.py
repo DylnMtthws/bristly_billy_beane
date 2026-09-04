@@ -31,21 +31,30 @@ DETECTION_VERSION = "1.0.0"
 _POSITIVE_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("destroy_target", re.compile(r"destroy target", re.IGNORECASE)),
     ("exile_target", re.compile(r"exile target", re.IGNORECASE)),
-    ("damage_target", re.compile(
-        r"deals \d+ damage to (?:target|any|each)",
-        re.IGNORECASE,
-    )),
-    ("minus_counters", re.compile(
-        r"target.*gets? -\d+/-\d+",
-        re.IGNORECASE,
-    )),
+    (
+        "damage_target",
+        re.compile(
+            r"deals \d+ damage to (?:target|any|each)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "minus_counters",
+        re.compile(
+            r"target.*gets? -\d+/-\d+",
+            re.IGNORECASE,
+        ),
+    ),
     ("counter_spell", re.compile(r"counter target spell", re.IGNORECASE)),
     ("board_wipe_destroy", re.compile(r"destroy all", re.IGNORECASE)),
     ("board_wipe_exile", re.compile(r"exile all", re.IGNORECASE)),
-    ("bounce", re.compile(
-        r"return target.*to.*(?:owner's |its owner's )?hand",
-        re.IGNORECASE,
-    )),
+    (
+        "bounce",
+        re.compile(
+            r"return target.*to.*(?:owner's |its owner's )?hand",
+            re.IGNORECASE,
+        ),
+    ),
 ]
 
 # --- Negative patterns (applied to original text to catch reminder-embedded caveats) ---
@@ -139,7 +148,9 @@ def _flexibility_score(oracle: str) -> float:
         return 2.0
     if types_hit == 1:
         return 1.0
-    if "target" in oracle_lower and ("destroy" in oracle_lower or "exile" in oracle_lower):
+    if "target" in oracle_lower and (
+        "destroy" in oracle_lower or "exile" in oracle_lower
+    ):
         return 2.0
     return 1.0
 

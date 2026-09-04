@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.commander.names | join(' + ') }} — cEDH candidate{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div>
+        <h1 class="text-2xl font-bold tracking-tight text-body">{{ doc.commander.names | join(' + ') }}</h1>
+        <p class="mt-1 text-sm text-muted">
+            {{ doc.provenance.pack_id }} v{{ doc.provenance.pack_version }}
+            &middot; deck sha256 <code class="text-xs">{{ doc.deck_sha256[:16] }}</code>
+        </p>
+    </div>
+    <a href="{{ url_for('cedh.candidate_json', candidate_id=row.candidate_id) }}"
+       class="rounded-lg border border-line bg-panel px-3 py-2 text-sm font-medium text-body hover:bg-panel2">
+        Download {{ doc.schema }}
+    </a>
+</header>
+
+{% if warnings %}
+<section class="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+    <h2 class="text-sm font-semibold text-amber-300">What this build could not do</h2>
+    <ul class="mt-2 space-y-1 text-sm text-amber-200/90">
+        {% for w in warnings %}<li>&bull; {{ w }}</li>{% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<div class="mb-6 grid gap-4 lg:grid-cols-2">
+    {# ---- Simulation provenance. Never a number without its framing. ---- #}
+    <section class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Simulation</h2>
+        {% if simulation and simulation.status == 'simulated' %}
+        <p class="mt-3 rounded-lg border border-line/70 bg-panel2 p-3 text-xs text-muted">
+            <strong class="text-body">A faster number is not a better deck.</strong>
+            This measures {{ simulation.measures }}. It does not measure
+            {{ simulation.does_not_measure }}
+        </p>
+        <dl class="mt-3 space-y-1 text-sm">
+            {% for point in simulation.assembly %}
+            <div class="flex items-baseline justify-between gap-4">
+                <dt class="text-muted">P(assembled by turn {{ point.turn }})</dt>
+                <dd class="font-medium text-body">
+                    {{ '%.2f' | format(point.probability * 100) }}%
+                    {% if point.ci_low is not none %}
+                    <span class="text-xs text-muted">
+                        [{{ '%.2f' | format(point.ci_low * 100) }}&ndash;{{ '%.2f' | format(point.ci_high * 100) }}]
+                    </span>
+                    {% endif %}
+                </dd>
+            </div>
+            {% endfor %}
+            <div class="flex items-baseline justify-between gap-4 border-t border-line/70 pt-1">
+                <dt class="text-muted">censored</dt>
+                <dd class="text-body">{{ '%.2f' | format(simulation.censored_fraction * 100) }}%</dd>
+            </div>
+        </dl>
+        <p class="mt-3 text-xs text-muted">
+            {{ "{:,}".format(simulation.games) }} games &middot; {{ simulation.simulator_version }}
+            {% if simulation.result_schema %}
+                &middot; {{ simulation.result_schema }}
+                &middot; cards {{ simulation.cards_sha256[:12] }}
+                {% if simulation.simulator_threads %}&middot; {{ simulation.simulator_threads }} threads{% endif %}
+            {% endif %}
+        </p>
+        {% if simulation.inert_cards or simulation.unauthored_cards %}
+        <details class="mt-3 text-xs">
+            <summary class="cursor-pointer text-muted hover:text-body">
+                What the model could not see
+                ({{ simulation.inert_cards | length + simulation.unauthored_cards | length }} cards)
+            </summary>
+            <ul class="mt-2 space-y-1 text-muted">
+                {% for card in simulation.inert_cards %}
+                <li>&bull; <span class="text-body">{{ card.name }}</span> &mdash; {{ card.reason }} <em>({{ card.category }})</em></li>
+                {% endfor %}
+                {% for name in simulation.unauthored_cards %}
+                <li>&bull; <span class="text-body">{{ name }}</span> &mdash; unauthored in the simulator's card model</li>
+                {% endfor %}
+            </ul>
+            {% if simulation.known_misclassifications %}
+            <p class="mt-2 text-brand">
+                {% for note in simulation.known_misclassifications %}{{ note }}{% endfor %}
+            </p>
+            {% endif %}
+        </details>
+        {% endif %}
+        {% else %}
+        <p class="mt-3 rounded-lg border border-line/70 bg-panel2 p-3 text-sm text-muted">
+            <strong class="text-body">Not simulated.</strong>
+            {% if simulation %}{{ simulation.detail }}{% endif %}
+            No score is shown because there is no measurement &mdash; a neutral number
+            here would be indistinguishable from a real one.
+        </p>
+        {% endif %}
+    </section>
+
+    {# ---- Evidence provenance. ---- #}
+    <section class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Evidence</h2>
+        <dl class="mt-3 space-y-1 text-sm">
+            <div class="flex items-baseline justify-between gap-4">
+                <dt class="text-muted">Tournament data</dt>
+                <dd class="{% if doc.provenance.meta_available %}text-emerald-400{% else %}text-muted{% endif %}">
+                    {{ 'available' if doc.provenance.meta_available else 'none' }}
+                </dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-4">
+                <dt class="text-muted">Card inclusion</dt>
+                <dd class="{% if doc.provenance.inclusion_available %}text-emerald-400{% else %}text-muted{% endif %}">
+                    {% if doc.provenance.inclusion_available %}
+                    available (n={{ doc.provenance.inclusion_decks or 0 }} distinct decks;
+                    {{ doc.provenance.incomplete_decks or 0 }} incomplete)
+                    {% else %}unavailable{% endif %}
+                </dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-4">
+                <dt class="text-muted">Window</dt>
+                <dd class="text-body">
+                    since {{ doc.provenance.meta_since or 'unknown' }}
+                    (last {{ doc.provenance.window_days }}d), events of
+                    {{ doc.provenance.min_event_size }}+
+                </dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-4">
+                <dt class="text-muted">Card corpus</dt>
+                <dd class="text-body">{{ doc.provenance.card_snapshot or 'unknown' }}</dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-4">
+                <dt class="text-muted">Tournament corpus</dt>
+                <dd class="text-body">{{ doc.provenance.meta_snapshot or 'unavailable' }}</dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-4">
+                <dt class="text-muted">Evidence hash</dt>
+                <dd class="text-body"><code class="text-xs">{{ (doc.provenance.evidence_hash or 'none')[:16] }}</code></dd>
+            </div>
+        </dl>
+        <p class="mt-3 border-t border-line/70 pt-3 text-xs text-muted">
+            Pack source: {{ doc.provenance.pack_source or 'unrecorded' }}
+        </p>
+    </section>
+</div>
+
+{# ---- Win packages. ---- #}
+<section class="mb-6 rounded-2xl border border-line bg-panel p-4 shadow-panel">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Win packages</h2>
+    <div class="mt-3 space-y-3">
+        {% for w in doc.win_packages %}
+        <div class="rounded-lg border border-line/70 bg-panel2 p-3">
+            <div class="flex items-center gap-2">
+                <h3 class="text-sm font-semibold text-body">{{ w.name }}</h3>
+                <span class="rounded-full bg-white/5 px-2 py-0.5 text-xs text-muted">{{ w.kind }}</span>
+                {% if w.complete %}
+                <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-400">assembled by this list</span>
+                {% else %}
+                <span class="rounded-full bg-brand/15 px-2 py-0.5 text-xs text-brand">incomplete &mdash; {{ w.missing_oracle_ids | length }} piece(s) missing</span>
+                {% endif %}
+            </div>
+            <p class="mt-2 text-sm text-body/80">{{ w.converts_via }}</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+{# ---- Explanation, if the model produced one. ---- #}
+{% if explanation %}
+<section class="mb-6 rounded-2xl border border-line bg-panel p-4 shadow-panel">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">How it plays</h2>
+    <p class="mt-3 text-sm text-body/90">{{ explanation.game_plan }}</p>
+    <h3 class="mt-4 text-sm font-medium text-body">Primary line</h3>
+    <p class="mt-1 text-sm text-body/80">{{ explanation.primary_line }}</p>
+    {% if explanation.weaknesses %}
+    <h3 class="mt-4 text-sm font-medium text-body">Weaknesses</h3>
+    <ul class="mt-1 space-y-1 text-sm text-body/80">
+        {% for w in explanation.weaknesses %}<li>&bull; {{ w }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if explanation.mulligan_guidance %}
+    <h3 class="mt-4 text-sm font-medium text-body">Mulligans</h3>
+    <p class="mt-1 text-sm text-body/80">{{ explanation.mulligan_guidance }}</p>
+    {% endif %}
+    <p class="mt-4 border-t border-line/70 pt-3 text-xs text-muted">
+        Written by the model from the deck above and the evidence cited. It did not
+        choose any of these cards.
+    </p>
+</section>
+{% endif %}
+
+{# ---- The 99, by role. ---- #}
+<section>
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
+        The 99 &middot; {{ doc.role_counts.values() | sum }} cards
+    </h2>
+    <div class="grid gap-4 md:grid-cols-2">
+        {% for role, cards in by_role.items() %}
+        <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+            <h3 class="flex items-baseline justify-between text-sm font-semibold text-body">
+                <span>{{ role.replace('_', ' ') }}</span>
+                <span class="text-xs font-normal text-muted">{{ cards | map(attribute='quantity') | sum }}</span>
+            </h3>
+            <ul class="mt-2 space-y-1 text-sm">
+                {% for card in cards %}
+                <li class="flex items-baseline justify-between gap-2">
+                    <span class="text-body/90">
+                        {% if card.quantity > 1 %}{{ card.quantity }}&times; {% endif %}{{ card.name }}
+                    </span>
+                    {% if card.source != 'pool' %}
+                    <span class="shrink-0 text-xs text-muted">{{ card.source.replace('_', ' ') }}</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+{% if doc.notes %}
+<section class="mt-6 rounded-2xl border border-line bg-panel p-4 shadow-panel">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Build notes</h2>
+    <ul class="mt-2 space-y-1 text-sm text-muted">
+        {% for note in doc.notes %}<li>&bull; {{ note }}</li>{% endfor %}
+    </ul>
+</section>
+{% endif %}
+{% endblock %}

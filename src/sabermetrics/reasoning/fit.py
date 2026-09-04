@@ -83,23 +83,28 @@ class FitScorer:
                 results.append((card, fit_response))
                 logger.debug(
                     "Card %d/%d: %s → score %d",
-                    i + 1, len(cards),
-                    card.get("name", "?"), fit_response.fit_score,
+                    i + 1,
+                    len(cards),
+                    card.get("name", "?"),
+                    fit_response.fit_score,
                 )
             except Exception as e:
                 logger.warning(
                     "Failed to score card %s: %s",
-                    card.get("name", "?"), e,
+                    card.get("name", "?"),
+                    e,
                 )
                 # Provide default score on failure
-                results.append((
-                    card,
-                    CardFitResponse(
-                        fit_score=5,
-                        reasoning="Scoring failed; default score assigned.",
-                        slot_role="other",
-                    ),
-                ))
+                results.append(
+                    (
+                        card,
+                        CardFitResponse(
+                            fit_score=5,
+                            reasoning="Scoring failed; default score assigned.",
+                            slot_role="other",
+                        ),
+                    )
+                )
 
         logger.info("Scored %d/%d cards successfully", len(results), len(cards))
         return results
@@ -119,7 +124,8 @@ class FitScorer:
         """Score a single card via LLM call."""
         # Format the prompt
         prompt_text = template.format(
-            archetype_definition=archetype_definition or "No specific archetype definition available.",
+            archetype_definition=archetype_definition
+            or "No specific archetype definition available.",
             relevant_rule_excerpts=relevant_rules or "No specific rule excerpts.",
             profile_summary=profile_summary,
             card_name=card.get("name", "Unknown"),
@@ -130,7 +136,8 @@ class FitScorer:
             inclusion_pct=f"{card.get('edhrec_inclusion_pct', 0) or 0:.1f}",
             cwe_score=f"{card.get('cwe_score', 'N/A')}",
             cooccurrence_avg=f"{card.get('cooccurrence_avg', 0) or 0:.2f}",
-            deck_composition_context=deck_composition_context or "No deck context available yet.",
+            deck_composition_context=deck_composition_context
+            or "No deck context available yet.",
         )
 
         # The cached section is the profile + archetype + rules (message 0)
@@ -164,7 +171,6 @@ class FitScorer:
 
         data = json.loads(response_text)
         return CardFitResponse(**data)
-
 
     def score_cards_batch(
         self,
@@ -275,12 +281,13 @@ class FitScorer:
         text = result.content.strip()
         try:
             start, end = text.find("["), text.rfind("]")
-            items = json.loads(text[start:end + 1])
+            items = json.loads(text[start : end + 1])
         except Exception:
             # Truncated output loses the closing bracket and the whole-array
             # parse fails -- build9 defaulted all 47 verdicts to 5 and the
             # vet fired blanks. Salvage every complete object individually.
             import re as _re
+
             items = []
             for m in _re.finditer(r"\{[^{}]*\}", text):
                 try:
@@ -288,8 +295,10 @@ class FitScorer:
                 except Exception:
                     continue
             logger.warning(
-                "Batch fit array parse failed; salvaged %d/%d verdicts "
-                "(tail: %r)", len(items), len(cards), text[-120:],
+                "Batch fit array parse failed; salvaged %d/%d verdicts " "(tail: %r)",
+                len(items),
+                len(cards),
+                text[-120:],
             )
         for item in items:
             try:
@@ -309,7 +318,8 @@ class FitScorer:
             out.append((card, resp))
         logger.info(
             "Batch vet: %d cards in one call, %d verdicts parsed",
-            len(cards), len(by_name),
+            len(cards),
+            len(by_name),
         )
         return out
 

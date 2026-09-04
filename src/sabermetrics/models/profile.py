@@ -1,7 +1,7 @@
 """Commander intent profile models."""
 
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -10,12 +10,12 @@ class CardAnalysis(BaseModel):
     """Stream 1: Card-derived intent."""
 
     mana_cost: str
-    color_identity: List[str]
+    color_identity: list[str]
     core_mechanic: str
-    triggered_abilities: List[str]
-    activated_abilities: List[str]
-    static_abilities: List[str]
-    evasion_or_protection: Optional[str] = None
+    triggered_abilities: list[str]
+    activated_abilities: list[str]
+    static_abilities: list[str]
+    evasion_or_protection: str | None = None
 
 
 class TopCard(BaseModel):
@@ -29,11 +29,11 @@ class BehavioralSignals(BaseModel):
     """Stream 2: Behavioral aggregate."""
 
     total_decks_tracked: int
-    edhrec_themes: List[str]
-    most_included_cards: List[TopCard]
+    edhrec_themes: list[str]
+    most_included_cards: list[TopCard]
     average_deck_price_usd: float
     average_cmc: float
-    tournament_win_rate: Optional[float] = None
+    tournament_win_rate: float | None = None
     tournament_sample_size: int = 0
 
 
@@ -41,16 +41,16 @@ class CommunitySignals(BaseModel):
     """Stream 3: Cultural signal."""
 
     reddit_thread_count: int
-    named_archetypes: List[str]
-    primer_articles_referenced: List[str]
-    emerging_strategies: List[str] = Field(default_factory=list)
+    named_archetypes: list[str]
+    primer_articles_referenced: list[str]
+    emerging_strategies: list[str] = Field(default_factory=list)
 
 
 class WinCondition(BaseModel):
     """A deck win condition."""
 
     description: str
-    key_cards: List[str]
+    key_cards: list[str]
     reliability: Literal["primary", "secondary", "backup"]
 
 
@@ -60,14 +60,14 @@ class BuildPath(BaseModel):
     name: str
     description: str
     consensus_status: Literal["mainstream", "emerging", "underexplored"]
-    key_card_categories: List[str]
+    key_card_categories: list[str]
 
 
 class AntiSynergy(BaseModel):
     """Cards or strategies that work against the commander."""
 
     description: str
-    cards_to_avoid: List[str]
+    cards_to_avoid: list[str]
     reasoning: str
 
 
@@ -76,8 +76,8 @@ class ValueInversion(BaseModel):
 
     normal_heuristic: str
     inverted_value: str
-    desired_characteristics: List[str]
-    undesired_characteristics: List[str] = Field(default_factory=list)
+    desired_characteristics: list[str]
+    undesired_characteristics: list[str] = Field(default_factory=list)
     evaluation_guidance: str
 
 
@@ -90,9 +90,11 @@ class EngineDependency(BaseModel):
     """
 
     engine: str  # e.g. "Auras you control"
-    engine_card_traits: List[str]  # e.g. ["aura", "enchant creature", "bestow"]
-    dependent_outputs: List[str]  # e.g. ["life drain", "creature lockdown"]
-    false_synergy_warning: str  # e.g. "Lifegain cards that don't interact with Auras..."
+    engine_card_traits: list[str]  # e.g. ["aura", "enchant creature", "bestow"]
+    dependent_outputs: list[str]  # e.g. ["life drain", "creature lockdown"]
+    false_synergy_warning: (
+        str  # e.g. "Lifegain cards that don't interact with Auras..."
+    )
 
 
 class MispricedCardExample(BaseModel):
@@ -123,38 +125,38 @@ class StrategicProfile(BaseModel):
 
     primary_archetype: str
     game_plan_summary: str
-    win_conditions: List[WinCondition]
-    build_paths: List[BuildPath]
-    synergy_priorities: Dict[str, List[str]]
-    anti_synergies: List[AntiSynergy]
+    win_conditions: list[WinCondition]
+    build_paths: list[BuildPath]
+    synergy_priorities: dict[str, list[str]]
+    anti_synergies: list[AntiSynergy]
     strategic_constraints: StrategicConstraints
     power_indicators: PowerIndicators
-    value_inversions: List[ValueInversion] = Field(default_factory=list)
-    engine_dependencies: List[EngineDependency] = Field(default_factory=list)
-    mispriced_card_examples: List[MispricedCardExample] = Field(default_factory=list)
+    value_inversions: list[ValueInversion] = Field(default_factory=list)
+    engine_dependencies: list[EngineDependency] = Field(default_factory=list)
+    mispriced_card_examples: list[MispricedCardExample] = Field(default_factory=list)
 
 
 class UserIntent(BaseModel):
     """Optional user-provided build direction."""
 
     provided: bool
-    description: Optional[str] = None
-    divergence_from_consensus: Optional[str] = None
+    description: str | None = None
+    divergence_from_consensus: str | None = None
 
 
 class EvidenceFreshness(BaseModel):
     """Timestamps of evidence source data."""
 
-    edhrec_last_updated: Optional[datetime] = None
-    topdeck_last_updated: Optional[datetime] = None
-    reddit_last_searched: Optional[datetime] = None
+    edhrec_last_updated: datetime | None = None
+    topdeck_last_updated: datetime | None = None
+    reddit_last_searched: datetime | None = None
 
 
 class ProfileSources(BaseModel):
     """Sources used to generate the profile."""
 
-    rules_chunks_referenced: List[str] = Field(default_factory=list)
-    articles_referenced: List[str] = Field(default_factory=list)
+    rules_chunks_referenced: list[str] = Field(default_factory=list)
+    articles_referenced: list[str] = Field(default_factory=list)
     evidence_freshness: EvidenceFreshness
 
 

@@ -8,9 +8,12 @@ from pathlib import Path
 import pytest
 
 from sabermetrics.ui.app import create_app
+from tests._populated_db import HAS_POPULATED_DB
 
 DB_PATH = Path("data/sabermetrics.db")
-HAS_DB = DB_PATH.exists()
+# Existence is not readiness: `setup_db` on a fresh deployment creates
+# every table and no rows, which passed the old `.exists()` gate.
+HAS_DB = HAS_POPULATED_DB
 
 
 TEST_USER_EMAIL = "pytest-admin@local"
@@ -36,12 +39,16 @@ def test_user():
 
     repo = db.UsersRepo(DB_PATH)
     existing = repo.get_by_email(TEST_USER_EMAIL)
-    uid = existing["id"] if existing else repo.create(
-        email=TEST_USER_EMAIL,
-        display_name="Pytest Admin",
-        role="admin",
-        status="active",
-        password_hash=db.hash_password("test-password-123"),
+    uid = (
+        existing["id"]
+        if existing
+        else repo.create(
+            email=TEST_USER_EMAIL,
+            display_name="Pytest Admin",
+            role="admin",
+            status="active",
+            password_hash=db.hash_password("test-password-123"),
+        )
     )
     yield uid
     with db.connect(DB_PATH) as conn:
@@ -148,10 +155,15 @@ def test_generate_deck_missing_commander(client) -> None:
 
 def test_templates_exist() -> None:
     """All required templates exist."""
-    template_dir = Path(__file__).parent.parent / "src" / "sabermetrics" / "ui" / "templates"
+    template_dir = (
+        Path(__file__).parent.parent / "src" / "sabermetrics" / "ui" / "templates"
+    )
     expected = [
-        "base.html", "home.html", "deck_view.html",
-        "profile_view.html", "cost_report.html",
+        "base.html",
+        "home.html",
+        "deck_view.html",
+        "profile_view.html",
+        "cost_report.html",
     ]
     for name in expected:
         assert (template_dir / name).exists(), f"Missing template: {name}"
@@ -161,7 +173,11 @@ def test_static_css_exists() -> None:
     """CSS stylesheet exists."""
     css_path = (
         Path(__file__).parent.parent
-        / "src" / "sabermetrics" / "ui" / "static" / "style.css"
+        / "src"
+        / "sabermetrics"
+        / "ui"
+        / "static"
+        / "style.css"
     )
     assert css_path.exists()
     content = css_path.read_text()
@@ -173,8 +189,9 @@ def test_static_css_exists() -> None:
 
 def test_serve_command_registered() -> None:
     """Serve command is registered in CLI."""
-    from sabermetrics.main import cli
     from click.testing import CliRunner
+
+    from sabermetrics.main import cli
 
     runner = CliRunner()
     result = runner.invoke(cli, ["serve", "--help"])

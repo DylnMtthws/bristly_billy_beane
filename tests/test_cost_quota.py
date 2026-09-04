@@ -14,16 +14,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.setup_db import setup_database  # noqa: E402
-
-from sabermetrics import db  # noqa: E402
-from sabermetrics.config import settings  # noqa: E402
-from sabermetrics.reasoning.client import (  # noqa: E402
+from sabermetrics import db
+from sabermetrics.config import settings
+from sabermetrics.reasoning.client import (
     AnthropicClient,
     CallResult,
     cost_attribution,
 )
-from sabermetrics.ui.app import create_app  # noqa: E402
+from sabermetrics.ui.app import create_app
+from scripts.setup_db import setup_database
 
 
 @pytest.fixture
@@ -96,8 +95,13 @@ def test_log_cost_attribution(db_path) -> None:
     client = AnthropicClient.__new__(AnthropicClient)  # bypass API-key __init__
     client.db_path = db_path
     result = CallResult(
-        content="", model="claude-haiku-4-5", input_tokens=10,
-        cached_input_tokens=0, output_tokens=5, cost_usd=0.01, request_id="r1",
+        content="",
+        model="claude-haiku-4-5",
+        input_tokens=10,
+        cached_input_tokens=0,
+        output_tokens=5,
+        cost_usd=0.01,
+        request_id="r1",
     )
     with cost_attribution("user-1", "deck-1"):
         client._log_cost(result, "fit")
@@ -108,7 +112,9 @@ def test_log_cost_attribution(db_path) -> None:
             "SELECT call_type, user_id, deck_id FROM cost_log ORDER BY id"
         ).fetchall()
     assert (rows[0]["call_type"], rows[0]["user_id"], rows[0]["deck_id"]) == (
-        "fit", "user-1", "deck-1",
+        "fit",
+        "user-1",
+        "deck-1",
     )
     assert rows[1]["user_id"] is None and rows[1]["deck_id"] is None
 

@@ -16,10 +16,20 @@ from sabermetrics.analytics.deck_clustering import (
 
 LIB = load_library()
 
-ARISTO = ["Blood Artist", "Zulaport Cutthroat", "Cruel Celebrant",
-          "Bastion of Remembrance", "Viscera Seer"]
-LANDFALL = ["Lotus Cobra", "Scute Swarm", "Rampaging Baloths",
-            "Avenger of Zendikar", "Felidar Retreat"]
+ARISTO = [
+    "Blood Artist",
+    "Zulaport Cutthroat",
+    "Cruel Celebrant",
+    "Bastion of Remembrance",
+    "Viscera Seer",
+]
+LANDFALL = [
+    "Lotus Cobra",
+    "Scute Swarm",
+    "Rampaging Baloths",
+    "Avenger of Zendikar",
+    "Felidar Retreat",
+]
 
 
 def _decks(card_lists) -> list[DeckRecord]:
@@ -35,8 +45,8 @@ def test_build_feature_matrix_shape_and_content() -> None:
     assert feats.shape == (2, len(names))
     ai = names.index("aristocrats")
     li = names.index("landfall")
-    assert feats[0, ai] > 0 and feats[0, li] == 0   # aristocrats deck
-    assert feats[1, li] > 0 and feats[1, ai] == 0   # landfall deck
+    assert feats[0, ai] > 0 and feats[0, li] == 0  # aristocrats deck
+    assert feats[1, li] > 0 and feats[1, ai] == 0  # landfall deck
 
 
 def test_build_feature_matrix_normalizes_rows() -> None:

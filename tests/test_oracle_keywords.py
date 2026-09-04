@@ -1,13 +1,17 @@
 """Tests for oracle text keyword extraction and CVAR synergy integration."""
 
+from sabermetrics.analytics.cvar import ScoringContext, compute_synergy_score
 from sabermetrics.analytics.oracle_keywords import (
     card_matches_referenced_keywords,
     extract_referenced_keywords,
     extract_referenced_mechanics,
 )
-from sabermetrics.analytics.cvar import ScoringContext, compute_synergy_score
-from sabermetrics.models.profile import MispricedCardExample, ValueInversion, StrategicProfile
 from sabermetrics.models.evidence import EvidencePackage
+from sabermetrics.models.profile import (
+    MispricedCardExample,
+    StrategicProfile,
+    ValueInversion,
+)
 
 
 def _make_card(
@@ -151,7 +155,10 @@ def test_unrelated_card_does_not_match() -> None:
         type_line="Creature — Badger",
         keywords=["Trample"],
     )
-    assert card_matches_referenced_keywords(card, ["defender"], ["toughness_matters"]) is False
+    assert (
+        card_matches_referenced_keywords(card, ["defender"], ["toughness_matters"])
+        is False
+    )
 
 
 def test_no_match_when_empty_refs() -> None:
@@ -503,9 +510,9 @@ def test_toughness_matters_rejects_base_stat_setting() -> None:
         type_line="Creature — Human Pirate",
         keywords=["Flying"],
     )
-    assert card_matches_referenced_keywords(
-        marauder, [], ["toughness_matters"]
-    ) is False
+    assert (
+        card_matches_referenced_keywords(marauder, [], ["toughness_matters"]) is False
+    )
 
     spirit = _make_card(
         "Ascendant Spirit",
@@ -516,9 +523,7 @@ def test_toughness_matters_rejects_base_stat_setting() -> None:
         type_line="Creature — Spirit",
         keywords=["Flying"],
     )
-    assert card_matches_referenced_keywords(
-        spirit, [], ["toughness_matters"]
-    ) is False
+    assert card_matches_referenced_keywords(spirit, [], ["toughness_matters"]) is False
 
 
 def test_toughness_matters_accepts_damage_equal_to_toughness() -> None:
@@ -531,9 +536,7 @@ def test_toughness_matters_accepts_damage_equal_to_toughness() -> None:
         ),
         type_line="Enchantment",
     )
-    assert card_matches_referenced_keywords(
-        assault, [], ["toughness_matters"]
-    ) is True
+    assert card_matches_referenced_keywords(assault, [], ["toughness_matters"]) is True
 
 
 def test_toughness_matters_accepts_toughness_buff() -> None:
@@ -543,14 +546,14 @@ def test_toughness_matters_accepts_toughness_buff() -> None:
         oracle_text="Creatures you control get +0/+5 and gain reach until end of turn.",
         type_line="Instant",
     )
-    assert card_matches_referenced_keywords(
-        tower, [], ["toughness_matters"]
-    ) is True
+    assert card_matches_referenced_keywords(tower, [], ["toughness_matters"]) is True
 
 
 def test_high_cmc_card_matches_cost_reduction() -> None:
     """Card with CMC >= 5 matches cost_reduction."""
-    card = _make_card("Blightsteel Colossus", type_line="Artifact Creature — Phyrexian Golem")
+    card = _make_card(
+        "Blightsteel Colossus", type_line="Artifact Creature — Phyrexian Golem"
+    )
     card["cmc"] = 12
     assert card_matches_referenced_keywords(card, [], ["cost_reduction"]) is True
 
@@ -857,9 +860,7 @@ ERIETTE_ACTUAL_TEXT = (
     "you gain X life, where X is the number of Auras you control."
 )
 
-SYTHIS_TEXT = (
-    "Whenever you cast an enchantment spell, you gain 1 life and draw a card."
-)
+SYTHIS_TEXT = "Whenever you cast an enchantment spell, you gain 1 life and draw a card."
 
 NAHIRI_TEXT = (
     "Equipped creatures you control have double strike and indestructible.\n"
@@ -869,8 +870,8 @@ NAHIRI_TEXT = (
 
 SHORIKAI_TEXT = (
     "{1}, {T}: Draw two cards, then discard a card. Create a 1/1 "
-    "colorless Pilot creature token with \"This creature crews "
-    "Vehicles as though its power were 2 greater.\"\n"
+    'colorless Pilot creature token with "This creature crews '
+    'Vehicles as though its power were 2 greater."\n'
     "Shorikai, Genesis Engine can be your commander.\n"
     "Crew 8"
 )
@@ -931,7 +932,10 @@ def test_enchantment_card_matches_enchantment_synergy() -> None:
         oracle_text="Creatures can't attack you unless their controller pays {2}.",
         type_line="Enchantment",
     )
-    assert card_matches_referenced_keywords(propaganda, [], ["enchantment_synergy"]) is True
+    assert (
+        card_matches_referenced_keywords(propaganda, [], ["enchantment_synergy"])
+        is True
+    )
 
 
 def test_creature_does_not_match_enchantment_synergy() -> None:
@@ -1180,8 +1184,7 @@ def test_profile_summary_includes_mispriced_examples() -> None:
         f"Commander: Arcades\n"
         f"Archetype: {profile.primary_archetype}\n"
         f"Game Plan: {profile.game_plan_summary}\n"
-        f"Win Conditions: "
-        + ", ".join(wc.description for wc in profile.win_conditions)
+        f"Win Conditions: " + ", ".join(wc.description for wc in profile.win_conditions)
     )
     if hasattr(profile, "mispriced_card_examples"):
         examples = profile.mispriced_card_examples
@@ -1243,8 +1246,7 @@ def test_profile_summary_works_without_mispriced_examples() -> None:
         f"Commander: Lathril\n"
         f"Archetype: {profile.primary_archetype}\n"
         f"Game Plan: {profile.game_plan_summary}\n"
-        f"Win Conditions: "
-        + ", ".join(wc.description for wc in profile.win_conditions)
+        f"Win Conditions: " + ", ".join(wc.description for wc in profile.win_conditions)
     )
     if hasattr(profile, "mispriced_card_examples"):
         examples = profile.mispriced_card_examples

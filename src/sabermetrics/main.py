@@ -1,19 +1,31 @@
 """CLI interface for Sabermetrics."""
 
 from pathlib import Path
+from typing import Any
 
 import click
 
 
 def _default_db_path() -> Path:
     """Resolve the default database path."""
-    return Path("data/sabermetrics.db")
+    from sabermetrics.config import resolve_db_path
+
+    return resolve_db_path()
 
 
 @click.group()
 @click.version_option(version="0.1.0")
 def cli() -> None:
-    """Sabermetrics for Magic — Commander/EDH deck optimization."""
+    """Sabermetrics for Magic — Commander/EDH deck optimization.
+
+    Loads ``.env`` first so the documented configuration actually takes effect;
+    nothing loaded it before, which made every "set it in .env" instruction in
+    the docs and error messages false. Real environment variables still win, so
+    an explicit export overrides the file rather than the reverse.
+    """
+    from sabermetrics.config import load_env_file
+
+    load_env_file()
 
 
 @cli.command()
@@ -58,8 +70,10 @@ def profile(commander_name: str, user_intent: str | None, force_refresh: bool) -
         click.echo(f"Time: {result.generation_time_seconds:.1f}s")
         click.echo(f"\nArchetype: {result.profile.strategic_profile.primary_archetype}")
         click.echo(f"Game plan: {result.profile.strategic_profile.game_plan_summary}")
-        click.echo(f"Power range: {result.profile.strategic_profile.power_indicators.estimated_floor_bracket}"
-                    f"-{result.profile.strategic_profile.power_indicators.estimated_ceiling_bracket}")
+        click.echo(
+            f"Power range: {result.profile.strategic_profile.power_indicators.estimated_floor_bracket}"
+            f"-{result.profile.strategic_profile.power_indicators.estimated_ceiling_bracket}"
+        )
     except Exception as e:
         click.echo(f"Profile generation failed: {e}")
 
@@ -109,7 +123,7 @@ def build(
     commander_id, full_name = row
     click.echo(f"Building deck for {full_name}...")
 
-    from sabermetrics.pipeline.deck_builder import DeckBuildRequest, DeckBuilder
+    from sabermetrics.pipeline.deck_builder import DeckBuilder, DeckBuildRequest
     from sabermetrics.pipeline.formatters import format_deck
 
     builder = DeckBuilder(db_path)
@@ -160,6 +174,7 @@ def refresh_set(set_code: str) -> None:
     result = subprocess.run(
         [sys.executable, str(script), set_code],
         env={**__import__("os").environ, "PYTHONPATH": str(scripts_dir.parent / "src")},
+        check=False,
     )
     if result.returncode != 0:
         click.echo("Refresh completed with errors (check data/logs/)")
@@ -172,7 +187,10 @@ def refresh_set(set_code: str) -> None:
 @click.option("--top-k", type=int, default=5, help="Number of results.")
 def search_rules(query: str, top_k: int) -> None:
     """Search reference material (rules, etc.)."""
-    from sabermetrics.reference_layer.retriever import ReferenceQuery, ReferenceRetriever
+    from sabermetrics.reference_layer.retriever import (
+        ReferenceQuery,
+        ReferenceRetriever,
+    )
 
     db_path = _default_db_path()
     retriever = ReferenceRetriever(db_path)
@@ -190,14 +208,40 @@ def search_rules(query: str, top_k: int) -> None:
 
 
 @cli.command()
-@click.option("--port", type=int, default=5000, help="Server port.")
-@click.option("--host", default="127.0.0.1", help="Server host.")
+@click.option("--port", type=int, envvar="SABER_PORT", default=5000, show_default=True)
+@click.option(
+    "--host", envvar="SABER_BIND_HOST", default="127.0.0.1", show_default=True
+)
 def serve(port: int, host: str) -> None:
     """Start the Flask UI server."""
     from sabermetrics.ui.app import run_server
+    from scripts.setup_db import setup_database
 
     db_path = _default_db_path()
+    setup_database(db_path)
     run_server(host=host, port=port, db_path=db_path)
+
+
+@cli.command("db-backup")
+@click.argument("dest", type=click.Path(path_type=Path))
+def db_backup(dest: Path) -> None:
+    """Create a consistent online SQLite backup at DEST."""
+    import sqlite3
+
+    from sabermetrics import db
+
+    source = _default_db_path()
+    if not source.exists():
+        raise click.ClickException(f"Database does not exist: {source}")
+    if source.resolve() == dest.resolve():
+        raise click.ClickException("Backup destination must differ from the database")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with (
+        db.connect(source, row_factory=False) as source_conn,
+        sqlite3.connect(str(dest)) as dest_conn,
+    ):
+        source_conn.backup(dest_conn)
+    click.echo(f"Backed up {source} to {dest}")
 
 
 @cli.command("create-admin")
@@ -280,7 +324,9 @@ def invite_user(
     )
     token = invites.create(user_id, ttl_days=ttl_days)
     link = f"{base_url.rstrip('/')}/invite/{token}"
-    click.echo(f"Invited {email}. Send them this one-time link (expires in {ttl_days}d):")
+    click.echo(
+        f"Invited {email}. Send them this one-time link (expires in {ttl_days}d):"
+    )
     click.echo(f"  {link}")
 
 
@@ -340,14 +386,16 @@ def health() -> None:
         click.echo("No source health data recorded yet.")
         return
 
-    click.echo(f"{'Source':<15} {'Last Success':<22} {'Last Failure':<22} {'Failures':>8}")
+    click.echo(
+        f"{'Source':<15} {'Last Success':<22} {'Last Failure':<22} {'Failures':>8}"
+    )
     click.echo("-" * 70)
     for rec in records:
         source = rec.get("source", "?")
         last_ok = rec.get("last_successful_sync", "-") or "-"
         last_fail = rec.get("last_failed_sync", "-") or "-"
         failures = rec.get("consecutive_failures", 0)
-        click.echo(f"{source:<15} {str(last_ok):<22} {str(last_fail):<22} {failures:>8}")
+        click.echo(f"{source:<15} {last_ok!s:<22} {last_fail!s:<22} {failures:>8}")
 
 
 @cli.command(name="build-kb")
@@ -376,6 +424,7 @@ def build_kb(skip_ingest: bool, skip_fetch: bool) -> None:
     result = subprocess.run(
         cmd,
         env={**__import__("os").environ, "PYTHONPATH": str(scripts_dir.parent / "src")},
+        check=False,
     )
     if result.returncode != 0:
         click.echo("Knowledge base build completed with errors (check logs)")
@@ -402,9 +451,12 @@ def index_mechanics(skip_download: bool, force_reindex: bool) -> None:
     data_dir = db_path.parent
 
     cmd = [
-        sys.executable, str(script),
-        "--db-path", str(db_path),
-        "--data-dir", str(data_dir),
+        sys.executable,
+        str(script),
+        "--db-path",
+        str(db_path),
+        "--data-dir",
+        str(data_dir),
     ]
     if skip_download:
         cmd.append("--skip-download")
@@ -415,6 +467,7 @@ def index_mechanics(skip_download: bool, force_reindex: bool) -> None:
     result = subprocess.run(
         cmd,
         env={**__import__("os").environ, "PYTHONPATH": str(scripts_dir.parent / "src")},
+        check=False,
     )
     if result.returncode != 0:
         click.echo("Mechanics indexing completed with errors (check logs)")
@@ -485,7 +538,9 @@ def _report_pulled_corpus(db_path: Path, commander_query: str) -> None:
     help="Popularity sort (a proxy, not power).",
 )
 @click.option(
-    "--max-candidates", type=int, default=600,
+    "--max-candidates",
+    type=int,
+    default=600,
     help="Cost cap: candidate decks examined per commander.",
 )
 @click.option("--full", is_flag=True, help="Re-fetch decks already stored.")
@@ -522,10 +577,13 @@ def pull_decks(
         click.echo(f"\n=== {name} ===")
         try:
             result = ingestion.ingest_commander(
-                name, target=target, sort=sort, full=full,
+                name,
+                target=target,
+                sort=sort,
+                full=full,
                 max_candidates=max_candidates,
             )
-        except Exception as e:  # noqa: BLE001 — one bad commander shouldn't halt a batch
+        except Exception as e:
             click.echo(f"  FAILED: {e}")
             continue
 
@@ -547,10 +605,21 @@ def pull_decks(
 
 @cli.command(name="cluster-decks")
 @click.argument("commander_name")
-@click.option("--k", type=int, default=None, help="Cluster count (default: data-driven).")
-@click.option("--bootstrap", type=int, default=100, help="Bootstrap resamples for ARI stability.")
-@click.option("--floor", type=int, default=20, help="Min decks/cluster for validity (plan: 20-40).")
-@click.option("--no-normalize", is_flag=True, help="Cluster on raw scores, not archetype profile.")
+@click.option(
+    "--k", type=int, default=None, help="Cluster count (default: data-driven)."
+)
+@click.option(
+    "--bootstrap", type=int, default=100, help="Bootstrap resamples for ARI stability."
+)
+@click.option(
+    "--floor",
+    type=int,
+    default=20,
+    help="Min decks/cluster for validity (plan: 20-40).",
+)
+@click.option(
+    "--no-normalize", is_flag=True, help="Cluster on raw scores, not archetype profile."
+)
 def cluster_decks_cmd(
     commander_name: str,
     k: int | None,
@@ -568,20 +637,24 @@ def cluster_decks_cmd(
 
     db_path = _default_db_path()
     report = run_clustering(
-        db_path, commander_name, k=k, n_bootstrap=bootstrap,
-        floor=floor, normalize=not no_normalize,
+        db_path,
+        commander_name,
+        k=k,
+        n_bootstrap=bootstrap,
+        floor=floor,
+        normalize=not no_normalize,
     )
     click.echo(format_report(report))
 
 
 @cli.command(name="value-cards")
 @click.argument("commander_name")
-@click.option("--k", type=int, default=None, help="Cluster count (default: floor-aware auto).")
+@click.option(
+    "--k", type=int, default=None, help="Cluster count (default: floor-aware auto)."
+)
 @click.option("--floor", type=int, default=20, help="Min decks/cluster for validity.")
 @click.option("--top", type=int, default=12, help="Cards shown per list.")
-def value_cards_cmd(
-    commander_name: str, k: int | None, floor: int, top: int
-) -> None:
+def value_cards_cmd(commander_name: str, k: int | None, floor: int, top: int) -> None:
     """Per-cluster card valuation with confidence bands (Phase 4).
 
     Reports each sub-archetype cluster's confident staples (tight CI) and the
@@ -601,7 +674,12 @@ def value_cards_cmd(
 
 @cli.command(name="characterize-variants")
 @click.argument("commander_name")
-@click.option("--sample-decks", type=int, default=1, help="Sample decklists per cluster sent to the LLM.")
+@click.option(
+    "--sample-decks",
+    type=int,
+    default=1,
+    help="Sample decklists per cluster sent to the LLM.",
+)
 def characterize_variants_cmd(commander_name: str, sample_decks: int) -> None:
     """LLM variant characterization over a commander's clusters (Phase 4b).
 
@@ -619,7 +697,7 @@ def characterize_variants_cmd(commander_name: str, sample_decks: int) -> None:
         response, cost, valuation = characterize_variants(
             db_path, commander_name, sample_decks=sample_decks
         )
-    except Exception as e:  # noqa: BLE001 — surface API/key errors cleanly
+    except Exception as e:
         click.echo(f"Variant characterization failed: {e}")
         return
     click.echo(format_variants(response, valuation))
@@ -630,7 +708,9 @@ def characterize_variants_cmd(commander_name: str, sample_decks: int) -> None:
 @click.argument("commander_name")
 @click.option("--test-frac", type=float, default=0.2, help="Held-out fraction.")
 @click.option("--splits", type=int, default=25, help="Random splits to average.")
-@click.option("--top", type=int, default=45, help="Consensus-decklist cards per cluster.")
+@click.option(
+    "--top", type=int, default=45, help="Consensus-decklist cards per cluster."
+)
 def validate_clusters_cmd(
     commander_name: str, test_frac: float, splits: int, top: int
 ) -> None:
@@ -661,18 +741,18 @@ def validate_clusters_cmd(
 @click.option("--full", is_flag=True, help="Full refresh instead of incremental.")
 def sync(source: str | None, full: bool) -> None:
     """Sync data from external sources."""
-    from sabermetrics.ingestion.scryfall import ScryfallIngestion
-    from sabermetrics.ingestion.topdeck import TopDeckIngestion
-    from sabermetrics.ingestion.edhrec import EDHRECIngestion
-    from sabermetrics.ingestion.spellbook import SpellbookIngestion
-    from sabermetrics.ingestion.mtgapi import MtgApiIngestion
-    from sabermetrics.ingestion.moxfield import MoxfieldIngestion
     from sabermetrics.ingestion.archidekt import ArchidektIngestion
     from sabermetrics.ingestion.deckstats import DeckstatsIngestion
+    from sabermetrics.ingestion.edhrec import EDHRECIngestion
+    from sabermetrics.ingestion.moxfield import MoxfieldIngestion
+    from sabermetrics.ingestion.mtgapi import MtgApiIngestion
+    from sabermetrics.ingestion.scryfall import ScryfallIngestion
+    from sabermetrics.ingestion.spellbook import SpellbookIngestion
+    from sabermetrics.ingestion.topdeck import TopDeckIngestion
 
     db_path = _default_db_path()
 
-    all_sources = {
+    all_sources: dict[str, Any] = {
         "scryfall": ScryfallIngestion(db_path),
         "topdeck": TopDeckIngestion(db_path),
         "edhrec": EDHRECIngestion(db_path),
@@ -685,7 +765,9 @@ def sync(source: str | None, full: bool) -> None:
 
     if source:
         if source not in all_sources:
-            click.echo(f"Unknown source '{source}'. Available: {', '.join(all_sources)}")
+            click.echo(
+                f"Unknown source '{source}'. Available: {', '.join(all_sources)}"
+            )
             return
         sources_to_sync = {source: all_sources[source]}
     else:
@@ -710,3 +792,264 @@ def sync(source: str | None, full: bool) -> None:
 
 if __name__ == "__main__":
     cli()
+
+
+@cli.group()
+def cedh() -> None:
+    """cEDH Deck Lab: strategy packs, candidates, provenance."""
+
+
+@cedh.command("packs")
+def cedh_packs() -> None:
+    """List the authored strategy packs and whether each is supported."""
+    from sabermetrics.cedh.factory import build_default_lab
+
+    lab, modes = build_default_lab(db_path=str(_default_db_path()))
+    click.echo(
+        f"modes: cards={modes.cards} meta={modes.meta} "
+        f"model={modes.model} simulator={modes.simulator}"
+    )
+    for notice in modes.notices:
+        click.echo(f"  ! {notice}")
+    click.echo("")
+    for pack in lab.pack_summaries():
+        state = "supported" if pack.supported else "UNSUPPORTED"
+        sim = "sim:yes" if pack.simulator_supported else "sim:no"
+        click.echo(f"{pack.pack_id:<24} {state:<12} {sim:<8} {pack.name}")
+        if not pack.supported:
+            click.echo(f"    {pack.detail}")
+
+
+@cedh.command("build")
+@click.option("--pack", "pack_id", default=None, help="Strategy pack id.")
+@click.option("--intent", default="", help="Free-text intent (needs a model).")
+@click.option("--flex", type=int, default=0, help="Flex slots left open.")
+@click.option(
+    "--out",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Write the decklab-deck-candidate.v1 document here.",
+)
+def cedh_build(
+    pack_id: str | None,
+    intent: str,
+    flex: int,
+    out: Path | None,
+) -> None:
+    """Build a cEDH candidate and report its provenance.
+
+    CLI builds are unattributed: no user owns them, so they are not counted
+    against anyone's quota. The global cost ceiling still applies.
+    """
+    from sabermetrics.cedh.domain import BuildConstraints, LabRequest, MetagameWindow
+    from sabermetrics.cedh.factory import build_default_lab
+    from sabermetrics.cedh.settings import load_cedh_settings
+    from sabermetrics.cedh.simulator import SimulationResult
+
+    settings = load_cedh_settings()
+    lab, modes = build_default_lab(db_path=str(_default_db_path()))
+    for notice in modes.notices:
+        click.echo(f"! {notice}")
+
+    constraints = BuildConstraints(
+        flex_slots=flex,
+        metagame=MetagameWindow(
+            days=settings.meta.window_days,
+            min_event_size=settings.meta.min_event_size,
+        ),
+    )
+    result = lab.run(
+        LabRequest(raw_intent=intent, pack_id=pack_id, constraints=constraints)
+    )
+
+    if result.candidate is None:
+        click.echo(f"\nNo candidate: {result.unsupported_detail}")
+        for warning in result.warnings:
+            click.echo(f"  ! {warning}")
+        raise SystemExit(1)
+
+    candidate = result.candidate
+    click.echo(f"\n{candidate.commander.display_name} — {result.pack_name}")
+    click.echo(f"candidate: {candidate.candidate_id}")
+    click.echo(f"deck sha256: {candidate.deck_sha256}")
+    click.echo(f"cards: {sum(c.quantity for c in candidate.cards)}")
+    click.echo(
+        "roles: "
+        + ", ".join(f"{role} {n}" for role, n in sorted(candidate.role_counts.items()))
+    )
+    click.echo(f"card corpus: {candidate.provenance.card_snapshot}")
+    click.echo(
+        "tournament evidence: "
+        + (
+            candidate.provenance.meta_snapshot
+            if candidate.provenance.meta_available
+            else "NONE"
+        )
+    )
+
+    simulation = result.simulation
+    point = simulation.headline if simulation is not None else None
+    if isinstance(simulation, SimulationResult) and point is not None:
+        click.echo(
+            f"simulation: P(assembled by turn "
+            f"{simulation.objective_turn}) = "
+            f"{point.probability:.2%} over {simulation.games:,} games "
+            f"[{simulation.simulator_version}]"
+        )
+        click.echo(
+            "  a faster number is not a better deck; this measures "
+            f"{simulation.measures}"
+        )
+    else:
+        # A simulator that returned no assembly points is as unmeasured as an
+        # absent one; neither gets to become a number.
+        detail = getattr(simulation, "detail", "") or "no simulation result"
+        click.echo(f"simulation: NOT SIMULATED — {detail}")
+
+    click.echo(f"model cost: ${result.total_cost_usd:.4f}")
+    for warning in result.warnings:
+        click.echo(f"  ! {warning}")
+    for note in candidate.notes:
+        click.echo(f"  - {note}")
+
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(candidate.to_json(), encoding="utf-8")
+        click.echo(f"\nwrote {out}")
+
+
+@cli.command("grant-access")
+@click.argument("tailscale_login")
+@click.option("--name", "display_name", default=None, help="Display name.")
+@click.option("--admin", "as_admin", is_flag=True, help="Grant the admin role.")
+@click.option(
+    "--quota",
+    type=int,
+    default=None,
+    help="Monthly deck quota override (default: the global quota).",
+)
+def grant_access(
+    tailscale_login: str,
+    display_name: str | None,
+    as_admin: bool,
+    quota: int | None,
+) -> None:
+    """Give a tailnet identity an account. The whole provisioning story.
+
+    TAILSCALE_LOGIN is the login Tailscale reports, e.g. 'alice@github' or
+    'alice@example.com'. Find it with `tailscale status` once they have joined
+    the tailnet, or read it off the app's own "no access" page after they try.
+
+    There is no invite link, no password and no email to send: Tailscale has
+    already authenticated them, so this only records what they may do. Re-run it
+    to change a role or quota; it updates an existing account rather than
+    failing.
+    """
+    from sabermetrics import db
+
+    db_path = _default_db_path()
+    users = db.UsersRepo(db_path)
+    role = "admin" if as_admin else "user"
+
+    existing = users.get_by_tailscale_login(tailscale_login)
+    if existing is None and "@" in tailscale_login:
+        # A Tailscale login is often the person's email. If an account already
+        # exists under that address (a password-era account), attach the
+        # identity to it rather than creating a second one that would silently
+        # own none of their decks.
+        by_email = users.get_by_email(tailscale_login)
+        if by_email is not None:
+            users.set_tailscale_login(by_email["id"], tailscale_login)
+            existing = users.get_by_tailscale_login(tailscale_login)
+            click.echo(
+                f"Linked {tailscale_login} to the existing account "
+                f"{by_email['email']} (keeping its decks and feedback)."
+            )
+
+    if existing is not None:
+        users.set_status(existing["id"], "active")
+        if quota is not None:
+            users.set_quota(existing["id"], quota)
+        with db.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE users SET role = ? WHERE id = ?", (role, existing["id"])
+            )
+            if display_name:
+                conn.execute(
+                    "UPDATE users SET display_name = ? WHERE id = ?",
+                    (display_name, existing["id"]),
+                )
+            conn.commit()
+        click.echo(f"Updated {tailscale_login}: role={role}, status=active.")
+        return
+
+    user_id = users.create(
+        tailscale_login=tailscale_login,
+        display_name=display_name or tailscale_login.split("@", 1)[0],
+        role=role,
+        status="active",
+        monthly_deck_quota=quota,
+    )
+    click.echo(f"Granted access to {tailscale_login} (role={role}).")
+    if as_admin:
+        backfilled = users.backfill_deck_owner(user_id)
+        if backfilled:
+            click.echo(f"Backfilled {backfilled} owner-less deck(s) to this admin.")
+
+
+@cli.command("revoke-access")
+@click.argument("tailscale_login")
+@click.option(
+    "--delete",
+    is_flag=True,
+    help="Delete the account outright instead of disabling it.",
+)
+def revoke_access(tailscale_login: str, delete: bool) -> None:
+    """Revoke a tailnet identity's access.
+
+    Disabling is the default and takes effect on the person's next request:
+    identity is re-checked every time, so there is no session left to expire.
+
+    Deleting is offered but rarely right — the account owns their decks and
+    their per-card feedback, and that feedback is the research data this beta
+    exists to collect.
+    """
+    from sabermetrics import db
+
+    db_path = _default_db_path()
+    users = db.UsersRepo(db_path)
+    row = users.get_by_tailscale_login(tailscale_login)
+    if row is None:
+        raise click.ClickException(f"No account for {tailscale_login}.")
+
+    if delete:
+        with db.connect(db_path) as conn:
+            conn.execute("DELETE FROM users WHERE id = ?", (row["id"],))
+            conn.commit()
+        click.echo(f"Deleted the account for {tailscale_login}.")
+        return
+
+    users.set_status(row["id"], "disabled")
+    click.echo(f"Disabled {tailscale_login}. Their next request is refused.")
+
+
+@cli.command("list-access")
+def list_access() -> None:
+    """List every account and its tailnet identity."""
+    from sabermetrics import db
+
+    rows = db.UsersRepo(_default_db_path()).list_all()
+    if not rows:
+        click.echo("No accounts yet. Run: sabermetrics grant-access <login> --admin")
+        return
+
+    click.echo(
+        f"{'TAILNET LOGIN':<32} {'ROLE':<7} {'STATUS':<9} {'NAME':<20} LAST LOGIN"
+    )
+    for row in rows:
+        login = row.get("tailscale_login") or f"(password: {row.get('email') or '?'})"
+        click.echo(
+            f"{login:<32} {row.get('role', ''):<7} {row.get('status', ''):<9} "
+            f"{(row.get('display_name') or '')[:20]:<20} "
+            f"{row.get('last_login_at') or 'never'}"
+        )

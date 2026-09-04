@@ -17,8 +17,8 @@ import yaml
 
 from sabermetrics.analytics.components import (
     count_board_wipes,
-    count_removal,
     count_ramp_spells,
+    count_removal,
     count_tutors,
 )
 
@@ -59,9 +59,7 @@ def _load_game_changers(config_dir: Path | None = None) -> dict[str, int]:
     }
 
 
-def _detect_combos(
-    cards: list[dict], db_path: Path | None = None
-) -> list[dict]:
+def _detect_combos(cards: list[dict], db_path: Path | None = None) -> list[dict]:
     """Check if any known combos are present in the card list.
 
     Args:
@@ -82,15 +80,21 @@ def _detect_combos(
         found = []
         for row in cursor:
             combo_cards_json = row[1]
-            combo_cards = json.loads(combo_cards_json) if isinstance(combo_cards_json, str) else combo_cards_json
+            combo_cards = (
+                json.loads(combo_cards_json)
+                if isinstance(combo_cards_json, str)
+                else combo_cards_json
+            )
             combo_names = {c.lower() for c in combo_cards}
             if combo_names <= card_names:
-                found.append({
-                    "id": row[0],
-                    "cards": combo_cards,
-                    "description": row[2],
-                    "result": row[3],
-                })
+                found.append(
+                    {
+                        "id": row[0],
+                        "cards": combo_cards,
+                        "description": row[2],
+                        "result": row[3],
+                    }
+                )
         return found
     finally:
         conn.close()
@@ -123,10 +127,7 @@ def classify_bracket(
     signals: dict[str, float] = {}
 
     # Non-land cards for analysis
-    non_lands = [
-        c for c in cards
-        if "land" not in (c.get("type_line") or "").lower()
-    ]
+    non_lands = [c for c in cards if "land" not in (c.get("type_line") or "").lower()]
 
     # Signal 1: Game changers present
     gc_found = []
@@ -141,20 +142,26 @@ def classify_bracket(
     signals["max_game_changer_bracket"] = max_gc_bracket
     if gc_found:
         reasoning.append(
-            f"Game changers present ({len(gc_found)}): "
-            + ", ".join(gc_found[:5])
+            f"Game changers present ({len(gc_found)}): " + ", ".join(gc_found[:5])
         )
 
     # Signal 2: Fast mana
     fast_mana_names = {
-        "sol ring", "mana crypt", "mana vault", "chrome mox",
-        "mox diamond", "mox opal", "lotus petal", "jeweled lotus",
-        "dark ritual", "cabal ritual", "simian spirit guide",
+        "sol ring",
+        "mana crypt",
+        "mana vault",
+        "chrome mox",
+        "mox diamond",
+        "mox opal",
+        "lotus petal",
+        "jeweled lotus",
+        "dark ritual",
+        "cabal ritual",
+        "simian spirit guide",
         "elvish spirit guide",
     }
     fast_mana = sum(
-        1 for c in cards
-        if (c.get("name") or "").lower() in fast_mana_names
+        1 for c in cards if (c.get("name") or "").lower() in fast_mana_names
     )
     signals["fast_mana"] = fast_mana
     if fast_mana > 0:
@@ -194,21 +201,35 @@ def classify_bracket(
     bracket = 2  # Default: focused casual
 
     # Bracket 5: cEDH indicators
-    if (fast_mana >= 4 and tutors >= 5 and len(combos) >= 2 and avg_cmc < 2.5):
+    if fast_mana >= 4 and tutors >= 5 and len(combos) >= 2 and avg_cmc < 2.5:
         bracket = 5
-        reasoning.append("cEDH indicators: heavy fast mana + tutors + combos + low curve")
+        reasoning.append(
+            "cEDH indicators: heavy fast mana + tutors + combos + low curve"
+        )
     # Bracket 4: High power
-    elif (max_gc_bracket >= 4 or (fast_mana >= 2 and tutors >= 3) or
-          (len(combos) >= 2 and tutors >= 2)):
+    elif (
+        max_gc_bracket >= 4
+        or (fast_mana >= 2 and tutors >= 3)
+        or (len(combos) >= 2 and tutors >= 2)
+    ):
         bracket = 4
-        reasoning.append("High power: game changers and/or significant fast mana + tutors")
+        reasoning.append(
+            "High power: game changers and/or significant fast mana + tutors"
+        )
     # Bracket 3: Optimized casual
-    elif (ramp >= 10 and removal >= 5 and (tutors >= 1 or fast_mana >= 1)):
+    elif ramp >= 10 and removal >= 5 and (tutors >= 1 or fast_mana >= 1):
         bracket = 3
-        reasoning.append("Optimized casual: good ramp/removal suite with some optimization")
+        reasoning.append(
+            "Optimized casual: good ramp/removal suite with some optimization"
+        )
     # Bracket 1: Precon-like
-    elif (fast_mana == 0 and tutors == 0 and len(combos) == 0 and
-          avg_cmc >= 3.5 and ramp < 8):
+    elif (
+        fast_mana == 0
+        and tutors == 0
+        and len(combos) == 0
+        and avg_cmc >= 3.5
+        and ramp < 8
+    ):
         bracket = 1
         reasoning.append("Precon-level: no optimization, high curve, minimal ramp")
     else:

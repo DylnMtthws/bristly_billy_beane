@@ -38,8 +38,13 @@ def _assignment(card, role="utility", score=0.5):
 
 def _template(floors=None):
     return DeckTemplate(
-        land_count=36, ramp_count=8, draw_count=6, removal_count=6,
-        board_wipe_count=2, differentiator_slots=37, avg_cmc_target=3.0,
+        land_count=36,
+        ramp_count=8,
+        draw_count=6,
+        removal_count=6,
+        board_wipe_count=2,
+        differentiator_slots=37,
+        avg_cmc_target=3.0,
         type_floors=floors,
     )
 
@@ -66,7 +71,10 @@ def test_deficit_is_repaired_weakest_first(builder):
     pool = [_aura("Best Aura", cvar=0.9), _aura("Good Aura", cvar=0.7)]
 
     out, swaps = builder._enforce_type_floors(
-        deck, pool, _template({"aura": 3}), budget=200.0,
+        deck,
+        pool,
+        _template({"aura": 3}),
+        budget=200.0,
     )
 
     assert swaps == 2
@@ -79,7 +87,10 @@ def test_deficit_is_repaired_weakest_first(builder):
 def test_no_floors_is_a_noop(builder):
     deck = [_assignment(_card("Anything"), score=0.1)]
     out, swaps = builder._enforce_type_floors(
-        deck, [_aura("Aura")], _template(None), budget=200.0,
+        deck,
+        [_aura("Aura")],
+        _template(None),
+        budget=200.0,
     )
     assert swaps == 0 and _names(out) == ["Anything"]
 
@@ -87,8 +98,10 @@ def test_no_floors_is_a_noop(builder):
 def test_met_floor_is_a_noop(builder):
     deck = [_assignment(_aura("Aura One")), _assignment(_card("Creature"))]
     out, swaps = builder._enforce_type_floors(
-        deck, [_aura("Better Aura", cvar=0.99)],
-        _template({"aura": 1}), budget=200.0,
+        deck,
+        [_aura("Better Aura", cvar=0.99)],
+        _template({"aura": 1}),
+        budget=200.0,
     )
     assert swaps == 0 and "Better Aura" not in _names(out)
 
@@ -100,7 +113,10 @@ def test_protected_cards_are_never_swapped_out(builder):
         _assignment(_card("Weak Filler"), score=0.3),
     ]
     out, swaps = builder._enforce_type_floors(
-        deck, [_aura("New Aura")], _template({"aura": 1}), budget=200.0,
+        deck,
+        [_aura("New Aura")],
+        _template({"aura": 1}),
+        budget=200.0,
         protected_names={"Reserved Staple"},
     )
     assert swaps == 1
@@ -110,12 +126,18 @@ def test_protected_cards_are_never_swapped_out(builder):
 
 def test_lands_are_never_swapped_out(builder):
     deck = [
-        _assignment(_card("Some Plains", type_line="Basic Land — Plains",
-                          price=0.0), role="land", score=0.0),
+        _assignment(
+            _card("Some Plains", type_line="Basic Land — Plains", price=0.0),
+            role="land",
+            score=0.0,
+        ),
         _assignment(_card("Filler"), score=0.4),
     ]
     out, swaps = builder._enforce_type_floors(
-        deck, [_aura("New Aura")], _template({"aura": 1}), budget=200.0,
+        deck,
+        [_aura("New Aura")],
+        _template({"aura": 1}),
+        budget=200.0,
     )
     assert swaps == 1 and "Some Plains" in _names(out)
 
@@ -130,7 +152,10 @@ def test_budget_delta_skips_to_affordable_candidate(builder):
     # Deck total 0.10, budget 5 -> headroom 4.90: the $150 delta fails,
     # the $0.40 delta fits.
     out, swaps = builder._enforce_type_floors(
-        deck, pool, _template({"aura": 1}), budget=5.0,
+        deck,
+        pool,
+        _template({"aura": 1}),
+        budget=5.0,
     )
     assert swaps == 1 and _names(out) == ["Budget Aura"]
 
@@ -142,7 +167,10 @@ def test_anti_engine_candidates_are_excluded(builder):
         _aura("Clean Aura", cvar=0.50),
     ]
     out, swaps = builder._enforce_type_floors(
-        deck, pool, _template({"aura": 1}), budget=200.0,
+        deck,
+        pool,
+        _template({"aura": 1}),
+        budget=200.0,
     )
     assert swaps == 1 and _names(out) == ["Clean Aura"]
 
@@ -151,6 +179,9 @@ def test_unmet_floor_degrades_gracefully(builder):
     """Pool exhaustion leaves the deck valid and merely under-floor."""
     deck = [_assignment(_card("Filler"), score=0.2)]
     out, swaps = builder._enforce_type_floors(
-        deck, [_aura("Only Aura")], _template({"aura": 5}), budget=200.0,
+        deck,
+        [_aura("Only Aura")],
+        _template({"aura": 5}),
+        budget=200.0,
     )
     assert swaps == 1 and len(out) == 1

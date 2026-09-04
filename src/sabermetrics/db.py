@@ -5,7 +5,7 @@ consistent), plus thin repositories for the most-duplicated query shapes and a
 helper for hydrating Pydantic models from rows. This replaces the pattern of
 each module calling ``sqlite3.connect()`` directly with its own ad-hoc setup.
 
-Connection policy (deliberately behavior-preserving):
+Connection policy:
 
 - ``row_factory`` defaults to :class:`sqlite3.Row`. A ``Row`` supports positional
   (``row[0]``), keyed (``row["col"]``), iteration, and ``dict(row)`` access, so
@@ -14,8 +14,8 @@ Connection policy (deliberately behavior-preserving):
   foreign keys enabled (``scripts/setup_db.py``), but application connections
   have historically run with SQLite's per-connection default (off). Turning it on
   globally here could reject inserts that currently succeed, so it stays opt-in.
-- WAL journal mode is a persistent property of the database file, already set at
-  setup time; no per-connection pragma is needed.
+- Every connection sets a five-second busy timeout and WAL journal mode. WAL is
+  persistent, but setting it idempotently also hardens a newly copied database.
 """
 
 from __future__ import annotations
@@ -89,7 +89,11 @@ def connect(
     Yields:
         An open :class:`sqlite3.Connection`.
     """
-    conn = sqlite3.connect(str(db_path))
+    path = Path(db_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA journal_mode=WAL")
     if row_factory:
         conn.row_factory = sqlite3.Row
     if foreign_keys:
@@ -232,11 +236,12 @@ class UsersRepo:
     def create(
         self,
         *,
-        email: str,
+        email: str | None = None,
         display_name: str | None = None,
         role: str = "user",
         status: str = "invited",
         password_hash: str | None = None,
+        tailscale_login: str | None = None,
         avatar_emoji: str | None = None,
         invited_by: str | None = None,
         monthly_deck_quota: int | None = None,
@@ -244,22 +249,30 @@ class UsersRepo:
     ) -> str:
         """Insert a new user and return its id.
 
+        ``email`` is optional because a tailnet-authenticated account is keyed
+        on ``tailscale_login`` and may have no email at all — a GitHub SSO
+        identity renders as ``someone@github``, which is not an address anyone
+        can be reached at.
+
         Raises:
-            sqlite3.IntegrityError: if ``email`` is already taken.
+            sqlite3.IntegrityError: if ``email`` or ``tailscale_login`` is
+                already taken.
         """
         uid = user_id or new_id()
         with connect(self.db_path) as conn:
             conn.execute(
                 """INSERT INTO users
-                (id, email, display_name, avatar_emoji, password_hash, role,
-                 status, monthly_deck_quota, invited_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (id, email, display_name, avatar_emoji, password_hash,
+                 tailscale_login, role, status, monthly_deck_quota,
+                 invited_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     uid,
                     email,
                     display_name,
                     avatar_emoji,
                     password_hash,
+                    tailscale_login,
                     role,
                     status,
                     monthly_deck_quota,
@@ -269,6 +282,85 @@ class UsersRepo:
             )
             conn.commit()
         return uid
+
+    def get_by_tailscale_login(self, login: str) -> dict | None:
+        """Look up an account by its tailnet identity.
+
+        The lookup is exact and case-sensitive: Tailscale login names are
+        stable identifiers, and loosening the match here would be the one place
+        two identities could collide into one account.
+        """
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM users WHERE tailscale_login = ?", (login,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def register_failed_login(
+        self, user_id: str, *, threshold: int, lock_minutes: int
+    ) -> bool:
+        """Count a failed sign-in and lock the account past ``threshold``.
+
+        Returns:
+            True if the account is now locked.
+
+        Locking the account rather than only the source address is what makes
+        this useful against a public login page: an attacker can rotate IPs,
+        and behind Tailscale Funnel legitimate traffic may share one.
+        """
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COALESCE(failed_login_count, 0) FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+            count = (row[0] if row else 0) + 1
+            locked_until = None
+            if count >= threshold:
+                locked_until = (
+                    datetime.now() + timedelta(minutes=lock_minutes)
+                ).isoformat(timespec="seconds")
+            conn.execute(
+                "UPDATE users SET failed_login_count = ?, locked_until = ? "
+                "WHERE id = ?",
+                (count, locked_until, user_id),
+            )
+            conn.commit()
+        return locked_until is not None
+
+    def clear_failed_logins(self, user_id: str) -> None:
+        """Reset the failure counter after a successful sign-in."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE users SET failed_login_count = 0, locked_until = NULL "
+                "WHERE id = ?",
+                (user_id,),
+            )
+            conn.commit()
+
+    @staticmethod
+    def lock_expires_at(row: dict) -> datetime | None:
+        """Return when ``row``'s lock expires, or None if it is not locked.
+
+        A lock in the past is not a lock: this returns None once it has
+        elapsed, so the account recovers without anyone clearing a flag.
+        """
+        raw = row.get("locked_until")
+        if not raw:
+            return None
+        try:
+            expires = datetime.fromisoformat(str(raw))
+        except ValueError:
+            return None
+        return expires if expires > datetime.now() else None
+
+    def set_tailscale_login(self, user_id: str, login: str | None) -> None:
+        """Attach (or clear) a tailnet identity on an existing account."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE users SET tailscale_login = ? WHERE id = ?",
+                (login, user_id),
+            )
+            conn.commit()
 
     def get(self, user_id: str) -> dict | None:
         """Return the user row for ``user_id``, or None."""
@@ -334,9 +426,7 @@ class UsersRepo:
     def set_status(self, user_id: str, status: str) -> None:
         """Set a user's status (``invited`` | ``active`` | ``disabled``)."""
         with connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE users SET status = ? WHERE id = ?", (status, user_id)
-            )
+            conn.execute("UPDATE users SET status = ? WHERE id = ?", (status, user_id))
             conn.commit()
 
     def set_quota(self, user_id: str, quota: int | None) -> None:
@@ -629,8 +719,15 @@ class FeedbackRepo:
                     card_name = excluded.card_name,
                     updated_at = excluded.updated_at""",
                 (
-                    new_id(), user_id, deck_id, card_id, card_name,
-                    self._norm(vote), self._norm(comment), now, now,
+                    new_id(),
+                    user_id,
+                    deck_id,
+                    card_id,
+                    card_name,
+                    self._norm(vote),
+                    self._norm(comment),
+                    now,
+                    now,
                 ),
             )
             conn.commit()
@@ -650,8 +747,13 @@ class FeedbackRepo:
                     comment = excluded.comment,
                     updated_at = excluded.updated_at""",
                 (
-                    new_id(), user_id, deck_id,
-                    self._norm(verdict), self._norm(comment), now, now,
+                    new_id(),
+                    user_id,
+                    deck_id,
+                    self._norm(verdict),
+                    self._norm(comment),
+                    now,
+                    now,
                 ),
             )
             conn.commit()
@@ -664,7 +766,9 @@ class FeedbackRepo:
                 "WHERE user_id = ? AND deck_id = ?",
                 (user_id, deck_id),
             ).fetchall()
-        return {r["card_id"]: {"vote": r["vote"], "comment": r["comment"]} for r in rows}
+        return {
+            r["card_id"]: {"vote": r["vote"], "comment": r["comment"]} for r in rows
+        }
 
     def deck(self, user_id: str, deck_id: str) -> dict | None:
         """Return this user's deck-level feedback ({verdict, comment}) or None."""
@@ -691,8 +795,9 @@ class AdminAnalyticsRepo:
     def overview(self) -> dict:
         """High-level KPIs for the admin landing page."""
         with connect(self.db_path) as conn:
+
             def scalar(sql: str) -> float:
-                return conn.execute(sql).fetchone()[0]
+                return float(conn.execute(sql).fetchone()[0])
 
             status_rows = conn.execute(
                 "SELECT status, COUNT(*) n FROM users GROUP BY status"
@@ -867,3 +972,190 @@ class AdminAnalyticsRepo:
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+
+class CedhCandidatesRepo:
+    """Persistence for cEDH Deck Lab candidates.
+
+    The candidate document is stored verbatim as JSON. It is a versioned
+    artifact handed to another repository, and shredding it into columns would
+    mean a schema change here could silently reshape what a downstream consumer
+    reads back. Everything else stored alongside it is an index onto that
+    document, not a second source of truth.
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = Path(db_path)
+
+    def save(
+        self,
+        *,
+        candidate_id: str,
+        owner_id: str | None,
+        pack_id: str,
+        commander_key: str,
+        commander_name: str,
+        deck_sha256: str,
+        candidate_json: str,
+        evidence_hash: str = "",
+        meta_available: bool = False,
+        simulation_status: str = "",
+        simulation_json: str | None = None,
+        explanation_json: str | None = None,
+        warnings: list[str] | None = None,
+    ) -> None:
+        """Insert or replace one candidate."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO cedh_candidates "
+                "(candidate_id, owner_id, pack_id, commander_key, "
+                "commander_name, deck_sha256, candidate_json, evidence_hash, "
+                "meta_available, simulation_status, simulation_json, "
+                "explanation_json, warnings_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    candidate_id,
+                    owner_id,
+                    pack_id,
+                    commander_key,
+                    commander_name,
+                    deck_sha256,
+                    candidate_json,
+                    evidence_hash,
+                    1 if meta_available else 0,
+                    simulation_status,
+                    simulation_json,
+                    explanation_json,
+                    json.dumps(warnings or []),
+                ),
+            )
+            conn.commit()
+
+    def get(self, candidate_id: str) -> dict | None:
+        """Fetch one candidate row, or None."""
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM cedh_candidates WHERE candidate_id = ?",
+                (candidate_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def owner_of(self, candidate_id: str) -> str | None:
+        """Return the owning user id, or None if unowned/absent."""
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT owner_id FROM cedh_candidates WHERE candidate_id = ?",
+                (candidate_id,),
+            ).fetchone()
+            return row["owner_id"] if row else None
+
+    def list_for_owner(self, user_id: str, *, limit: int = 50) -> list[dict]:
+        """Most recent candidates for one user."""
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT candidate_id, created_at, pack_id, commander_name, "
+                "simulation_status, meta_available "
+                "FROM cedh_candidates WHERE owner_id = ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def count_this_month(self, user_id: str) -> int:
+        """Candidates this user has built since the 1st of the month.
+
+        Counted against the same per-user quota as the casual generator: a lab
+        run spends tokens, and a quota that only counted one of the two paths
+        would not be a quota.
+        """
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM cedh_candidates WHERE owner_id = ? "
+                "AND created_at >= date('now', 'start of month')",
+                (user_id,),
+            ).fetchone()
+            return int(row[0] or 0)
+
+
+class BuildJobsRepo:
+    """Persistence and state transitions for asynchronous cEDH builds."""
+
+    ACTIVE_STATUSES = ("queued", "running", "simulating", "explaining")
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = Path(db_path)
+
+    def create(
+        self, *, user_id: str, request_json: str, job_id: str | None = None
+    ) -> str:
+        """Queue one build job and return its opaque id."""
+        jid = job_id or new_id()
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO build_jobs (id, user_id, status, request_json) "
+                "VALUES (?, ?, 'queued', ?)",
+                (jid, user_id, request_json),
+            )
+            conn.commit()
+        return jid
+
+    def get(self, job_id: str) -> dict | None:
+        """Fetch one build job, or None."""
+        with connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM build_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def set_status(
+        self,
+        job_id: str,
+        status: str,
+        *,
+        candidate_id: str | None = None,
+        error_code: str | None = None,
+        error_detail: str | None = None,
+    ) -> None:
+        """Move a job to ``status`` and maintain lifecycle timestamps."""
+        started = "CURRENT_TIMESTAMP" if status == "running" else "started_at"
+        finished = (
+            "CURRENT_TIMESTAMP" if status in {"done", "failed"} else "finished_at"
+        )
+        with connect(self.db_path) as conn:
+            conn.execute(
+                f"UPDATE build_jobs SET status = ?, started_at = {started}, "
+                f"finished_at = {finished}, candidate_id = ?, "
+                "error_code = ?, error_detail = ? WHERE id = ?",
+                (
+                    status,
+                    candidate_id,
+                    error_code,
+                    error_detail,
+                    job_id,
+                ),
+            )
+            conn.commit()
+
+    def fail_interrupted(self) -> int:
+        """Fail jobs abandoned by a prior process, returning the row count.
+
+        A missing table is allowed during first-run app construction; the CLI
+        initializes the schema immediately before serving.
+        """
+        try:
+            with connect(self.db_path) as conn:
+                placeholders = ",".join("?" for _ in self.ACTIVE_STATUSES)
+                cursor = conn.execute(
+                    f"UPDATE build_jobs SET status = 'failed', "
+                    "error_code = 'interrupted', "
+                    "error_detail = 'Build interrupted by process restart', "
+                    "finished_at = CURRENT_TIMESTAMP "
+                    f"WHERE status IN ({placeholders})",
+                    self.ACTIVE_STATUSES,
+                )
+                conn.commit()
+                return cursor.rowcount
+        except sqlite3.OperationalError as exc:
+            if "no such table" not in str(exc):
+                raise
+            return 0

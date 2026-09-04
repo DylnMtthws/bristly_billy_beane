@@ -1,0 +1,85 @@
+# cEDH Deck Lab configuration.
+#
+# Secrets are NOT here. The model credential is read from the environment
+# variable named by `model.credential_env` (default HF_TOKEN).
+#
+# The monthly cost ceiling is deliberately absent: it lives in
+# config/settings.yaml as `llm.monthly_cost_ceiling_usd` and bounds spend
+# across both the legacy Anthropic path and this gateway. One ceiling.
+
+model:
+  # Provider is pinned. `:deepinfra` on the model id is the pin -- a
+  # `:cheapest` route would make the model id recorded on every usage row a
+  # guess about which model actually answered.
+  provider: "deepinfra"
+  base_url: "https://router.huggingface.co/v1"
+  model_id: "deepseek-ai/DeepSeek-V4-Flash:deepinfra"
+  credential_env: "HF_TOKEN"
+  timeout_seconds: 60.0
+  max_retries: 2
+  max_validation_retries: 1
+  require_pinned_provider: true
+
+  # USD per 1M tokens. Configuration, not constants in code: a price change
+  # must not require a code edit, and every cost figure in the UI and the
+  # ledger is computed from exactly these numbers.
+  #
+  # VERIFY BEFORE RELYING ON COST FIGURES. These are the DeepInfra list prices
+  # recorded when the adapter was written; the router bills what the provider
+  # charges on the day, not what is written here.
+  pricing:
+    input: 0.25
+    cached_input: 0.025
+    output: 0.85
+    # null => reasoning tokens are billed at the output rate.
+    reasoning: null
+
+  # Reasoning modes. `extra_body` is passed to the provider verbatim, which is
+  # what keeps the gateway provider-neutral -- the vendor's parameter name for
+  # "think less" is config, not code.
+  modes:
+    # Request classification: no thinking. Mechanical normalisation only.
+    classify:
+      extra_body:
+        reasoning_effort: "none"
+      max_output_tokens: 400
+      temperature: 0.0
+    # Explanations shown to a person: ordinary reasoning.
+    explain:
+      extra_body:
+        reasoning_effort: "low"
+      max_output_tokens: 1200
+      temperature: 0.2
+    # Elevated. Only for decisions documented as ambiguous; the gateway
+    # requires an ambiguity_note before it will use this mode at all.
+    adjudicate:
+      extra_body:
+        reasoning_effort: "high"
+      max_output_tokens: 2000
+      temperature: 0.0
+
+evidence:
+  # Hard bounds. The model never sees the card corpus or an unbounded deck
+  # corpus; it sees at most this much, attributed.
+  max_chunks: 24
+  max_chars_per_chunk: 1200
+  max_total_chars: 16000
+  cache_ttl_hours: 168
+
+simulator:
+  # fixture | subprocess | off. `fixture` is the default until the simulator
+  # publishes the versioned JSON contract in docs/integration-handoff.md.
+  mode: "fixture"
+  binary_path: ""
+  cards_path: "fixtures/cedh/cards.json"
+  fixture_dir: "fixtures/cedh/simulation"
+  games: 20000
+  objective_turn: 3
+  timeout_seconds: 330.0
+
+meta:
+  window_days: 180
+  min_event_size: 32
+
+packs_dir: "config/cedh_packs"
+fixtures_dir: "fixtures/cedh"

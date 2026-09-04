@@ -38,15 +38,14 @@ _cost_context: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
 
 
 @contextmanager
-def cost_attribution(
-    user_id: str | None, deck_id: str | None
-) -> Iterator[None]:
+def cost_attribution(user_id: str | None, deck_id: str | None) -> Iterator[None]:
     """Attribute cost_log rows written in this scope to a user + deck."""
     token = _cost_context.set({"user_id": user_id, "deck_id": deck_id})
     try:
         yield
     finally:
         _cost_context.reset(token)
+
 
 # ADR-011: allowed models. All three are current, active model IDs (verified
 # against the Anthropic model catalog). Keep this set in sync with the models
@@ -113,9 +112,7 @@ def validate_models() -> None:
         )
     retired = ALLOWED_MODELS & KNOWN_RETIRED_MODELS
     if retired:
-        raise FatalError(
-            f"Allowed models are retired (will 404): {sorted(retired)}"
-        )
+        raise FatalError(f"Allowed models are retired (will 404): {sorted(retired)}")
 
 
 def validate_configured_models(configured: dict[str, str]) -> None:
@@ -175,18 +172,18 @@ class AnthropicClient:
         validate_models()
         from sabermetrics.config import settings
 
-        validate_configured_models({
-            "profile_model": settings.llm.profile_model,
-            "fit_model": settings.llm.fit_model,
-            "synthesis_model": settings.llm.synthesis_model,
-            "refresh_model": settings.llm.refresh_model,
-            "template_model": settings.llm.template_model,
-        })
+        validate_configured_models(
+            {
+                "profile_model": settings.llm.profile_model,
+                "fit_model": settings.llm.fit_model,
+                "synthesis_model": settings.llm.synthesis_model,
+                "refresh_model": settings.llm.refresh_model,
+                "template_model": settings.llm.template_model,
+            }
+        )
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not api_key:
-            raise FatalError(
-                "ANTHROPIC_API_KEY not set. Export it or add to .env"
-            )
+            raise FatalError("ANTHROPIC_API_KEY not set. Export it or add to .env")
         self._client = anthropic.Anthropic(api_key=api_key)
 
     @classmethod
@@ -236,6 +233,7 @@ class AnthropicClient:
 
         # Check cost ceiling
         from sabermetrics.config import settings
+
         monthly_ceiling = settings.llm.monthly_cost_ceiling_usd
         current_spend = self.get_monthly_spend()
         if current_spend >= monthly_ceiling:
@@ -267,10 +265,12 @@ class AnthropicClient:
                 if content_blocks:
                     content_blocks[-1]["cache_control"] = {"type": "ephemeral"}
 
-            api_messages.append({
-                "role": msg.get("role", "user"),
-                "content": content_blocks,
-            })
+            api_messages.append(
+                {
+                    "role": msg.get("role", "user"),
+                    "content": content_blocks,
+                }
+            )
 
         # Retry with exponential backoff
         last_error = None
@@ -288,9 +288,7 @@ class AnthropicClient:
                 usage = response.usage
                 input_tokens = usage.input_tokens
                 output_tokens = usage.output_tokens
-                cached_input = getattr(
-                    usage, "cache_read_input_tokens", 0
-                ) or 0
+                cached_input = getattr(usage, "cache_read_input_tokens", 0) or 0
 
                 # Compute cost
                 cost = self.estimate_cost(
@@ -321,45 +319,53 @@ class AnthropicClient:
                 logger.info(
                     "API call: model=%s type=%s input=%d cached=%d "
                     "output=%d cost=$%.4f",
-                    model, call_type, input_tokens, cached_input,
-                    output_tokens, cost,
+                    model,
+                    call_type,
+                    input_tokens,
+                    cached_input,
+                    output_tokens,
+                    cost,
                 )
 
                 return result
 
             except anthropic.RateLimitError as e:
                 last_error = e
-                wait = 2 ** attempt * 2
+                wait = 2**attempt * 2
                 logger.warning(
                     "Rate limited (attempt %d/3), waiting %ds: %s",
-                    attempt + 1, wait, e,
+                    attempt + 1,
+                    wait,
+                    e,
                 )
                 time.sleep(wait)
 
             except anthropic.APIConnectionError as e:
                 last_error = e
-                wait = 2 ** attempt * 2
+                wait = 2**attempt * 2
                 logger.warning(
                     "Connection error (attempt %d/3), waiting %ds: %s",
-                    attempt + 1, wait, e,
+                    attempt + 1,
+                    wait,
+                    e,
                 )
                 time.sleep(wait)
 
             except anthropic.APIStatusError as e:
                 if e.status_code >= 500:
                     last_error = e
-                    wait = 2 ** attempt * 2
+                    wait = 2**attempt * 2
                     logger.warning(
                         "Server error %d (attempt %d/3), waiting %ds",
-                        e.status_code, attempt + 1, wait,
+                        e.status_code,
+                        attempt + 1,
+                        wait,
                     )
                     time.sleep(wait)
                 else:
                     raise FatalError(f"API error: {e}") from e
 
-        raise RecoverableError(
-            f"API call failed after 3 retries: {last_error}"
-        )
+        raise RecoverableError(f"API call failed after 3 retries: {last_error}")
 
     def estimate_cost(
         self,

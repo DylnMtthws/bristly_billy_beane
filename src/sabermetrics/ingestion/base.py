@@ -71,8 +71,6 @@ class SourceHealthMixin:
         """When did this source last successfully sync? None if never."""
         return SourceHealthRepo(self.db_path).last_successful_sync(self.name)
 
-    def _update_source_health(
-        self, success: bool, error: str | None = None
-    ) -> None:
+    def _update_source_health(self, success: bool, error: str | None = None) -> None:
         """Record a sync outcome in the source_health table."""
         SourceHealthRepo(self.db_path).record(self.name, success, error)

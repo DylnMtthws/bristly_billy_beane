@@ -101,34 +101,42 @@ def parse_alternative_costs(oracle_text: str | None) -> list[dict]:
     # Evoke
     match = _EVOKE_RE.search(oracle_text)
     if match:
-        results.append({
-            "method": "evoke",
-            "cmc": _parse_mana_cost_cmc(match.group(1)),
-        })
+        results.append(
+            {
+                "method": "evoke",
+                "cmc": _parse_mana_cost_cmc(match.group(1)),
+            }
+        )
 
     # Dash
     match = _DASH_RE.search(oracle_text)
     if match:
-        results.append({
-            "method": "dash",
-            "cmc": _parse_mana_cost_cmc(match.group(1)),
-        })
+        results.append(
+            {
+                "method": "dash",
+                "cmc": _parse_mana_cost_cmc(match.group(1)),
+            }
+        )
 
     # Madness
     match = _MADNESS_RE.search(oracle_text)
     if match:
-        results.append({
-            "method": "madness",
-            "cmc": _parse_mana_cost_cmc(match.group(1)),
-        })
+        results.append(
+            {
+                "method": "madness",
+                "cmc": _parse_mana_cost_cmc(match.group(1)),
+            }
+        )
 
     # Unearth
     match = _UNEARTH_RE.search(oracle_text)
     if match:
-        results.append({
-            "method": "unearth",
-            "cmc": _parse_mana_cost_cmc(match.group(1)),
-        })
+        results.append(
+            {
+                "method": "unearth",
+                "cmc": _parse_mana_cost_cmc(match.group(1)),
+            }
+        )
 
     return results
 

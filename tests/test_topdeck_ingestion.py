@@ -22,24 +22,40 @@ _DECKLIST = (
     "~~Sideboard~~\\n1 Should Be Ignored\\n"
 )
 
-_FIXTURE = [{
-    "TID": "test-tourney-1",
-    "startDate": "2026-06-01",
-    "standings": [
-        {"name": "Alice", "wins": 4, "losses": 1, "draws": 0,
-         "winRate": 0.8, "standing": 1, "decklist": _DECKLIST},
-        {"name": "Bob", "wins": 2, "losses": 2, "draws": 1,
-         "winRate": 0.5, "standing": 5, "decklist": None},  # no deck
-    ],
-}]
+_FIXTURE = [
+    {
+        "TID": "test-tourney-1",
+        "startDate": "2026-06-01",
+        "standings": [
+            {
+                "name": "Alice",
+                "wins": 4,
+                "losses": 1,
+                "draws": 0,
+                "winRate": 0.8,
+                "standing": 1,
+                "decklist": _DECKLIST,
+            },
+            {
+                "name": "Bob",
+                "wins": 2,
+                "losses": 2,
+                "draws": 1,
+                "winRate": 0.5,
+                "standing": 5,
+                "decklist": None,
+            },  # no deck
+        ],
+    }
+]
 
 # Real card names present in the synthetic DB (map to fake ids).
 _CARDS = {
     "Sisay, Weatherlight Captain": "id-sisay",
     "Sol Ring": "id-sol",
     "Swords to Plowshares": "id-swords",
-    "Agatha's Soul Cauldron": "id-agatha",   # note: no backslash in real name
-    "Malakir Rebirth": "id-malakir",          # front face only
+    "Agatha's Soul Cauldron": "id-agatha",  # note: no backslash in real name
+    "Malakir Rebirth": "id-malakir",  # front face only
 }
 
 
@@ -47,8 +63,7 @@ _CARDS = {
 def db(tmp_path) -> Path:
     p = tmp_path / "td.db"
     conn = sqlite3.connect(str(p))
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE cards (id TEXT PRIMARY KEY, name TEXT);
         CREATE TABLE decks (id TEXT PRIMARY KEY, source TEXT, source_id TEXT,
             commander_id TEXT, deck_name TEXT, creator TEXT);
@@ -61,8 +76,7 @@ def db(tmp_path) -> Path:
         CREATE TABLE source_health (source TEXT PRIMARY KEY,
             last_successful_sync TIMESTAMP, last_failed_sync TIMESTAMP,
             last_error TEXT, consecutive_failures INTEGER DEFAULT 0);
-        """
-    )
+        """)
     for name, cid in _CARDS.items():
         conn.execute("INSERT INTO cards VALUES (?, ?)", (cid, name))
     conn.commit()
@@ -71,6 +85,7 @@ def db(tmp_path) -> Path:
 
 
 # --- _parse_decklist ---
+
 
 def test_parse_decklist_sections_and_quantities() -> None:
     cmds, main = _parse_decklist(_DECKLIST)
@@ -82,7 +97,9 @@ def test_parse_decklist_sections_and_quantities() -> None:
 
 
 def test_parse_decklist_handles_real_newlines_and_empty() -> None:
-    cmds, main = _parse_decklist("~~Commanders~~\n1 Krenko, Mob Boss\n~~Mainboard~~\n2 Goblin")
+    cmds, main = _parse_decklist(
+        "~~Commanders~~\n1 Krenko, Mob Boss\n~~Mainboard~~\n2 Goblin"
+    )
     assert cmds == ["Krenko, Mob Boss"] and main == ["Goblin"]
     assert _parse_decklist(None) == ([], [])
     assert _parse_decklist("") == ([], [])
@@ -90,18 +107,24 @@ def test_parse_decklist_handles_real_newlines_and_empty() -> None:
 
 # --- _resolve_card_id normalization ---
 
+
 def test_resolve_card_id_variants(db) -> None:
     ing = TopDeckIngestion(db)
     conn = sqlite3.connect(str(db))
-    assert ing._resolve_card_id(conn, "Sol Ring") == "id-sol"           # exact
-    assert ing._resolve_card_id(conn, "sol ring") == "id-sol"           # case
-    assert ing._resolve_card_id(conn, "Agatha\\'s Soul Cauldron") == "id-agatha"  # escaped '
-    assert ing._resolve_card_id(conn, "Malakir Rebirth // Malakir Mire") == "id-malakir"  # DFC front
+    assert ing._resolve_card_id(conn, "Sol Ring") == "id-sol"  # exact
+    assert ing._resolve_card_id(conn, "sol ring") == "id-sol"  # case
+    assert (
+        ing._resolve_card_id(conn, "Agatha\\'s Soul Cauldron") == "id-agatha"
+    )  # escaped '
+    assert (
+        ing._resolve_card_id(conn, "Malakir Rebirth // Malakir Mire") == "id-malakir"
+    )  # DFC front
     assert ing._resolve_card_id(conn, "Totally Not A Real Card 9000") is None
     conn.close()
 
 
 # --- _process_tournament ---
+
 
 def test_process_tournament_writes_results_and_deck_cards(db) -> None:
     ing = TopDeckIngestion(db)
@@ -112,7 +135,9 @@ def test_process_tournament_writes_results_and_deck_cards(db) -> None:
 
     conn = sqlite3.connect(str(db))
     conn.row_factory = sqlite3.Row
-    rows = {r["player_name"]: r for r in conn.execute("SELECT * FROM tournament_results")}
+    rows = {
+        r["player_name"]: r for r in conn.execute("SELECT * FROM tournament_results")
+    }
     assert set(rows) == {"Alice"}
     alice = rows["Alice"]
     assert alice["commander_id"] == "id-sisay"
@@ -127,6 +152,7 @@ def test_process_tournament_writes_results_and_deck_cards(db) -> None:
 
 
 # --- full sync() with mocked httpx ---
+
 
 def test_sync_populates_from_mocked_api(db) -> None:
     ing = TopDeckIngestion(db)

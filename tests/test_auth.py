@@ -14,10 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.setup_db import setup_database  # noqa: E402
-
-from sabermetrics import db  # noqa: E402
-from sabermetrics.ui.app import create_app  # noqa: E402
+from sabermetrics import db
+from sabermetrics.ui.app import create_app
+from scripts.setup_db import setup_database
 
 
 @pytest.fixture
@@ -78,7 +77,9 @@ def test_xhr_unauthorized_returns_401_json(client) -> None:
 # --- Login flow ---
 
 
-def _make_active_user(db_path, email="tester@local", password="password123", role="user"):
+def _make_active_user(
+    db_path, email="tester@local", password="password123", role="user"
+):
     repo = db.UsersRepo(db_path)
     return repo.create(
         email=email,
@@ -103,9 +104,7 @@ def test_login_success_grants_access(client, db_path) -> None:
 
 def test_login_wrong_password_rejected(client, db_path) -> None:
     _make_active_user(db_path)
-    resp = client.post(
-        "/login", data={"email": "tester@local", "password": "nope"}
-    )
+    resp = client.post("/login", data={"email": "tester@local", "password": "nope"})
     assert resp.status_code == 200
     assert b"Invalid email or password" in resp.data
     # Still gated.

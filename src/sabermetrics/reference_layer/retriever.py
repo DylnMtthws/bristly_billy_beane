@@ -83,9 +83,7 @@ class ReferenceRetriever:
             )
             return self._retrieve_by_text(query)
 
-    def _retrieve_by_embedding(
-        self, query: ReferenceQuery
-    ) -> list[RetrievedChunk]:
+    def _retrieve_by_embedding(self, query: ReferenceQuery) -> list[RetrievedChunk]:
         """Retrieve chunks using cosine similarity over embeddings."""
         # Compute query embedding
         indexer = self._get_indexer()
@@ -99,17 +97,14 @@ class ReferenceRetriever:
 
         # Compute similarities
         results: list[tuple[float, dict]] = []
-        for chunk_id, data in chunks_data.items():
+        for data in chunks_data.values():
             embedding = data["embedding"]
             meta = data["meta"]
 
             # Apply filters
             if query.tier_filter and meta["tier"] not in query.tier_filter:
                 continue
-            if (
-                query.document_filter
-                and meta["document"] not in query.document_filter
-            ):
+            if query.document_filter and meta["document"] not in query.document_filter:
                 continue
 
             similarity = self._cosine_similarity(query_embedding, embedding)
@@ -134,9 +129,7 @@ class ReferenceRetriever:
 
         return retrieved
 
-    def _retrieve_by_text(
-        self, query: ReferenceQuery
-    ) -> list[RetrievedChunk]:
+    def _retrieve_by_text(self, query: ReferenceQuery) -> list[RetrievedChunk]:
         """Fallback: retrieve chunks using simple text matching."""
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
@@ -164,9 +157,7 @@ class ReferenceRetriever:
 
             for row in rows:
                 content_lower = row["content"].lower()
-                matches = sum(
-                    1 for w in query_words if w in content_lower
-                )
+                matches = sum(1 for w in query_words if w in content_lower)
                 if matches > 0:
                     score = matches / len(query_words)
                     scored.append(
@@ -222,9 +213,7 @@ class ReferenceRetriever:
 
             cache: dict[str, dict] = {}
             for row in cursor:
-                embedding = np.frombuffer(
-                    row["embedding"], dtype=np.float32
-                )
+                embedding = np.frombuffer(row["embedding"], dtype=np.float32)
                 cache[row["id"]] = {
                     "embedding": embedding,
                     "meta": {

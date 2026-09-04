@@ -7,7 +7,6 @@ Pure function: same inputs -> same outputs. <100ms per card.
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -26,7 +25,7 @@ class CVARResult(BaseModel):
     mana_efficiency_score: float
     replacement_value_score: float
     price_efficiency_score: float
-    card_win_equity: Optional[float] = None
+    card_win_equity: float | None = None
 
 
 class ScoringContext(BaseModel):
@@ -36,18 +35,20 @@ class ScoringContext(BaseModel):
     commander_name: str
     commander_colors: list[str]
     commander_keywords: list[str] = Field(default_factory=list)
-    commander_oracle_text: Optional[str] = None
+    commander_oracle_text: str | None = None
     referenced_keywords: list[str] = Field(default_factory=list)
     referenced_mechanics: list[str] = Field(default_factory=list)
     engine_keywords: list[str] = Field(default_factory=list)
     output_keywords: list[str] = Field(default_factory=list)
-    edhrec_top_cards: dict[str, float] = Field(default_factory=dict)  # card_name_lower -> inclusion_pct
+    edhrec_top_cards: dict[str, float] = Field(
+        default_factory=dict
+    )  # card_name_lower -> inclusion_pct
     # Per-variant empirical inclusion from our own verified decklist corpus
     # (card_name_lower -> rate 0-1). Sharper than pooled EDHREC; corroboration
     # only — absence is neutral, never a penalty (preserves undervalued picks).
     empirical_inclusion: dict[str, float] = Field(default_factory=dict)
     empirical_reliable: set[str] = Field(default_factory=set)  # tight-CI card names
-    empirical_variant: Optional[str] = None
+    empirical_variant: str | None = None
     desired_card_traits: list[str] = Field(default_factory=list)
     # Card Win Equity from tournament data, keyed by card_id (batch-loaded once
     # per commander, like edhrec_top_cards). cwe_score is win_rate_with minus
@@ -63,7 +64,7 @@ class ScoringContext(BaseModel):
     weights_replacement_value: float = 0.30
     weights_price_efficiency: float = 0.0
     average_card_price: float = 2.0
-    max_budget: Optional[float] = None
+    max_budget: float | None = None
 
 
 def _count_desired_trait_matches(card: dict, traits: list[str]) -> int:
@@ -102,13 +103,22 @@ def _count_desired_trait_matches(card: dict, traits: list[str]) -> int:
                 break
         else:
             # Check type mentions
-            for type_kw in ("wall", "artifact", "enchantment", "creature", "instant", "sorcery"):
+            for type_kw in (
+                "wall",
+                "artifact",
+                "enchantment",
+                "creature",
+                "instant",
+                "sorcery",
+            ):
                 if type_kw in trait_lower and type_kw in type_line:
                     matches += 1
                     break
             else:
                 # Check CMC-related traits
-                if ("low mana cost" in trait_lower or "low cmc" in trait_lower) and cmc <= 3:
+                if (
+                    "low mana cost" in trait_lower or "low cmc" in trait_lower
+                ) and cmc <= 3:
                     matches += 1
                 elif "high toughness" in trait_lower:
                     toughness = card.get("toughness")
@@ -145,9 +155,7 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
     # Engine-aware mechanic matching
     if context.engine_keywords:
         # Cards matching engine keywords get full bonus
-        engine_matches = sum(
-            1 for kw in context.engine_keywords if kw in oracle_text
-        )
+        engine_matches = sum(1 for kw in context.engine_keywords if kw in oracle_text)
         if engine_matches > 0:
             score += min(0.4, engine_matches * 0.15)
         # Cards matching ONLY output keywords (not engine) get zero from
@@ -161,10 +169,22 @@ def compute_synergy_score(card: dict, context: ScoringContext) -> float:
     else:
         # Fallback: original mechanic_patterns for commanders without engine data
         mechanic_patterns = [
-            "sacrifice", "token", "counter", "draw", "graveyard",
-            "exile", "enters the battlefield", "dies", "combat damage",
-            "life", "mana", "enchantment", "artifact", "creature",
-            "aura", "equipment",
+            "sacrifice",
+            "token",
+            "counter",
+            "draw",
+            "graveyard",
+            "exile",
+            "enters the battlefield",
+            "dies",
+            "combat damage",
+            "life",
+            "mana",
+            "enchantment",
+            "artifact",
+            "creature",
+            "aura",
+            "equipment",
         ]
         shared = 0
         for pattern in mechanic_patterns:
@@ -248,19 +268,32 @@ _ROLE_IMPACT: dict[str, float] = {
 
 # Oracle text fallback patterns for impact detection (when role tags unavailable)
 _HIGH_IMPACT_PHRASES = [
-    "destroy all", "exile all", "each opponent loses",
-    "extra turn", "you win the game", "each player sacrifices",
-    "all creatures get", "return all",
+    "destroy all",
+    "exile all",
+    "each opponent loses",
+    "extra turn",
+    "you win the game",
+    "each player sacrifices",
+    "all creatures get",
+    "return all",
 ]
 _MEDIUM_HIGH_IMPACT_PHRASES = [
-    "destroy target", "exile target", "counter target spell",
-    "draw a card", "draw cards", "draws a card",
-    "search your library", "return target",
-    "deals damage to any target", "deals damage to each",
+    "destroy target",
+    "exile target",
+    "counter target spell",
+    "draw a card",
+    "draw cards",
+    "draws a card",
+    "search your library",
+    "return target",
+    "deals damage to any target",
+    "deals damage to each",
     "whenever",
 ]
 _RAMP_PHRASES = [
-    "add {", "add one mana", "add mana",
+    "add {",
+    "add one mana",
+    "add mana",
 ]
 
 
@@ -378,9 +411,7 @@ def compute_replacement_value(
     return min(1.0, base)
 
 
-def compute_price_efficiency(
-    card: dict, avg_price: float = 2.0
-) -> float:
+def compute_price_efficiency(card: dict, avg_price: float = 2.0) -> float:
     """Score price efficiency: cheaper cards relative to average score higher.
 
     Range: 0.0 to 1.0. Cards without prices are treated as floor-priced.

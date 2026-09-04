@@ -1,0 +1,16 @@
+{
+  "_README": "Synthetic unavailable-capability fixture. Unavailability is explicit and is not represented as an empty cohort.",
+  "availability": {
+    "summaries_available": false,
+    "inclusion_available": false,
+    "summary_detail": "mtg_v1.tournament: required columns or SELECT permission unavailable",
+    "inclusion_detail": "card inclusion requires the tournament-summary capability"
+  },
+  "snapshot": {"source_view": "mtg_v1.tournament"},
+  "tournaments": [],
+  "tournament_entries": [],
+  "decks": [],
+  "deck_commanders": [],
+  "deck_cards": [],
+  "cards": []
+}

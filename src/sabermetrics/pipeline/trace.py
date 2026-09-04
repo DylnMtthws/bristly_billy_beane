@@ -35,12 +35,10 @@ CREATE TABLE IF NOT EXISTS generation_traces (
 )
 """
 _CREATE_IDX_GEN = (
-    "CREATE INDEX IF NOT EXISTS idx_traces_gen "
-    "ON generation_traces(generation_id)"
+    "CREATE INDEX IF NOT EXISTS idx_traces_gen " "ON generation_traces(generation_id)"
 )
 _CREATE_IDX_CARD = (
-    "CREATE INDEX IF NOT EXISTS idx_traces_card "
-    "ON generation_traces(card_name)"
+    "CREATE INDEX IF NOT EXISTS idx_traces_card " "ON generation_traces(card_name)"
 )
 
 
@@ -106,15 +104,17 @@ class GenerationTracer:
         if not force and card_name not in self.watchlist:
             return
 
-        self._events.append(TraceEvent(
-            card_name=card_name,
-            card_id=card_id,
-            stage=stage,
-            action=action,
-            score=score,
-            score_components=score_components,
-            reason=reason,
-        ))
+        self._events.append(
+            TraceEvent(
+                card_name=card_name,
+                card_id=card_id,
+                stage=stage,
+                action=action,
+                score=score,
+                score_components=score_components,
+                reason=reason,
+            )
+        )
 
     def set_generation_id(self, generation_id: str) -> None:
         """Update the generation ID (called once the real deck ID is known)."""
@@ -170,7 +170,8 @@ class GenerationTracer:
             count = len(rows)
             logger.info(
                 "Flushed %d trace events for generation %s",
-                count, self.generation_id,
+                count,
+                self.generation_id,
             )
             return count
         finally:

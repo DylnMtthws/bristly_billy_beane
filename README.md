@@ -10,10 +10,18 @@ card, grounding that reasoning in card text, aggregated decklists, community
 discussion and the official rules.
 
 > **Scope.** A multi-user web app, self-hosted on one machine, Commander format
-> only. Accounts are provisioned by the owner through one-time invite links —
-> there is no self-registration. The app binds to localhost only; public access
-> is via a Cloudflare Tunnel rather than an exposed port. Not deployed publicly
-> yet. See [Scope & non-goals](#scope--non-goals).
+> only. Accounts are provisioned by the owner — there is no self-registration.
+> The app binds to localhost and is published to a private Tailscale tailnet;
+> it has no public surface at all. See [Deployment](docs/deployment.md) and
+> [Scope & non-goals](#scope--non-goals).
+
+> **Two paths, one app.** The original generator above builds casual Commander
+> decks and runs on a local SQLite corpus. The **[cEDH Deck Lab](#the-cedh-deck-lab)**
+> is a separate, competitive-only path that reads card and tournament facts from
+> the `mtg_v1` contract published by a sibling ingestion repository, builds from
+> curated strategy packs deterministically, and hands its result to a goldfishing
+> simulator. It shares this app's accounts, quota and cost ceiling and nothing
+> else. New work goes there.
 
 ## Architecture in one paragraph
 
@@ -44,14 +52,15 @@ configured monthly spend ceiling is reached.
 | | |
 |---|---|
 | **Language** | Python ≥ 3.11 |
-| **Typing** | Type hints throughout; mypy configured, 45 errors outstanding (reported, not gated) |
-| **Tests** | 774 collected across 67 files — 754 pass, 20 skip without a local database |
+| **Typing** | Type hints throughout; mypy configured, 42 errors outstanding (reported, not gated); the `cedh/` package is mypy-clean |
+| **Tests** | 976 collected across 75 files — 948 pass, 28 skip (no local database, and the three opt-in live integrations) |
 | **CI** | GitHub Actions; pytest gates the build, ruff (345 findings) and mypy report only, black not run |
-| **LLM** | Anthropic — `claude-sonnet-4-6` for profile synthesis, fit scoring and deck synthesis; `claude-haiku-4-5` for refresh; prompt caching enabled |
-| **Data sources** | 11 ingestion modules — Scryfall, EDHREC, Moxfield, Archidekt, deckstats, TopDeck.gg, Commander Spellbook, magicthegathering.io, Reddit, Game Knights, WotC rules |
+| **LLM** | Two paths. Casual: Anthropic `claude-sonnet-4-6` (profile, fit, synthesis) and `claude-haiku-4-5` (refresh), prompt caching on. cEDH: a provider-neutral gateway, DeepSeek-V4-Flash on DeepInfra by default, structured output required and Pydantic-validated |
+| **Data sources** | Casual: 11 ingestion modules — Scryfall, EDHREC, Moxfield, Archidekt, deckstats, TopDeck.gg, Commander Spellbook, magicthegathering.io, Reddit, Game Knights, WotC rules. cEDH: the `mtg_v1` Postgres contract only, plus curated strategy material |
 | **Retrieval** | `all-MiniLM-L6-v2` on CPU; cosine similarity in numpy over embeddings stored as SQLite blobs |
-| **Interfaces** | Flask web app (3 blueprints) and an 18-command Click CLI |
-| **Auth** | Flask-Login sessions, argon2id hashing, CSRF on POST, invite-only provisioning, no self-registration |
+| **Interfaces** | Flask web app (4 blueprints: portal, admin, auth, cEDH lab) and a 19-command Click CLI |
+| **Auth** | Three modes: tailnet identity from `tailscale serve` (no passwords), `hybrid` for public deployments, or email + argon2id. CSRF on POST, per-account lockout, admin-provisioned in every mode, no self-registration |
+| **Hosting** | `tailscale serve` on a private tailnet, or `tailscale funnel` for a public URL; app bound to 127.0.0.1, no port forward either way |
 | **Scheduling** | 4 macOS launchd jobs — nightly, weekly, monthly, quarterly |
 | **Commits** | 157 on `main`, 2026-05-06 to 2026-08-26 |
 
@@ -107,6 +116,7 @@ inspection.
 
 - [What a build produces](#what-a-build-produces)
 - [How it works](#how-it-works)
+- [The cEDH Deck Lab](#the-cedh-deck-lab)
 - [Requirements](#requirements)
 - [Setup](#setup)
 - [Usage](#usage)
@@ -168,6 +178,71 @@ Card selection is a pipeline of cheap deterministic stages that narrow ~25,000 c
 The differentiator is **strategic comprehension, not a better popularity heuristic** — made affordable by aggressive prompt caching and the filter-before-reason design.
 
 ---
+
+## The cEDH Deck Lab
+
+Competitive Commander only. Not a power-level slider on the casual generator —
+a different product with a different definition of a good answer.
+
+### What is different
+
+| | Casual generator | cEDH Deck Lab |
+|---|---|---|
+| **Card facts** | local SQLite, filled by `ingestion/` | `mtg_v1.card_any_medium` (Postgres, sibling repo) |
+| **Card selection** | scoring pipeline over the legal pool | deterministic fill from a curated strategy pack |
+| **Model role** | scores fit, vets the assembled deck | classifies intent, summarises evidence, explains. Never selects a card |
+| **Model provider** | Anthropic | provider-neutral gateway; DeepSeek on DeepInfra by default |
+| **Budget** | the objective | **does not exist.** cEDH is proxy-normal, so the engine never sees a price |
+| **Evidence** | EDHREC inclusion, Reddit, decklists | tournament results, with event counts and sample sizes |
+| **Validation** | none | goldfishing simulator, or a visible "not simulated" |
+
+### The rules it holds itself to
+
+The three that shaped the design, each enforced by a test rather than a
+convention:
+
+- **The model never picks a card.** Selection is deterministic and finished
+  before the first model call. If the provider is down, over budget, or returns
+  something that will not validate, the deck is unchanged and the narrative is
+  missing — with a note saying so.
+- **Absence is shown as absence.** No tournament data is "no tournament data",
+  never an empty result that reads like "no decks ran this". No simulator is
+  "not simulated", never a neutral score — a neutral number is indistinguishable
+  from a measured one once it is in a table.
+- **Popularity is not quality.** An inclusion rate is displayed with its
+  denominator, its window and its event-size floor, or it is not displayed.
+- **Price is not a performance signal.** cEDH is proxy-normal: the expensive
+  cards get proxied, so what a card costs says nothing about whether it wins a
+  round. There is no budget setting, `CardFacts` has no price field, and the
+  live card query does not select one — absence enforced by tests, because a
+  price field that exists eventually becomes a tie-break.
+- **The engine does not know who is asking.** No collection, no owned-cards
+  preference. A new deck means acquiring or proxying cards, so preferring
+  what's already in a binder is a price constraint wearing a different hat.
+  Selection sees the pack and the role and nothing else, which is also what
+  makes a build reproducible: the same pack yields the same 99 for everyone,
+  so the candidate hash identifies a list rather than a list-plus-requester.
+
+### Try it
+
+```bash
+sabermetrics cedh packs        # which commanders are supported, and in which mode
+sabermetrics cedh build --pack kinnan_basalt --out candidate.json
+```
+
+Or use the **cEDH Lab** tab in the web UI. Both work with no database, no model
+credential and no simulator binary — the first vertical slice (Kinnan, Bonder
+Prodigy) runs against checked-in fixtures, and every page states which of its
+inputs are fixtures rather than live.
+
+### What is not built
+
+One commander pack, because the simulator models one deck. The interfaces take
+more; nothing claims more exists. Tournament evidence is derived from the live
+atomic `mtg_v1` views. The simulator is a separate versioned JSON boundary; an
+unavailable result remains visible in the product rather than worked around.
+[`docs/integration-handoff.md`](docs/integration-handoff.md) states exactly what
+is needed from each sibling repository.
 
 ## Requirements
 
@@ -241,35 +316,62 @@ Builds work without this — the empirical layer degrades cleanly to community-w
 ## Configuration
 
 - **Tunable behavior** lives in `config/settings.yaml` (scoring weights, budget policy, reservation caps, model choices). No magic constants in code.
-- **Secrets** live in `.env` (only `ANTHROPIC_API_KEY` today).
+- **cEDH settings** live in `config/cedh.yaml` — model provider, base URL, pricing, reasoning modes, evidence bounds, simulator mode. Model **pricing is configuration**, so a provider price change is a YAML edit rather than a code change.
+- **Strategy packs** live in `config/cedh_packs/*.yaml`, authored by card name and resolved to `oracle_id`s at load. **Curated strategy material** lives in `config/cedh_evidence/*.yaml` — reviewed and versioned, never scraped at generation time.
 - **Reference data and synergy rules** live under `config/` (`synergy_rules.yaml`, `game_changers.yaml`, `auto_include_cards.yaml`, …).
 
-Cost is bounded by design: every LLM call routes through a wrapper that logs token usage and enforces a monthly spend ceiling.
+Secrets stay in the environment, never in `config/`:
+
+| Variable | Needed for | Absent means |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | the casual generator | that path cannot run |
+| `HF_TOKEN` | the cEDH model gateway | decks still build; no narrative |
+| `MTG_V1_DSN` | live `mtg_v1` card and tournament facts (`mtg_consumer` role) | the lab uses its fixture corpus and says so |
+| `CEDH_MODEL_BASE_URL`, `CEDH_MODEL_ID`, `CEDH_MODEL_PROVIDER` | overriding the model per deployment | the values in `config/cedh.yaml` |
+| `SABER_SECRET_KEY` | stable sessions and CSRF | a random key; sessions do not survive a restart |
+
+Cost is bounded by design: every model call — Anthropic or DeepSeek — logs token usage to one `cost_log` table and is refused once **one** monthly spend ceiling (`llm.monthly_cost_ceiling_usd`) is reached. One ceiling across both providers, because a per-provider ceiling is two soft limits rather than one hard stop.
 
 ## Project layout
 
 ```
 src/sabermetrics/
-  analytics/        # scoring, filters, empirical valuation, clustering
-  pipeline/         # deck builder, role generators, synergy optimizer, mana base
-  reasoning/        # LLM client, profile synthesis, deck vet, prompts
-  ingestion/        # Scryfall, Archidekt, EDHREC, TopDeck data sources
-  reference_layer/  # rules/strategy RAG for grounded reasoning
-  ui/               # local Flask app
-config/             # settings + tunable rules (YAML)
-scripts/            # setup, ingestion, scheduled refresh jobs
-tests/              # ~690 tests
+  cedh/             # the cEDH Deck Lab: repositories, model gateway, evidence,
+                    #   deterministic builder, simulator boundary, candidate export
+  analytics/        # scoring, filters, empirical valuation, clustering  (casual)
+  pipeline/         # deck builder, role generators, synergy optimizer    (casual)
+  reasoning/        # Anthropic client, profile synthesis, deck vet       (casual)
+  ingestion/        # Scryfall, Archidekt, EDHREC, TopDeck                (casual)
+  reference_layer/  # rules/strategy RAG for grounded reasoning           (casual)
+  ui/               # Flask app: portal, admin, cEDH lab
+config/             # settings, strategy packs, curated evidence (YAML)
+fixtures/cedh/      # offline corpus, tournament and simulation fixtures
+scripts/            # setup, ingestion, scheduled refresh, fixture generation
+tests/              # ~980 tests
 ```
+
+`cedh/` imports nothing from `analytics/`, `pipeline/`, `reasoning/`,
+`ingestion/` or `reference_layer/`, and no vendor model SDK. Both rules are
+asserted by tests over the import graph rather than left as conventions.
 
 Automated data refresh (nightly prices, weekly decklists, monthly rulings, quarterly set releases) is wired for macOS `launchd`; see `scripts/install_launchd.sh`.
 
 ## Development
 
 ```bash
-pytest                    # run the test suite (~690 tests)
+pytest                    # the whole suite: no network, no Postgres, no model, no binary
 ruff check src tests
 black src tests
 mypy src
+```
+
+The default suite is offline by construction, and a test asserts it. Live
+integrations are opt-in and each skips unless its dependency is configured:
+
+```bash
+pytest -m postgres        # needs MTG_V1_DSN
+pytest -m model           # needs HF_TOKEN; spends real money
+pytest -m simulator       # needs CEDH_SIMULATOR_BIN
 ```
 
 Type hints are required; data structures that cross module boundaries use Pydantic v2. Core scoring functions, filters, and parsers must have unit tests.
@@ -283,7 +385,7 @@ Deliberately **not** built, and not planned:
 - Real-time gameplay assistance or game simulation
 - Manual data entry or human-in-the-loop labeling of any kind
 
-Multi-user support and hosted access were on this list until the July 2026 pivot, ruled out as firmly as the items above. Multi-user is now built; hosted access is planned but not yet deployed.
+Multi-user support and hosted access were on this list until the July 2026 pivot, ruled out as firmly as the items above. Multi-user is now built, and access is via a private Tailscale tailnet rather than the public internet — the Cloudflare Tunnel that was once planned was never deployed and is no longer the design ([ADR-026](docs/deployment.md)).
 
 The guiding constraints are locality (one process, one machine), bounded cost (every operation has a budget), and observability (every recommendation cites its sources).
 

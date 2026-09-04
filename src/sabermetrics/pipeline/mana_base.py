@@ -47,12 +47,24 @@ MANA_SYMBOL_COLORS: dict[str, str] = {
 # Key: (pips_of_color_in_cost, turn_to_cast) → sources required
 # This is the in-memory default; overridden by load_karsten_config().
 KARSTEN_SOURCES_99: dict[tuple[int, int], int] = {
-    (1, 1): 22, (1, 2): 19, (1, 3): 17, (1, 4): 15, (1, 5): 13,
-    (1, 6): 12, (1, 7): 11,
-    (2, 2): 27, (2, 3): 23, (2, 4): 20, (2, 5): 18,
-    (2, 6): 16, (2, 7): 15,
-    (3, 3): 29, (3, 4): 26, (3, 5): 23,
-    (3, 6): 21, (3, 7): 19,
+    (1, 1): 22,
+    (1, 2): 19,
+    (1, 3): 17,
+    (1, 4): 15,
+    (1, 5): 13,
+    (1, 6): 12,
+    (1, 7): 11,
+    (2, 2): 27,
+    (2, 3): 23,
+    (2, 4): 20,
+    (2, 5): 18,
+    (2, 6): 16,
+    (2, 7): 15,
+    (3, 3): 29,
+    (3, 4): 26,
+    (3, 5): 23,
+    (3, 6): 21,
+    (3, 7): 19,
 }
 
 # Cached Karsten config
@@ -70,7 +82,11 @@ def load_karsten_config() -> dict:
     if _KARSTEN_CONFIG is not None:
         return _KARSTEN_CONFIG
 
-    config_path = Path(__file__).resolve().parent.parent.parent.parent / "config" / "karsten_mana_base.yaml"
+    config_path = (
+        Path(__file__).resolve().parent.parent.parent.parent
+        / "config"
+        / "karsten_mana_base.yaml"
+    )
     if not config_path.exists():
         logger.warning("karsten_mana_base.yaml not found, using built-in defaults")
         _KARSTEN_CONFIG = {
@@ -127,21 +143,18 @@ def target_land_count(avg_cmc: float) -> int:
 
     return 36  # Safe default
 
+
 # Regex patterns for oracle text parsing
 _ADD_MANA_PATTERN = re.compile(
     r"\{[Tt]\}:\s*[Aa]dd\s+(\{[WUBRGC]\}(?:\s*(?:or|,)\s*\{[WUBRGC]\})*)"
 )
-_ADD_MANA_SIMPLE = re.compile(
-    r"[Aa]dd\s+(\{[WUBRGC]\}(?:\s*(?:or|,)\s*\{[WUBRGC]\})*)"
-)
+_ADD_MANA_SIMPLE = re.compile(r"[Aa]dd\s+(\{[WUBRGC]\}(?:\s*(?:or|,)\s*\{[WUBRGC]\})*)")
 _MANA_SYMBOLS = re.compile(r"\{([WUBRG])\}")
-_ANY_COLOR = re.compile(r"(?:any color|any one color|one mana of any color)", re.IGNORECASE)
-_ETB_TAPPED = re.compile(
-    r"enters the battlefield tapped|enters tapped", re.IGNORECASE
+_ANY_COLOR = re.compile(
+    r"(?:any color|any one color|one mana of any color)", re.IGNORECASE
 )
-_ETB_TAPPED_UPSIDE = re.compile(
-    r"(?:scry|you gain|you may pay)", re.IGNORECASE
-)
+_ETB_TAPPED = re.compile(r"enters the battlefield tapped|enters tapped", re.IGNORECASE)
+_ETB_TAPPED_UPSIDE = re.compile(r"(?:scry|you gain|you may pay)", re.IGNORECASE)
 
 # Drawback patterns for _score_land, worst-first. Each is a real cost the
 # color-coverage score can't see; penalties are on the same scale as the
@@ -162,14 +175,15 @@ _LAND_DRAWBACKS: list[tuple[re.Pattern, float]] = [
     # Bounce lands you must pick up (Undiscovered Paradise)
     (re.compile(r"return (?:it|this land) to (?:its owner's|your) hand"), 2.0),
     # Opponent choice/benefit (Paliano, Forbidden Orchard)
-    (re.compile(r"(?:an opponent (?:chooses|gains)|each opponent (?:creates|may))"), 3.0),
+    (
+        re.compile(r"(?:an opponent (?:chooses|gains)|each opponent (?:creates|may))"),
+        3.0,
+    ),
 ]
 _FETCH_PATTERN = re.compile(
     r"[Ss]earch your library for (?:a|an)\s+(.*?)(?:\s+card)", re.IGNORECASE
 )
-_RESTRICTED_MANA = re.compile(
-    r"spend this mana only (?:to cast|on)", re.IGNORECASE
-)
+_RESTRICTED_MANA = re.compile(r"spend this mana only (?:to cast|on)", re.IGNORECASE)
 _CHECKLAND_CONDITION = re.compile(
     r"unless you control (?:a |an )?(.*?)(?:\.|$)", re.IGNORECASE
 )
@@ -343,7 +357,9 @@ def parse_land_colors(
                 info.fetch_targets.append(color)
 
         # Generic fetch (e.g. "a basic land card") — all commander colors
-        if not info.fetch_targets and ("basic land" in target_text or "land" in target_text):
+        if not info.fetch_targets and (
+            "basic land" in target_text or "land" in target_text
+        ):
             if commander_colors:
                 info.fetch_targets = list(commander_colors)
             else:
@@ -376,8 +392,7 @@ def count_color_pips(cards: list[dict]) -> dict[str, dict]:
 
         mana_cost = card.get("mana_cost") or ""
         cmc = int(float(card.get("cmc", 0) or 0))
-        if cmc < 1:
-            cmc = 1  # Floor at 1 for Karsten lookup
+        cmc = max(cmc, 1)  # Floor at 1 for Karsten lookup
 
         # Count pips per color in this card
         for color in "WUBRG":
@@ -476,9 +491,7 @@ def _score_land(
     score = 0.0
 
     # Points for each color produced that's still below target
-    relevant_colors = [
-        c for c in land_info.colors_produced if c in commander_colors
-    ]
+    relevant_colors = [c for c in land_info.colors_produced if c in commander_colors]
     for color in relevant_colors:
         deficit = color_deficit.get(color, 0)
         if deficit > 0:
@@ -589,7 +602,11 @@ def build_mana_base(
 
     # Compute avg CMC from spells for tempo-sensitive ETB penalty
     if spells:
-        cmcs = [float(s.get("cmc", 0) or 0) for s in spells if float(s.get("cmc", 0) or 0) > 0]
+        cmcs = [
+            float(s.get("cmc", 0) or 0)
+            for s in spells
+            if float(s.get("cmc", 0) or 0) > 0
+        ]
         computed_avg_cmc = sum(cmcs) / len(cmcs) if cmcs else 3.0
     else:
         computed_avg_cmc = 3.0
@@ -611,9 +628,7 @@ def build_mana_base(
     logger.info("Karsten color targets: %s", color_targets)
 
     # Step 3: Track remaining color needs (float for fractional tracking)
-    color_deficit: dict[str, float] = {
-        c: float(t) for c, t in color_targets.items()
-    }
+    color_deficit: dict[str, float] = {c: float(t) for c, t in color_targets.items()}
 
     # Step 4: Greedily select nonbasic lands
     assignments: list[SlotAssignment] = []
@@ -634,7 +649,9 @@ def build_mana_base(
             name = info.card.get("name", "")
             if name in used_names:
                 continue
-            mana_score = _score_land(info, color_deficit, commander_colors, avg_cmc=computed_avg_cmc)
+            mana_score = _score_land(
+                info, color_deficit, commander_colors, avg_cmc=computed_avg_cmc
+            )
             # Blend: 70% mana-math score, 30% CVAR base score
             combined = 0.7 * mana_score + 0.3 * base * 10
             scored.append((info, base, combined))
@@ -643,7 +660,7 @@ def build_mana_base(
             break
 
         scored.sort(key=lambda x: x[2], reverse=True)
-        best_info, best_base, best_score = scored[0]
+        best_info, _best_base, best_score = scored[0]
         card = best_info.card
 
         name = card.get("name", "")
@@ -667,8 +684,7 @@ def build_mana_base(
             allotment = max_budget - running_price
             if allotment > 0 and price > allotment / 3.0:
                 parsed_lands = [
-                    (i, b) for i, b in parsed_lands
-                    if i.card.get("name") != name
+                    (i, b) for i, b in parsed_lands if i.card.get("name") != name
                 ]
                 continue
 
@@ -681,12 +697,14 @@ def build_mana_base(
             continue
 
         # Accept this land
-        assignments.append(SlotAssignment(
-            card=card,
-            slot_role="land",
-            score=round(best_score, 4),
-            alternatives=[],
-        ))
+        assignments.append(
+            SlotAssignment(
+                card=card,
+                slot_role="land",
+                score=round(best_score, 4),
+                alternatives=[],
+            )
+        )
         used_names.add(name)
         land_price += price
 
@@ -702,15 +720,16 @@ def build_mana_base(
                     color_deficit[color] -= 0.5
 
         # Remove from candidate pool
-        parsed_lands = [
-            (i, b) for i, b in parsed_lands if i.card.get("name") != name
-        ]
+        parsed_lands = [(i, b) for i, b in parsed_lands if i.card.get("name") != name]
 
     # Step 5: Fill remaining slots with basics, weighted by remaining deficit
     basics_needed = total_lands - len(assignments)
     if basics_needed > 0 and commander_colors:
         _fill_basics_by_deficit(
-            assignments, commander_colors, color_deficit, basics_needed,
+            assignments,
+            commander_colors,
+            color_deficit,
+            basics_needed,
         )
 
     logger.info(
@@ -787,12 +806,14 @@ def _fill_basics_by_deficit(
                 "price_usd": 0.0,
                 "rarity": "common",
             }
-            assignments.append(SlotAssignment(
-                card=basic_card,
-                slot_role="land",
-                score=0.5,
-                alternatives=[],
-            ))
+            assignments.append(
+                SlotAssignment(
+                    card=basic_card,
+                    slot_role="land",
+                    score=0.5,
+                    alternatives=[],
+                )
+            )
             added += 1
 
     logger.info(

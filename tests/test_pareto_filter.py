@@ -50,7 +50,8 @@ def _fillers(n: int = 210) -> list[dict]:
     """
     return [
         _make_card(
-            f"filler-{i}", f"Filler {i}",
+            f"filler-{i}",
+            f"Filler {i}",
             cvar_score=0.99 - i * 0.001,
             price=500.0 - i * 2.0,
         )
@@ -92,8 +93,12 @@ def test_empirical_staple_survives_price_domination(builder) -> None:
     """
     jank = _make_card("jank", "Cheap Jank", cvar_score=0.60, price=0.03)
     staple = _make_card(
-        "staple", "Pitiless Plunderer", cvar_score=0.50, price=2.00,
-        _empirical_inclusion=0.90, _empirical_reliable=True,
+        "staple",
+        "Pitiless Plunderer",
+        cvar_score=0.50,
+        price=2.00,
+        _empirical_inclusion=0.90,
+        _empirical_reliable=True,
     )
 
     kept = builder._pareto_filter([jank, staple] + _fillers())
@@ -109,8 +114,12 @@ def test_protection_requires_reliable_inclusion(builder) -> None:
     """
     jank = _make_card("jank", "Cheap Jank", cvar_score=0.60, price=0.03)
     noisy = _make_card(
-        "noisy", "Noisy Card", cvar_score=0.50, price=2.00,
-        _empirical_inclusion=0.90, _empirical_reliable=False,
+        "noisy",
+        "Noisy Card",
+        cvar_score=0.50,
+        price=2.00,
+        _empirical_inclusion=0.90,
+        _empirical_reliable=False,
     )
 
     kept = builder._pareto_filter([jank, noisy] + _fillers())
@@ -130,12 +139,20 @@ def test_complementary_staples_both_survive(builder) -> None:
     Both appear in most real decks, so both must survive.
     """
     rival = _make_card(
-        "rival", "Deadly Dispute", cvar_score=0.775, price=0.35,
-        _empirical_inclusion=0.55, _empirical_reliable=True,
+        "rival",
+        "Deadly Dispute",
+        cvar_score=0.775,
+        price=0.35,
+        _empirical_inclusion=0.55,
+        _empirical_reliable=True,
     )
     staple = _make_card(
-        "staple", "Pitiless Plunderer", cvar_score=0.475, price=3.15,
-        _empirical_inclusion=0.65, _empirical_reliable=True,
+        "staple",
+        "Pitiless Plunderer",
+        cvar_score=0.475,
+        price=3.15,
+        _empirical_inclusion=0.65,
+        _empirical_reliable=True,
     )
 
     kept = builder._pareto_filter([rival, staple] + _fillers())
@@ -151,8 +168,12 @@ def test_protection_requires_clearing_the_inclusion_floor(builder) -> None:
     """
     jank = _make_card("jank", "Cheap Jank", cvar_score=0.60, price=0.03)
     fringe = _make_card(
-        "fringe", "Fringe Card", cvar_score=0.50, price=2.00,
-        _empirical_inclusion=0.10, _empirical_reliable=True,
+        "fringe",
+        "Fringe Card",
+        cvar_score=0.50,
+        price=2.00,
+        _empirical_inclusion=0.10,
+        _empirical_reliable=True,
     )
 
     kept = builder._pareto_filter([jank, fringe] + _fillers())

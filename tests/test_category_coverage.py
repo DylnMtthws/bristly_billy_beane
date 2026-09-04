@@ -3,7 +3,6 @@
 import json
 from datetime import datetime
 
-
 from sabermetrics.models.profile import (
     BehavioralSignals,
     BuildPath,
@@ -102,13 +101,15 @@ def _make_partial_deck(categories_per_card: list[list[str]]) -> list[dict]:
     """Create a partial deck with functional_categories set."""
     deck = []
     for i, cats in enumerate(categories_per_card):
-        deck.append({
-            "id": f"card-{i}",
-            "name": f"Test Card {i}",
-            "functional_categories": json.dumps(cats),
-            "role_tags": '["utility"]',
-            "_cvar_score": 0.5,
-        })
+        deck.append(
+            {
+                "id": f"card-{i}",
+                "name": f"Test Card {i}",
+                "functional_categories": json.dumps(cats),
+                "role_tags": '["utility"]',
+                "_cvar_score": 0.5,
+            }
+        )
     return deck
 
 
@@ -225,11 +226,13 @@ def test_coverage_counts_existing_cards() -> None:
         synergy_priorities={"sacrifice": ["sac outlet"]},
     )
     # Deck already has 3 sacrifice outlets
-    partial_deck = _make_partial_deck([
-        ["sacrifice_outlet"],
-        ["sacrifice_outlet"],
-        ["sacrifice_outlet"],
-    ])
+    partial_deck = _make_partial_deck(
+        [
+            ["sacrifice_outlet"],
+            ["sacrifice_outlet"],
+            ["sacrifice_outlet"],
+        ]
+    )
     intents = analyze_category_coverage(
         profile=profile,
         partial_deck=partial_deck,

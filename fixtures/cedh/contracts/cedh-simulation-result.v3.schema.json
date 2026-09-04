@@ -1,0 +1,628 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://commander-simulator.local/contracts/cedh-simulation-result.v3.schema.json",
+  "title": "cEDH simulation result v3",
+  "description": "A versioned goldfish turn-to-assembly result. Assembly probabilities are not win rates. v3 replaces v2's candidate.candidate_hash -- which mixed the strategy pack into a field named like a deck identity -- with two hashes that answer two different questions: candidate.deck_sha256 identifies the LIST that was simulated, and simulation_input_sha256 identifies every input that can change the numbers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "simulation_input_sha256",
+    "timestamps",
+    "simulator",
+    "metric",
+    "candidate",
+    "strategy_pack",
+    "card_data",
+    "simulation",
+    "coverage",
+    "assembly_cdf",
+    "censored",
+    "percentiles",
+    "ablation_results",
+    "warnings",
+    "unsupported_assumptions",
+    "determinism"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "cedh-simulation-result.v3"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "'run-' followed by the first 24 hex characters of simulation_input_sha256."
+    },
+    "timestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "started_at",
+        "completed_at"
+      ],
+      "properties": {
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "simulator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "build_flavour"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "build_flavour": {
+          "enum": [
+            "debug",
+            "release"
+          ]
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "measures",
+        "does_not_measure"
+      ],
+      "properties": {
+        "id": {
+          "const": "goldfish_turns_to_assembly"
+        },
+        "measures": {
+          "type": "string",
+          "minLength": 1
+        },
+        "does_not_measure": {
+          "type": "string",
+          "pattern": "win rate"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "deck_sha256"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deck_sha256": {
+          "description": "The simulator's OWN recomputation of the deck hash from the list it actually ran, not an echo of what was submitted. A consumer compares this field, and only this field, to decide whether a stored result describes the deck in front of the user.",
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "strategy_pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "content_sha256",
+        "derived",
+        "play_policy",
+        "assembly_objectives",
+        "patterns",
+        "inherited_patterns",
+        "rank_overrides",
+        "declared_table_assumptions",
+        "known_blind_spots"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "play_policy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assembly_objectives": {
+          "type": "array",
+          "minItems": 0,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "declared_table_assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "known_blind_spots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "derived": {
+          "type": "boolean"
+        },
+        "patterns": {
+          "type": "array",
+          "minItems": 0,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "source",
+              "terminal_state"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "enum": [
+                  "library",
+                  "pack"
+                ]
+              },
+              "terminal_state": {
+                "enum": [
+                  "in_model_win",
+                  "assembly_proxy"
+                ]
+              }
+            }
+          }
+        },
+        "inherited_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "rank_overrides": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "content_sha256": {
+          "description": "sha256 of the resolved pack file's bytes. id and version say WHICH pack; this says which revision of it, so an edited pack that kept its version cannot hide inside an unchanged fingerprint.",
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "card_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_hash",
+        "cards_sha256",
+        "source_view",
+        "max_content_updated_at",
+        "corpus_row_count"
+      ],
+      "properties": {
+        "manifest_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "cards_sha256": {
+          "$ref": "#/$defs/hex_sha256"
+        },
+        "source_view": {
+          "type": "string",
+          "minLength": 1
+        },
+        "max_content_updated_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corpus_row_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "simulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "games",
+        "seed",
+        "objective_turn",
+        "requested_scenario"
+      ],
+      "properties": {
+        "games": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "objective_turn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "requested_scenario": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version"
+          ],
+          "properties": {
+            "id": {
+              "const": "goldfish_assembly"
+            },
+            "version": {
+              "const": "1.0.0"
+            }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_cards",
+        "library_cards",
+        "commander_cards",
+        "modeled_cards",
+        "inert_cards",
+        "unauthored_cards",
+        "inert_by_reason"
+      ],
+      "properties": {
+        "total_cards": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "library_cards": {
+          "const": 99
+        },
+        "commander_cards": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "modeled_cards": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inert_cards": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unauthored_cards": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inert_by_reason": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "interaction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "opponent_trigger": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "opponent_permanent": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "timing_only": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "no_object_in_model": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "assembly_cdf": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/cdf_point"
+      }
+    },
+    "censored": {
+      "$ref": "#/$defs/proportion_count"
+    },
+    "percentiles": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/percentile"
+      }
+    },
+    "ablation_results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ablation"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "unsupported_assumptions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "detail"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "determinism": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seed_scheme",
+        "result_digest"
+      ],
+      "properties": {
+        "seed_scheme": {
+          "const": "splitmix64(base_seed ^ splitmix64(game_index)) + xoshiro256++"
+        },
+        "result_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        }
+      }
+    },
+    "simulation_input_sha256": {
+      "description": "sha256 over compact UTF-8 JSON with lexicographically sorted keys of: ablations (sorted), card_data_manifest_hash, cards_sha256, deck_sha256, games, objective_turn, scenario_id, scenario_version, schema_version ('cedh-simulation-input.v1'), seed, simulator_version, strategy_pack_content_sha256, strategy_pack_derived, strategy_pack_id, strategy_pack_version, sweep. The strategy-pack fields describe the pack the simulator RESOLVED and ran, not the one that was requested. Two results sharing this fingerprint are the same measurement; two results sharing only deck_sha256 are the same deck measured differently. This is the correct cache key. Vectors: contracts/hash-golden-vectors.json.",
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "oracle_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "hex_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "wilson": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "low",
+        "high"
+      ],
+      "properties": {
+        "low": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "high": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "proportion_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "games",
+        "rate",
+        "wilson_95"
+      ],
+      "properties": {
+        "games": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "wilson_95": {
+          "$ref": "#/$defs/wilson"
+        }
+      }
+    },
+    "cdf_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turn",
+        "assembled_games",
+        "probability",
+        "wilson_95"
+      ],
+      "properties": {
+        "turn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "assembled_games": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "probability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "wilson_95": {
+          "$ref": "#/$defs/wilson"
+        }
+      }
+    },
+    "percentile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "percentile",
+        "status",
+        "turn",
+        "interval_95"
+      ],
+      "properties": {
+        "percentile": {
+          "enum": [
+            0.1,
+            0.25,
+            0.5,
+            0.75,
+            0.9
+          ]
+        },
+        "status": {
+          "enum": [
+            "observed",
+            "censored"
+          ]
+        },
+        "turn": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "interval_95": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "low_turn",
+            "high_turn"
+          ],
+          "properties": {
+            "low_turn": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            },
+            "high_turn": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "ablation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "oracle_id",
+        "replacement_oracle_id",
+        "objective_turn",
+        "goldfish_turn_to_assembly_delta",
+        "interval_95",
+        "method"
+      ],
+      "properties": {
+        "oracle_id": {
+          "$ref": "#/$defs/oracle_id"
+        },
+        "replacement_oracle_id": {
+          "$ref": "#/$defs/oracle_id"
+        },
+        "objective_turn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "goldfish_turn_to_assembly_delta": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "interval_95": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "low",
+            "high"
+          ],
+          "properties": {
+            "low": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1
+            },
+            "high": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1
+            }
+          }
+        },
+        "method": {
+          "const": "paired_common_random_numbers"
+        }
+      }
+    }
+  }
+}

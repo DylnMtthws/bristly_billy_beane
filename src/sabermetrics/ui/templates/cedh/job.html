@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}cEDH build {{ job.id }}{% endblock %}
+
+{% block head %}
+{% if job.status in ('queued', 'running', 'simulating', 'explaining') %}
+<meta http-equiv="refresh" content="3">
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<section class="mx-auto max-w-2xl rounded-2xl border border-line bg-panel p-6 shadow-panel">
+    <h1 class="text-xl font-bold text-body">cEDH build</h1>
+    <p class="mt-2 text-sm text-muted">Job {{ job.id }}</p>
+
+    {% if job.status == 'failed' %}
+    <p class="mt-5 text-base font-semibold text-red-400">Build failed</p>
+    <p class="mt-2 text-sm text-body">{{ job.error_detail or 'The build could not be completed.' }}</p>
+    <p class="mt-2 text-xs text-muted">Error code: {{ job.error_code or 'unknown' }}</p>
+    {% else %}
+    <p class="mt-5 text-base text-body">
+        Status: <span class="font-semibold text-brand">{{ job.status }}</span>
+    </p>
+    <p class="mt-2 text-sm text-muted">This page refreshes while the build runs.</p>
+    {% endif %}
+
+    <a class="mt-6 inline-block text-sm text-brand hover:text-brand-hover"
+       href="{{ url_for('cedh.index') }}">Back to the lab</a>
+</section>
+{% endblock %}

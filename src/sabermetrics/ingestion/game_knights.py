@@ -85,10 +85,7 @@ class GameKnightsIngestion(DecklistIngestionBase):
                 "API discovery returned no results; using %d fallback deck IDs",
                 len(self._fallback_ids),
             )
-            urls = [
-                f"{ARCHIDEKT_DECK_URL}/{deck_id}"
-                for deck_id in self._fallback_ids
-            ]
+            urls = [f"{ARCHIDEKT_DECK_URL}/{deck_id}" for deck_id in self._fallback_ids]
 
         logger.info("Discovered %d Game Knights deck URLs", len(urls))
         return urls[:limit]
@@ -170,9 +167,7 @@ class GameKnightsIngestion(DecklistIngestionBase):
                     follow_redirects=True,
                 )
                 if resp.status_code != 200:
-                    logger.debug(
-                        "Folder %d returned %d", folder_id, resp.status_code
-                    )
+                    logger.debug("Folder %d returned %d", folder_id, resp.status_code)
                     break
 
                 data: dict[str, Any] = resp.json()
@@ -231,11 +226,15 @@ class GameKnightsIngestion(DecklistIngestionBase):
             if resp.status_code != 200:
                 logger.debug(
                     "[%s] Archidekt API returned %d for deck %s",
-                    self.name, resp.status_code, deck_id_str,
+                    self.name,
+                    resp.status_code,
+                    deck_id_str,
                 )
                 return False
         except httpx.HTTPError as e:
-            logger.warning("[%s] HTTP error fetching deck %s: %s", self.name, deck_id_str, e)
+            logger.warning(
+                "[%s] HTTP error fetching deck %s: %s", self.name, deck_id_str, e
+            )
             return False
 
         data = resp.json()
@@ -276,7 +275,8 @@ class GameKnightsIngestion(DecklistIngestionBase):
             if not commander_id:
                 logger.debug(
                     "[%s] Commander '%s' not found in DB",
-                    self.name, commander_name,
+                    self.name,
+                    commander_name,
                 )
                 return False
 

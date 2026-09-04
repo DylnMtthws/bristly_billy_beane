@@ -62,9 +62,7 @@ class MtgApiIngestion(SourceHealthMixin):
         try:
             # Get unique oracle_ids with their names
             cards_to_process = self._get_cards_needing_rulings(full=full)
-            logger.info(
-                "Fetching rulings for %d unique cards", len(cards_to_process)
-            )
+            logger.info("Fetching rulings for %d unique cards", len(cards_to_process))
 
             for i, (oracle_id, card_name) in enumerate(cards_to_process):
                 try:

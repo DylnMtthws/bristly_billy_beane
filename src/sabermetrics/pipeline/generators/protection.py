@@ -18,8 +18,8 @@ from sabermetrics.analytics.empirical_valuation import (
     empirical_bonus,
 )
 from sabermetrics.config import settings
-from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.models.template import DeckTemplate
+from sabermetrics.pipeline.greedy_optimizer import is_playable_as_land
 from sabermetrics.pipeline.slot_assigner import SlotAssignment
 
 logger = logging.getLogger(__name__)
@@ -183,7 +183,11 @@ def _load_protection_auto_includes() -> tuple[dict, set[str]]:
     Returns:
         Tuple of (auto_includes_dict, protected_names_set).
     """
-    config_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "auto_include_cards.yaml"
+    config_path = (
+        Path(__file__).resolve().parent.parent.parent.parent.parent
+        / "config"
+        / "auto_include_cards.yaml"
+    )
     if not config_path.exists():
         return {}, set()
     with open(config_path) as f:
@@ -327,7 +331,8 @@ class ProtectionPackageGenerator:
         # Lands are the land package's domain; placing one here inflates the
         # deck's land total past the template target.
         pool = [
-            c for c in pool
+            c
+            for c in pool
             if not is_playable_as_land(c.get("type_line") or "")
             and not c.get("_anti_engine")
         ]
@@ -344,16 +349,22 @@ class ProtectionPackageGenerator:
                 # with no price snapshot -- it then costs $0 in build-time
                 # budget sums and renders at the $0.05 floor in the UI. The
                 # pool's printing (cheapest priced) is canonical.
-                for k in ("_anti_engine", "_cvar_score",
-                          "_empirical_inclusion", "_empirical_reliable",
-                          "id", "oracle_id", "set_code", "price_usd"):
+                for k in (
+                    "_anti_engine",
+                    "_cvar_score",
+                    "_empirical_inclusion",
+                    "_empirical_reliable",
+                    "id",
+                    "oracle_id",
+                    "set_code",
+                    "price_usd",
+                ):
                     if k in src:
                         c[k] = src[k]
                 if c.get("_anti_engine"):
                     continue
                 gated.append(c)
             pool = gated
-
 
         # Place auto-includes from pool (or role_tag_pool as backup)
         search_pools = [pool] if use_candidates_table else [role_tag_pool]
@@ -363,16 +374,24 @@ class ProtectionPackageGenerator:
         for search_pool in search_pools:
             for card in search_pool:
                 name = card.get("name", "")
-                if name in auto_prot_names and name not in used_names \
-                        and not card.get("_anti_engine"):
+                if (
+                    name in auto_prot_names
+                    and name not in used_names
+                    and not card.get("_anti_engine")
+                ):
                     price = float(card.get("price_usd", 0) or 0)
-                    if budget_remaining <= 0 or running_price + price <= budget_remaining:
-                        assignments.append(SlotAssignment(
-                            card=card,
-                            slot_role="protection",
-                            score=0.95,
-                            alternatives=[],
-                        ))
+                    if (
+                        budget_remaining <= 0
+                        or running_price + price <= budget_remaining
+                    ):
+                        assignments.append(
+                            SlotAssignment(
+                                card=card,
+                                slot_role="protection",
+                                score=0.95,
+                                alternatives=[],
+                            )
+                        )
                         used_names.add(name)
                         running_price += price
                         auto_prot_names.discard(name)
@@ -415,8 +434,13 @@ class ProtectionPackageGenerator:
         candidates.sort(key=lambda x: x[1], reverse=True)
 
         # Track protection type diversity
-        type_counts = {"phasing": 0, "hexproof": 0, "indestructible": 0,
-                       "redirect": 0, "other": 0}
+        type_counts = {
+            "phasing": 0,
+            "hexproof": 0,
+            "indestructible": 0,
+            "redirect": 0,
+            "other": 0,
+        }
 
         for card, score in candidates:
             if len(assignments) >= target_count:
@@ -438,19 +462,24 @@ class ProtectionPackageGenerator:
             if type_counts.get(prot_type, 0) >= cap:
                 continue
 
-            assignments.append(SlotAssignment(
-                card=card,
-                slot_role="protection",
-                score=round(score, 4),
-                alternatives=[],
-            ))
+            assignments.append(
+                SlotAssignment(
+                    card=card,
+                    slot_role="protection",
+                    score=round(score, 4),
+                    alternatives=[],
+                )
+            )
             used_names.add(name)
             running_price += price
             type_counts[prot_type] = type_counts.get(prot_type, 0) + 1
 
         logger.info(
             "Protection generator: %d cards (target %d), types: %s, protected: %s",
-            len(assignments), target_count, type_counts, self.protected_names,
+            len(assignments),
+            target_count,
+            type_counts,
+            self.protected_names,
         )
         return assignments
 

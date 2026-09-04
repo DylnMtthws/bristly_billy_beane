@@ -8,9 +8,7 @@ from sabermetrics.analytics.theme_patterns import (
 )
 
 
-def _make_card(
-    name: str, oracle_text: str, type_line: str = "Creature"
-) -> dict:
+def _make_card(name: str, oracle_text: str, type_line: str = "Creature") -> dict:
     return {"name": name, "oracle_text": oracle_text, "type_line": type_line}
 
 
@@ -18,7 +16,9 @@ def test_count_theme_cards_sacrifice() -> None:
     """Detects sacrifice/dies patterns in oracle text."""
     cards = [
         _make_card("Viscera Seer", "Sacrifice a creature: Scry 1."),
-        _make_card("Blood Artist", "Whenever Blood Artist or another creature dies, ..."),
+        _make_card(
+            "Blood Artist", "Whenever Blood Artist or another creature dies, ..."
+        ),
         _make_card("Grizzly Bears", "Vanilla 2/2"),
     ]
     assert count_theme_cards(cards, "sacrifice") == 2

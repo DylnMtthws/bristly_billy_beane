@@ -19,17 +19,22 @@ def test_detects_enchantment_mass_removal():
         "• Destroy all creatures with mana value 3 or less."
     )
     assert mass_removal_types("Exile all artifacts and enchantments.") == {
-        "artifact", "enchantment",
+        "artifact",
+        "enchantment",
     }
 
 
 def test_positive_enchantment_text_is_not_flagged():
     """Mentioning the engine type is not the same as removing it."""
-    assert mass_removal_types(
-        "Whenever an enchantment you control enters, draw a card."
-    ) == set()
+    assert (
+        mass_removal_types("Whenever an enchantment you control enters, draw a card.")
+        == set()
+    )
     assert mass_removal_types("Destroy target enchantment.") == set()
-    assert mass_removal_types("Enchant creature. Enchanted creature can't attack.") == set()
+    assert (
+        mass_removal_types("Enchant creature. Enchanted creature can't attack.")
+        == set()
+    )
 
 
 def test_engine_types_thresholds_and_creature_exclusion():
@@ -37,7 +42,7 @@ def test_engine_types_thresholds_and_creature_exclusion():
     assert engine_types({"enchantment": 36, "creature": 21, "artifact": 5}) == {
         "enchantment"
     }
-    assert engine_types({"creature": 40}) == set()   # creatures never vetoed
+    assert engine_types({"creature": 40}) == set()  # creatures never vetoed
     assert engine_types(None) == set()
 
 
@@ -46,5 +51,5 @@ def test_is_anti_engine():
     wrath = {"oracle_text": "Destroy all creatures."}
     engine = {"enchantment"}
     assert is_anti_engine(paraselene, engine)
-    assert not is_anti_engine(wrath, engine)      # creature wipes untouched
+    assert not is_anti_engine(wrath, engine)  # creature wipes untouched
     assert not is_anti_engine(paraselene, set())  # no engine -> no veto

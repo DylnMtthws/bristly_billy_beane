@@ -22,19 +22,16 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,postgres,legacy]"
 
-      # Report-only. Every rule runs and the findings are in this log, but the
-      # repo carries ~345 of them and failing on that would make the build a
-      # thing people route around rather than read. Tighten as the count falls.
-      - name: Lint (ruff, report-only)
-        continue-on-error: true
-        run: ruff check .
+      - name: Lint (ruff)
+        run: ruff check src tests
 
-      # Report-only, same reasoning: ~45 errors outstanding.
-      - name: Types (mypy, report-only)
-        continue-on-error: true
-        run: mypy src/
+      - name: Format (black)
+        run: black --check src tests
+
+      - name: Types (mypy)
+        run: mypy src
 
       # The gate. This one must pass.
       - name: Tests (pytest)
@@ -45,3 +42,43 @@ jobs:
           # depending on whatever happens to be in the runner's environment.
           ANTHROPIC_API_KEY: dummy-key-not-used-by-tests
         run: pytest -q
+
+  container:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build linux/amd64 image
+        run: docker build --platform linux/amd64 --tag decklab-ci .
+
+      - name: Enforce image size ceiling
+        run: |
+          size_bytes="$(docker image inspect decklab-ci --format '{{.Size}}')"
+          test "$size_bytes" -lt 400000000
+          echo "Image size: $size_bytes bytes"
+
+      - name: Start container
+        run: >-
+          docker run --detach --name decklab-ci
+          --tmpfs /data:rw,uid=1001,gid=1001
+          --env SABER_AUTH_MODE=password
+          --env SABER_SECRET_KEY=ci-only-not-a-secret
+          --publish 127.0.0.1:8080:8080
+          decklab-ci
+
+      - name: Smoke health and login
+        run: |
+          curl --fail --silent --show-error --retry 20 --retry-all-errors \
+            --retry-delay 1 http://127.0.0.1:8080/healthz
+          curl --fail --silent --show-error http://127.0.0.1:8080/login \
+            | grep --quiet "Sign In"
+
+      - name: Container logs
+        if: always()
+        run: docker logs decklab-ci
+
+      - name: Remove container
+        if: always()
+        run: docker rm --force decklab-ci

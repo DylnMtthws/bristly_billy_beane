@@ -44,9 +44,7 @@ def build_cooccurrence(db_path: Path, min_decks: int = 3) -> int:
             logger.info("No commanders with >= %d decks found", min_decks)
             return 0
 
-        logger.info(
-            "Building co-occurrence for %d commanders", len(commanders)
-        )
+        logger.info("Building co-occurrence for %d commanders", len(commanders))
 
         total_pairs = 0
 
@@ -75,7 +73,7 @@ def build_cooccurrence(db_path: Path, min_decks: int = 3) -> int:
             pair_counts: dict[tuple[str, str], int] = defaultdict(int)
             for cards in deck_cards:
                 for i, card_a in enumerate(cards):
-                    for card_b in cards[i + 1:]:
+                    for card_b in cards[i + 1 :]:
                         pair_counts[(card_a, card_b)] += 1
 
             # Store results
@@ -101,7 +99,9 @@ def build_cooccurrence(db_path: Path, min_decks: int = 3) -> int:
 
             logger.info(
                 "Commander %s: %d pairs from %d decks",
-                cmdr_id, len(batch), n_decks,
+                cmdr_id,
+                len(batch),
+                n_decks,
             )
 
         conn.commit()

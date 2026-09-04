@@ -223,8 +223,7 @@ CORPUS: list[dict] = [
         "key": "removal/cyclonic_rift",
         "detector": "removal",
         "oracle_text": (
-            "Return target nonland permanent you don't control to its owner's "
-            "hand."
+            "Return target nonland permanent you don't control to its owner's " "hand."
         ),
         "type_line": "Instant",
         "cmc": 2.0,
@@ -303,18 +302,14 @@ CORPUS: list[dict] = [
     {
         "key": "protection/swiftfoot_boots",
         "detector": "protection",
-        "oracle_text": (
-            "Equipped creature has hexproof and haste. Equip {1}."
-        ),
+        "oracle_text": ("Equipped creature has hexproof and haste. Equip {1}."),
         "type_line": "Artifact — Equipment",
         "cmc": 2.0,
     },
     {
         "key": "protection/lightning_greaves",
         "detector": "protection",
-        "oracle_text": (
-            "Equipped creature has shroud and haste. Equip {0}."
-        ),
+        "oracle_text": ("Equipped creature has shroud and haste. Equip {0}."),
         "type_line": "Artifact — Equipment",
         "cmc": 2.0,
     },

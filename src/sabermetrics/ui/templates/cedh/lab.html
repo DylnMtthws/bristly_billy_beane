@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}cEDH Deck Lab{% endblock %}
+
+{% block content %}
+<header class="mb-8">
+    <h1 class="text-2xl font-bold tracking-tight text-body">cEDH Deck Lab</h1>
+    <p class="mt-1 max-w-3xl text-sm text-muted">
+        Competitive Commander only. Decks are constructed deterministically from a
+        curated strategy pack; the model explains and compares, it does not choose
+        cards. The objective is performance: cEDH is proxy-normal, so the engine
+        does not know or care what a card costs.
+    </p>
+</header>
+
+{% if modes.notices %}
+<section class="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+    <h2 class="text-sm font-semibold text-amber-300">Running in a non-production mode</h2>
+    <ul class="mt-2 space-y-1 text-sm text-amber-200/90">
+        {% for notice in modes.notices %}<li>&bull; {{ notice }}</li>{% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="mb-8">
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Strategy packs</h2>
+    <div class="grid gap-4 sm:grid-cols-2">
+        {% for pack in packs %}
+        <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
+            <div class="flex items-start justify-between gap-3">
+                <h3 class="text-base font-semibold text-body">{{ pack.name }}</h3>
+                {% if pack.supported %}
+                <span class="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400">supported</span>
+                {% else %}
+                <span class="shrink-0 rounded-full bg-brand/15 px-2 py-0.5 text-xs font-medium text-brand">unsupported</span>
+                {% endif %}
+            </div>
+            <p class="mt-1 text-xs text-muted">{{ pack.commander_names | join(' + ') }}</p>
+            <p class="mt-2 text-sm text-body/80">{{ pack.summary }}</p>
+            <p class="mt-3 border-t border-line/70 pt-3 text-xs text-muted">
+                Simulator:
+                {% if pack.simulator_supported %}
+                <span class="text-emerald-400">a model exists for this commander</span>
+                {% else %}
+                <span class="text-muted">no model &mdash; builds will show <em>not simulated</em></span>
+                {% endif %}
+            </p>
+            {% if not pack.supported %}
+            <p class="mt-2 text-xs text-brand">{{ pack.detail }}</p>
+            {% endif %}
+        </div>
+        {% else %}
+        <p class="text-sm text-muted">No strategy packs are authored yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="mb-8 rounded-2xl border border-line bg-panel p-5 shadow-panel">
+    <h2 class="mb-1 text-base font-semibold text-body">Build a candidate</h2>
+    <p class="mb-4 text-xs text-muted">
+        {{ quota_used }} of {{ quota }} builds used this month.
+    </p>
+    <form method="post" action="{{ url_for('cedh.build') }}" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block">
+                <span class="mb-1 block text-sm font-medium text-body">Strategy pack</span>
+                <select name="pack_id" class="w-full rounded-lg border border-line bg-field px-3 py-2 text-sm text-body">
+                    {% for pack in packs if pack.supported %}
+                    <option value="{{ pack.pack_id }}">{{ pack.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="block">
+                <span class="mb-1 block text-sm font-medium text-body">Flex slots</span>
+                <input type="number" name="flex_slots" value="0" min="0" max="20"
+                       class="w-full rounded-lg border border-line bg-field px-3 py-2 text-sm text-body">
+                <span class="mt-1 block text-xs text-muted">Slots left open for the pilot. Taken from flex first, never from lands.</span>
+            </label>
+        </div>
+
+        <label class="block">
+            <span class="mb-1 block text-sm font-medium text-body">What are you looking for? <span class="text-muted">(optional)</span></span>
+            <textarea name="raw_intent" rows="2" placeholder="e.g. fast Kinnan, heavy on free interaction"
+                      class="w-full rounded-lg border border-line bg-field px-3 py-2 text-sm text-body"></textarea>
+            <span class="mt-1 block text-xs text-muted">
+                Only used to pick among the packs above. It never adds a card.
+            </span>
+        </label>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div class="rounded-lg border border-line/70 bg-panel2 p-3 text-xs text-muted">
+                <span class="font-medium text-body">No budget setting, on purpose.</span>
+                cEDH is proxy-normal &mdash; the expensive cards get proxied, so
+                price says nothing about whether a list wins a round. The engine
+                optimises for performance and never sees a card&rsquo;s price.
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="block">
+                    <span class="mb-1 block text-sm font-medium text-body">Window (days)</span>
+                    <input type="number" name="window_days" value="{{ settings.meta.window_days }}" min="1"
+                           class="w-full rounded-lg border border-line bg-field px-3 py-2 text-sm text-body">
+                </label>
+                <label class="block">
+                    <span class="mb-1 block text-sm font-medium text-body">Min event</span>
+                    <input type="number" name="min_event_size" value="{{ settings.meta.min_event_size }}" min="0"
+                           class="w-full rounded-lg border border-line bg-field px-3 py-2 text-sm text-body">
+                </label>
+            </div>
+        </div>
+
+        <button type="submit"
+                class="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
+            Build candidate
+        </button>
+    </form>
+</section>
+
+{% if candidates %}
+<section>
+    <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Your candidates</h2>
+    <div class="overflow-hidden rounded-2xl border border-line bg-panel shadow-panel">
+        <table class="w-full text-sm">
+            <thead class="border-b border-line/70 text-left text-xs uppercase tracking-wide text-muted">
+                <tr>
+                    <th class="px-4 py-3">Commander</th>
+                    <th class="px-4 py-3">Pack</th>
+                    <th class="px-4 py-3">Built</th>
+                    <th class="px-4 py-3">Evidence</th>
+                    <th class="px-4 py-3">Simulation</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-line/50">
+                {% for c in candidates %}
+                <tr class="transition-colors hover:bg-white/5">
+                    <td class="px-4 py-3">
+                        <a href="{{ url_for('cedh.candidate', candidate_id=c.candidate_id) }}"
+                           class="font-medium text-brand hover:text-brand-hover">{{ c.commander_name }}</a>
+                    </td>
+                    <td class="px-4 py-3 text-muted">{{ c.pack_id }}</td>
+                    <td class="px-4 py-3 text-muted">{{ c.created_at }}</td>
+                    <td class="px-4 py-3">
+                        {% if c.meta_available %}<span class="text-emerald-400">tournament data</span>
+                        {% else %}<span class="text-muted">none</span>{% endif %}
+                    </td>
+                    <td class="px-4 py-3">
+                        {% if c.simulation_status == 'simulated' %}<span class="text-emerald-400">simulated</span>
+                        {% else %}<span class="text-muted">not simulated</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
