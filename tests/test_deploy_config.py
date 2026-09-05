@@ -22,7 +22,7 @@ def test_fly_draft_matches_the_pinned_runtime_contract():
     assert config["http_service"]["internal_port"] == 8080
     assert config["http_service"]["auto_stop_machines"] == "off"
     assert config["http_service"]["min_machines_running"] == 1
-    assert config["http_service"]["checks"]["healthz"]["path"] == "/healthz"
+    assert config["http_service"]["checks"] == [{"path": "/healthz", "interval": "30s"}]
     assert config["mounts"] == {"source": "decklab_data", "destination": "/data"}
     assert len(config["vm"]) == 1
 
