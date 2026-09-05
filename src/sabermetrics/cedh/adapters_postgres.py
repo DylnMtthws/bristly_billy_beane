@@ -515,7 +515,12 @@ class PostgresMetaRepository:
                     MetaEvent(
                         event_id=str(r["event_id"]),
                         name=r.get("name") or "",
-                        held_on=r.get("held_on"),
+                        # The producer exposes timestamptz; evidence uses UTC dates.
+                        held_on=(
+                            r["held_on"].astimezone(UTC).date()
+                            if isinstance(r.get("held_on"), datetime)
+                            else r.get("held_on")
+                        ),
                         size=int(r.get("size") or 0),
                         source=r.get("source") or "",
                         source_url=r.get("source_url") or "",
