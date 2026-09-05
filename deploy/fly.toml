@@ -22,7 +22,7 @@ primary_region = "ord"
   auto_stop_machines = "off"
   min_machines_running = 1
 
-  [http_service.checks.healthz]
+  [[http_service.checks]]
     path = "/healthz"
     interval = "30s"
 
