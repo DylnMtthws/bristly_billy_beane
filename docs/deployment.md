@@ -57,6 +57,8 @@ and smokes both endpoints on an empty tmpfs `/data`.
 | `SABER_DB_PATH` | `data/sabermetrics.db` | SQLite app-state path; production sets `/data/sabermetrics.db` |
 | `CEDH_SIMULATOR_URL` | unset | Selects the HTTP simulator client and supplies its private base URL |
 | `CEDH_SIMULATOR_TIMEOUT` | `330` | Simulator read/write timeout in seconds; outlives the server's 300 s ceiling |
+| `SABER_EMAIL_FROM` | unset | Verified Resend sender, e.g. `Deck Lab <accounts@decklab.studio>` |
+| `SABER_PUBLIC_URL` | unset | Trusted HTTPS website origin for reset links; use the current public Fly URL until a custom website domain is configured |
 
 Production additionally sets `SABER_PUBLIC=1` and `SABER_AUTH_MODE=hybrid` as
 shown in `deploy/fly.toml`. `SABER_PUBLIC=1` requires a stable secret,
@@ -74,6 +76,58 @@ layer, a log, or a commit:
 | `MTG_V1_DSN` | Yes for production card data | `mtg_consumer` Postgres DSN, including `?sslmode=require` |
 | `HF_TOKEN` | Optional | Enables DeepSeek narrative/explanation calls; builds remain deterministic without it |
 | `CEDH_SIMULATOR_URL` | Yes for production simulation | Private simulator base URL; also selects HTTP mode |
+| `RESEND_API_KEY` | For password recovery | Resend sending-only key restricted to the verified sending domain |
+
+### Password recovery
+
+Set `RESEND_API_KEY`, `SABER_EMAIL_FROM`, and `SABER_PUBLIC_URL` together to
+enable **Forgot password?** in password/hybrid mode. Partial configuration
+fails at startup; with all three unset recovery is
+disabled and the existing login/invite flow works normally. Store the API key
+using the platform CLI's stdin secret import, never as a command argument or
+in repository files. The website origin must be HTTPS; request Host/proxy
+headers are never used to construct email links. The verified email domain
+does not also have to host the website.
+
+Use Resend's free transactional tier for this low-volume deployment and leave
+email click/open tracking disabled for recovery messages. Resend accepts the
+email via its HTTPS API; API acceptance does not prove inbox delivery. After
+deployment, test actual delivery to the administrator and complete a reset
+in their browser before calling the feature operational.
+
+Recovery applies only to active accounts with passwords; it cannot create an
+account, accept an invitation, enable a disabled account, or change its role.
+The browser receives the same response regardless of account eligibility or
+email delivery. Mail runs on a bounded background worker (eight tasks maximum).
+Pending messages may be lost on restart; retry after one minute. Failures are
+logged without provider response bodies, email contents, tokens or API keys.
+There is no automatic email retry that could duplicate sends.
+
+Reset links expire after 30 minutes, are stored only as SHA-256 hashes in
+SQLite, and are consumed in the same transaction as the password change.
+The token is in a URL fragment, moved by first-party JavaScript into the
+CSRF-protected POST body and removed from browser history. Recovery pages load
+no third-party scripts, set a strict CSP, forbid caching and send no referrer.
+JavaScript is required; scanners opening links do not consume them.
+
+Limits: requests 5/minute and 20/hour per IP; submissions 10/minute and 50/hour
+per IP. SQLite enforces one email per account per minute, three per hour, and
+40 reset emails total per rolling 24 hours, even across restarts or rotating
+IPs. The total reserves room for up to 40 password-change notifications within
+Resend's 100/day free allowance; other applications sharing the account also
+consume its allowance. Failed delivery attempts count toward these limits.
+
+Successful recovery preserves all profile, role, ownership and quota fields,
+clears login lockout, and invalidates previous password sessions, other reset
+links, and outstanding invite/setup links. A notification is sent and the user
+signs in normally. Trusted Tailscale identity remains a separate login method.
+
+Before deployment, take an online SQLite backup. Normal `sabermetrics serve`
+startup adds a `session_version` column and `password_reset_tokens` table
+idempotently. Legacy version-zero cookies work until that account changes its
+password. **Do not roll back to an older auth implementation after a reset**:
+it would accept legacy cookies without the version check. Disable recovery by
+removing all three email settings together while retaining this auth version.
 
 ### First admin and tester onboarding under `hybrid`
 

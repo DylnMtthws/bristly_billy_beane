@@ -462,6 +462,7 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
             # and Funnel traffic may share one.
             ("failed_login_count", "INTEGER"),
             ("locked_until", "TIMESTAMP"),
+            ("session_version", "INTEGER NOT NULL DEFAULT 0"),
         ],
     }
     for table, cols in column_migrations.items():
@@ -484,6 +485,18 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_user ON cost_log(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_deck ON cost_log(deck_id)")
+    conn.execute("""CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            token_digest TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id),
+            session_version INTEGER NOT NULL,
+            created_at REAL NOT NULL,
+            expires_at REAL NOT NULL,
+            revoked INTEGER NOT NULL DEFAULT 0
+        )""")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_password_reset_user_created "
+        "ON password_reset_tokens(user_id, created_at)"
+    )
     conn.commit()
 
 

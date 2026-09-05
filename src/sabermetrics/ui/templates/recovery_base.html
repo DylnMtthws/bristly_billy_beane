@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Password Recovery{% endblock %} | Deck Lab</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='recovery.css') }}">
+</head>
+<body>
+    <header><a href="{{ url_for('auth.login') }}">Deck Lab</a></header>
+    <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

@@ -20,9 +20,11 @@ Connection policy:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 import sqlite3
+import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -395,6 +397,7 @@ class UsersRepo:
             conn.execute(
                 """UPDATE users SET
                     password_hash = ?,
+                    session_version = session_version + 1,
                     display_name = COALESCE(?, display_name),
                     avatar_emoji = COALESCE(?, avatar_emoji),
                     status = 'active'
@@ -407,7 +410,8 @@ class UsersRepo:
         """Replace a user's password hash."""
         with connect(self.db_path) as conn:
             conn.execute(
-                "UPDATE users SET password_hash = ? WHERE id = ?",
+                "UPDATE users SET password_hash = ?, "
+                "session_version = session_version + 1 WHERE id = ?",
                 (password_hash, user_id),
             )
             conn.commit()
@@ -477,6 +481,113 @@ class UsersRepo:
             return cur.rowcount
 
 
+class PasswordResetRepo:
+    """Hashed, 30-minute reset tokens; issuance and consumption are atomic.
+
+    Limits survive process restarts and apply across IP addresses. Retain a
+    day's history (including failed deliveries) for abuse limits, then prune.
+    Forty reset emails plus forty change notices fit the free 100/day budget.
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = db_path
+
+    @staticmethod
+    def digest(token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def issue(self, email: str) -> tuple[str, str] | None:
+        """Return (raw token, stored recipient) for an eligible account only."""
+        now = time.time()
+        with connect(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                "DELETE FROM password_reset_tokens WHERE created_at < ?",
+                (now - 86400,),
+            )
+            row = conn.execute(
+                "SELECT id, email, session_version FROM users "
+                "WHERE email = ? COLLATE NOCASE AND status = 'active' "
+                "AND password_hash IS NOT NULL AND password_hash != ''",
+                (email,),
+            ).fetchone()
+            if row is None:
+                conn.commit()
+                return None
+            recent = conn.execute(
+                "SELECT created_at FROM password_reset_tokens "
+                "WHERE user_id = ? AND created_at > ?",
+                (row["id"], now - 3600),
+            ).fetchall()
+            total = conn.execute(
+                "SELECT COUNT(*) FROM password_reset_tokens"
+            ).fetchone()[0]
+            if total >= 40 or len(recent) >= 3 or any(r[0] > now - 60 for r in recent):
+                conn.commit()
+                return None
+            token = new_token()
+            conn.execute(
+                "INSERT INTO password_reset_tokens "
+                "(token_digest, user_id, session_version, created_at, expires_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    self.digest(token),
+                    row["id"],
+                    row["session_version"],
+                    now,
+                    now + 1800,
+                ),
+            )
+            conn.commit()
+            return token, row["email"]
+
+    def revoke(self, token: str) -> None:
+        """Invalidate a failed delivery without removing its rate-limit entry."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE password_reset_tokens SET revoked = 1 WHERE token_digest = ?",
+                (self.digest(token),),
+            )
+            conn.commit()
+
+    def consume(self, token: str, password_hash: str) -> str | None:
+        """Change a password once; return the recipient for a change notice.
+
+        Serializing validation with the update prevents two concurrent uses.
+        Role/profile/ownership/quota are untouched. Revoke outstanding invites
+        too: an old setup link must not undo a successful password recovery.
+        """
+        with connect(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT u.id, u.email FROM password_reset_tokens t "
+                "JOIN users u ON u.id = t.user_id "
+                "WHERE t.token_digest = ? AND t.revoked = 0 AND t.expires_at > ? "
+                "AND t.session_version = u.session_version AND u.status = 'active' "
+                "AND u.password_hash IS NOT NULL AND u.password_hash != ''",
+                (self.digest(token), time.time()),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute(
+                "UPDATE users SET password_hash = ?, "
+                "session_version = session_version + 1, "
+                "failed_login_count = 0, locked_until = NULL WHERE id = ?",
+                (password_hash, row["id"]),
+            )
+            conn.execute(
+                "UPDATE password_reset_tokens SET revoked = 1 WHERE user_id = ?",
+                (row["id"],),
+            )
+            conn.execute(
+                "UPDATE invite_tokens SET used_at = CURRENT_TIMESTAMP "
+                "WHERE user_id = ? AND used_at IS NULL",
+                (row["id"],),
+            )
+            conn.commit()
+            return str(row["email"])
+
+
 class InviteRepo:
     """Single-use, expiring invite tokens tied to a ``users`` row."""
 
@@ -524,6 +635,45 @@ class InviteRepo:
                 (datetime.now().isoformat(timespec="seconds"), token),
             )
             conn.commit()
+
+    def consume(
+        self,
+        token: str,
+        password_hash: str,
+        *,
+        display_name: str,
+        avatar_emoji: str | None = None,
+    ) -> str | None:
+        """Atomically recheck and accept an invite, including reset revocation.
+
+        A form opened before password recovery must not overwrite the recovered
+        password by racing the separate get_valid/activate/mark_used calls.
+        """
+        now = datetime.now().isoformat(timespec="seconds")
+        with connect(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT u.id FROM invite_tokens t JOIN users u ON u.id = t.user_id "
+                "WHERE t.token = ? AND t.used_at IS NULL "
+                "AND (t.expires_at IS NULL OR t.expires_at > ?) "
+                "AND u.status IN ('active', 'invited')",
+                (token, now),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute(
+                "UPDATE users SET password_hash = ?, status = 'active', "
+                "session_version = session_version + 1, display_name = ?, "
+                "avatar_emoji = COALESCE(?, avatar_emoji) WHERE id = ?",
+                (password_hash, display_name, avatar_emoji, row["id"]),
+            )
+            conn.execute(
+                "UPDATE invite_tokens SET used_at = ? "
+                "WHERE user_id = ? AND used_at IS NULL",
+                (now, row["id"]),
+            )
+            conn.commit()
+            return str(row["id"])
 
 
 class FavoritesRepo:

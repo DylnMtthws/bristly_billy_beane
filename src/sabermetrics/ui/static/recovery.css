@@ -1,0 +1,18 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; color: #e6e8f0; background: #0b1020; }
+* { box-sizing: border-box; }
+body { margin: 0; line-height: 1.5; }
+header { padding: 1rem 1.5rem; background: #151b30; border-bottom: 1px solid #2a3350; font-weight: 700; }
+header a { color: #e6e8f0; text-decoration: none; }
+main { max-width: 26rem; margin: 3rem auto; padding: 0 1rem; }
+h1 { font-size: 1.6rem; line-height: 1.25; }
+p { color: #9aa3c0; }
+a { color: #ff6b81; }
+form { margin-top: 1.5rem; padding: 1.5rem; border: 1px solid #2a3350; border-radius: 1rem; background: #151b30; }
+.form-field { margin-bottom: 1rem; }
+label { display: block; font-size: .85rem; margin-bottom: .4rem; }
+.field-error { display: block; font-size: .85rem; color: #ff6b81; margin-top: .4rem; }
+input:not([type=hidden]) { width: 100%; padding: .75rem; font: inherit; border: 1px solid #2a3350; border-radius: .5rem; background: #1e2740; color: #e6e8f0; }
+input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #ff6b81; outline-offset: 3px; }
+button { width: 100%; padding: .75rem; font: inherit; font-weight: 600; border: 0; border-radius: .6rem; background: #e94560; color: white; cursor: pointer; }
+button:hover { background: #b9233d; }
+[role=status], [role=alert] { padding: 1rem; background: #151b30; border: 1px solid #2a3350; border-radius: .6rem; color: #e6e8f0; }

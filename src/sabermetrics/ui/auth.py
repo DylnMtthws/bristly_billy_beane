@@ -102,7 +102,10 @@ class AuthUser(UserMixin):
         self._row = row
 
     def get_id(self) -> str:
-        return str(self._row["id"])
+        # Version zero accepts pre-recovery cookies. Changing a password moves
+        # to a new version so old sessions and remember cookies stop working.
+        version = self._row.get("session_version", 0)
+        return f"{self.id}:{version}" if version else self.id
 
     @property
     def is_active(self) -> bool:
@@ -150,8 +153,11 @@ def _invites() -> db.InviteRepo:
 @login_manager.user_loader
 def load_user(user_id: str) -> AuthUser | None:
     """Reload a user from its id for each request."""
-    row = _users().get(user_id)
-    return AuthUser(row) if row else None
+    uid, _, version = user_id.partition(":")
+    row = _users().get(uid)
+    if row is None or str(row.get("session_version", 0)) != (version or "0"):
+        return None
+    return AuthUser(row)
 
 
 @login_manager.request_loader
@@ -418,15 +424,15 @@ def accept_invite(token: str):
     if form.validate_on_submit():
         assert form.password.data is not None
         assert form.display_name.data is not None
-        users = _users()
-        users.activate_with_password(
-            user["id"],
+        user_id = _invites().consume(
+            token,
             db.hash_password(form.password.data),
             display_name=form.display_name.data.strip(),
             avatar_emoji=(form.avatar_emoji.data or "").strip() or None,
         )
-        _invites().mark_used(token)
-        row = users.get(user["id"])
+        if user_id is None:
+            return render_template("invite.html", invalid=True), 400
+        row = _users().get(user_id)
         assert row is not None
         login_user(AuthUser(row))
         logger.info("Invite accepted for %s", row.get("email"))
