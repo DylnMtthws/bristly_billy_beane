@@ -83,6 +83,11 @@ jobs:
           print("Installed schema accepts a v3 result and rejects missing card_data from /tmp")
           PY
 
+      - name: Validate installed password recovery with mock delivery
+        run: >-
+          docker run --rm --interactive --network none --workdir /tmp
+          decklab-ci python -I - < scripts/smoke_password_recovery.py
+
       - name: Start container
         run: >-
           docker run --detach --name decklab-ci

@@ -126,6 +126,9 @@ def create_app(db_path: Path | None = None) -> Flask:
     app.register_blueprint(admin_bp)
     app.register_blueprint(cedh_bp)
     app.register_blueprint(main_bp)
+    from sabermetrics.ui.recovery import init_recovery
+
+    init_recovery(app)
 
     # A thread-pool job cannot survive a process restart. Make that state
     # explicit on boot instead of leaving a status page polling forever.

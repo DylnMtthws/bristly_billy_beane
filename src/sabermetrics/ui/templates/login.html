@@ -60,12 +60,6 @@
     </div>
     {% endif %}
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-      <div class="mt-4 rounded-xl px-4 py-3 text-sm {% if category == 'error' %}border border-brand/40 bg-brand/10 text-brand-hover{% else %}border border-line bg-panel text-body{% endif %}">{{ message }}</div>
-      {% endfor %}
-    {% endwith %}
-
     <form method="post" action="{{ url_for('auth.login', next=request.args.get('next')) }}"
           class="mt-6 space-y-4 rounded-2xl border border-line bg-panel p-6 shadow-panel">
         {{ form.hidden_tag() }}
@@ -84,6 +78,9 @@
             Sign In
         </button>
     </form>
+    {% if config.PASSWORD_RECOVERY_ENABLED %}
+    <p class="mt-4 text-center text-sm"><a class="text-brand hover:underline" href="{{ url_for('recovery.forgot_password') }}">Forgot password?</a></p>
+    {% endif %}
 {% endif %}
 </div>
 {% endblock %}
