@@ -1,9 +1,7 @@
 {% extends "admin_base.html" %}
 {% block title %}Users{% endblock %}
 
-{% block content %}
-<h1 class="text-2xl font-bold tracking-tight">Users</h1>
-
+{% block flash_messages %}
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% for category, message in messages %}
     {% if category == 'invite' %}
@@ -16,6 +14,10 @@
     {% endif %}
   {% endfor %}
 {% endwith %}
+{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold tracking-tight">Users</h1>
 
 <details open class="group mt-6 rounded-2xl border border-line bg-panel shadow-panel">
     <summary class="flex cursor-pointer list-none items-center gap-2 px-5 py-4 text-sm font-semibold [&::-webkit-details-marker]:hidden">
@@ -50,7 +52,7 @@
         <div class="sm:col-span-2">
             <button type="submit"
                     class="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
-                Create &amp; generate invite
+                {% if config.PASSWORD_RECOVERY_ENABLED or config.PUBLIC_DEPLOYMENT %}Create &amp; send invite{% else %}Create &amp; generate invite{% endif %}
             </button>
         </div>
     </form>
@@ -113,10 +115,12 @@
                             <input type="hidden" name="status" value="active">
                             <button type="submit" class="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:border-brand hover:bg-brand hover:text-white">Enable</button>
                         </form>
+                        {% if u.status == 'invited' %}
                         <form method="post" action="{{ url_for('admin.reinvite', user_id=u.id) }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:border-brand hover:bg-brand hover:text-white">Re-invite</button>
+                            <button type="submit" class="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:border-brand hover:bg-brand hover:text-white">{% if config.PASSWORD_RECOVERY_ENABLED or config.PUBLIC_DEPLOYMENT %}Resend invite{% else %}Re-invite{% endif %}</button>
                         </form>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </td>

@@ -135,8 +135,24 @@ class RecoveryMailer:
                 return True
         except (httpx.HTTPError, ValueError, AttributeError):
             pass
-        logger.error("Resend did not confirm password recovery email delivery")
+        logger.error("Resend did not confirm email acceptance")
         return False
+
+    def send_invite(self, recipient: str, token: str) -> bool:
+        """Send an admin-issued invite using the trusted website origin.
+
+        Admin actions wait for the bounded HTTP call so they can report an
+        unconfirmed send immediately and offer a retry, rather than claiming
+        that a background task delivered an invitation.
+        """
+        return self.send(
+            recipient,
+            "You're invited to Deck Lab",
+            "You've been invited to Deck Lab. Choose your password and finish "
+            "setting up your account using this one-time link within 7 days:\n\n"
+            f"{self.config.base_url}/invite/{token}\n\n"
+            "If you weren't expecting this invitation, you can ignore this email.",
+        )
 
     def request_reset(self, email: str) -> None:
         issued = self.repo.issue(email)

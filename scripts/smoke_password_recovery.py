@@ -75,8 +75,56 @@ with TemporaryDirectory() as directory:
             row = db.UsersRepo(path).get(uid)
             assert row["role"] == "admin" and row["session_version"] == 1
             assert db.verify_password(row["password_hash"], "installed-new-password")
+            # Exercise automatic invitations through the installed admin UI,
+            # including CSRF, configured link origin and visible send failure.
+            worker.submit(lambda: None).result(timeout=5)
+            page = client.get("/login")
+            csrf = re.search(rb'name="csrf_token"[^>]*value="([^"]+)"', page.data)[
+                1
+            ].decode()
+            response = client.post(
+                "/login",
+                data={
+                    "email": "admin@example.com",
+                    "password": "installed-new-password",
+                    "csrf_token": csrf,
+                },
+            )
+            assert response.status_code == 302
+            page = client.get("/admin/users")
+            assert b"Create &amp; send invite" in page.data
+            csrf = re.search(rb'name="csrf_token"[^>]*value="([^"]+)"', page.data)[
+                1
+            ].decode()
+            send.reset_mock()
+            response = client.post(
+                "/admin/users/create",
+                data={
+                    "email": "player@example.com",
+                    "csrf_token": csrf,
+                },
+                follow_redirects=True,
+            )
+            assert (
+                response.data.count(b"Invitation email sent to player@example.com.")
+                == 1
+            )
+            assert (
+                send.call_count == 1 and send.call_args.args[0] == "player@example.com"
+            )
+            assert "https://decklab.example.com/invite/" in send.call_args.args[2]
+            user = db.UsersRepo(path).get_by_email("player@example.com")
+            assert user["status"] == "invited"
+            send.return_value = False
+            response = client.post(
+                f"/admin/users/{user['id']}/reinvite",
+                data={
+                    "csrf_token": csrf,
+                },
+                follow_redirects=True,
+            )
+            assert b"couldn&#39;t confirm" in response.data
+            assert b"Try Resend invite" in response.data
         finally:
             worker.shutdown(wait=True)
-print(
-    "Installed recovery templates, assets, CSRF, email handoff and admin reset passed"
-)
+print("Installed recovery, CSRF, admin reset and automatic invitation checks passed")

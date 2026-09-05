@@ -247,7 +247,9 @@ class TestOwnerScopingSurvives:
         ).headers["Location"]
 
         assert (
-            client.get(location, headers={LOGIN_HEADER: TESTER_LOGIN}).status_code
+            client.get(
+                location, headers={LOGIN_HEADER: TESTER_LOGIN}, follow_redirects=True
+            ).status_code
             == 200
         )
         assert (
@@ -255,7 +257,10 @@ class TestOwnerScopingSurvives:
             == 403
         )
         assert (
-            client.get(location, headers={LOGIN_HEADER: ADMIN_LOGIN}).status_code == 200
+            client.get(
+                location, headers={LOGIN_HEADER: ADMIN_LOGIN}, follow_redirects=True
+            ).status_code
+            == 200
         )
         assert other_id
 

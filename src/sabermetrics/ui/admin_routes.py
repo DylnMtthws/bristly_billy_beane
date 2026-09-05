@@ -60,6 +60,34 @@ def _invites() -> db.InviteRepo:
     return db.InviteRepo(current_app.config["DB_PATH"])
 
 
+def _deliver_invite(user_id: str, email: str) -> None:
+    """Send automatically when email is configured; report failures honestly."""
+    token = _invites().create(user_id)
+    mailer = current_app.extensions.get("recovery_mailer")
+    if mailer is not None:
+        if mailer.send_invite(email, token):
+            flash(f"Invitation email sent to {email}.", "success")
+        else:
+            flash(
+                f"The account for {email} is saved, but we couldn't confirm that "
+                "the invitation email was sent. Try Resend invite.",
+                "error",
+            )
+        return
+    if current_app.config.get("PUBLIC_DEPLOYMENT"):
+        flash(
+            "The account is saved, but invitation email is unavailable. "
+            "Configure email delivery, then use Resend invite.",
+            "error",
+        )
+        return
+    # Keep manual onboarding available for the private/local deployment that
+    # intentionally has no outbound email service.
+    link = url_for("auth.accept_invite", token=token, _external=True)
+    flash(f"Invited {email}. Send this one-time link:", "success")
+    flash(link, "invite")
+
+
 @bp.route("/")
 def overview():
     """Admin landing: KPIs across users, decks, spend, and feedback."""
@@ -91,7 +119,7 @@ def user_detail(user_id: str):
 
 @bp.route("/users/create", methods=["POST"])
 def create_user():
-    """Create an invited account and surface a one-time invite link."""
+    """Create an invited account and send its one-time invitation email."""
     users_repo = _users()
     email = (request.form.get("email") or "").strip()
     display_name = (request.form.get("display_name") or "").strip() or None
@@ -121,10 +149,7 @@ def create_user():
         monthly_deck_quota=quota,
         invited_by=current_user.id,
     )
-    token = _invites().create(user_id)
-    link = url_for("auth.accept_invite", token=token, _external=True)
-    flash(f"Invited {email}. Send this one-time link:", "success")
-    flash(link, "invite")
+    _deliver_invite(user_id, email)
     logger.info("Admin %s invited %s", current_user.email, email)
     return redirect(url_for("admin.users"))
 
@@ -166,17 +191,20 @@ def set_quota(user_id: str):
 
 @bp.route("/users/<user_id>/reinvite", methods=["POST"])
 def reinvite(user_id: str):
-    """Issue a fresh invite link for an invited/inactive user."""
+    """Email a fresh invitation without creating another account."""
     target = _users().get(user_id)
     if target is None:
         abort(404)
     if target.get("status") == "active":
         flash(f"{target.get('email')} is already active.", "error")
         return redirect(url_for("admin.users"))
-    token = _invites().create(user_id)
-    link = url_for("auth.accept_invite", token=token, _external=True)
-    flash(f"New invite link for {target.get('email')}:", "success")
-    flash(link, "invite")
+    if target.get("status") != "invited" or not target.get("email"):
+        flash(
+            "Only invited accounts with an email address can receive invitations.",
+            "error",
+        )
+        return redirect(url_for("admin.users"))
+    _deliver_invite(user_id, target["email"])
     return redirect(url_for("admin.users"))
 
 
