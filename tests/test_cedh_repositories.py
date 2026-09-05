@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
+
 import pytest
 
 from sabermetrics.cedh.adapters_fixture import FixtureMetaRepository
@@ -388,9 +390,31 @@ class TestPostgresContractProbes:
         assert state.summaries_available is False
         assert "event_date is missing" in state.summary_detail
 
-    def test_real_producer_shape_maps_through_every_evidence_query(self, monkeypatch):
-        from datetime import date
-
+    @pytest.mark.parametrize(
+        ("event_date", "expected_held_on"),
+        [
+            pytest.param(
+                datetime.fromisoformat("2026-08-30T18:45:12.123456+00:00"),
+                date(2026, 8, 30),
+                id="non-midnight-utc",
+            ),
+            pytest.param(
+                datetime.fromisoformat("2026-08-30T00:30:00+14:00"),
+                date(2026, 8, 29),
+                id="previous-utc-date",
+            ),
+            pytest.param(
+                datetime.fromisoformat("2026-08-30T23:30:00-07:00"),
+                date(2026, 8, 31),
+                id="next-utc-date",
+            ),
+            pytest.param(date(2026, 8, 30), date(2026, 8, 30), id="date-preserved"),
+            pytest.param(None, None, id="none-preserved"),
+        ],
+    )
+    def test_real_producer_shape_maps_through_every_evidence_query(
+        self, monkeypatch, event_date, expected_held_on
+    ):
         from sabermetrics.cedh import adapters_postgres
 
         connection = self._Connection()
@@ -407,7 +431,7 @@ class TestPostgresContractProbes:
             if "WHERE FALSE" in sql or sql.startswith("SET TRANSACTION"):
                 return []
             if "COUNT(*) AS n, MAX(event_date)" in sql:
-                return [{"n": 1, "latest": date(2026, 8, 30)}]
+                return [{"n": 1, "latest": event_date}]
             if "COUNT(DISTINCT entry_id) AS entries" in sql:
                 return [
                     {
@@ -432,7 +456,7 @@ class TestPostgresContractProbes:
                     {
                         "event_id": "tournament-id",
                         "name": "Event Name",
-                        "held_on": date(2026, 8, 30),
+                        "held_on": event_date,
                         "size": 64,
                         "source": "EDHTop16",
                         "source_url": "https://example.test/event",
@@ -471,7 +495,7 @@ class TestPostgresContractProbes:
         assert result.commander is not None
         assert result.commander.names == ("Commander Name",)
         assert result.events[0].event_id == "tournament-id"
-        assert result.events[0].held_on == date(2026, 8, 30)
+        assert result.events[0].held_on == expected_held_on
         assert result.events[0].size == 64
         assert result.events[0].source_url == "https://example.test/event"
         assert result.entries[0].decklist_id == "deck-id"
