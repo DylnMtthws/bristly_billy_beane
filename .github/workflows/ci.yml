@@ -59,6 +59,30 @@ jobs:
           test "$size_bytes" -lt 400000000
           echo "Image size: $size_bytes bytes"
 
+      - name: Validate installed simulator result schema outside the checkout
+        run: |
+          docker run --rm --interactive --network none --workdir /tmp decklab-ci python -I - <<'PY'
+          import json
+          from pathlib import Path
+          from jsonschema.exceptions import ValidationError
+          from sabermetrics.cedh.simulator import _http_result_validator
+
+          payload = json.loads(Path("/app/fixtures/cedh/simulation/kinnan.json").read_text())
+          payload.pop("_README")
+          payload.pop("commander_keys")
+          validator = _http_result_validator()
+          validator.check_schema(validator.schema)
+          validator.validate(payload)
+          del payload["card_data"]
+          try:
+              validator.validate(payload)
+          except ValidationError:
+              pass
+          else:
+              raise AssertionError("Malformed result was accepted")
+          print("Installed schema accepts a v3 result and rejects missing card_data from /tmp")
+          PY
+
       - name: Start container
         run: >-
           docker run --detach --name decklab-ci

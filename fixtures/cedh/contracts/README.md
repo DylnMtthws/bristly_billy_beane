@@ -30,3 +30,8 @@ Regenerate on the simulator side with
 `uv run --project export python scripts/make_hash_golden_vectors.py`, then
 re-copy the four files above together. They are one artifact; do not update
 one without the others.
+
+The result schema also ships as package data at
+`src/sabermetrics/cedh/contracts/cedh-simulation-result.v3.schema.json` so installed
+clients can validate responses without the repository checkout. Refresh that
+copy when updating the vendored contracts; a test requires byte-for-byte parity.

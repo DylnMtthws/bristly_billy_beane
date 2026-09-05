@@ -45,6 +45,7 @@ import subprocess
 import time
 from collections.abc import Callable
 from functools import lru_cache
+from importlib.resources import files
 from pathlib import Path
 from typing import Any, Final, Literal, Protocol, cast, runtime_checkable
 
@@ -209,12 +210,8 @@ class SimulatorClient(Protocol):
 @lru_cache(maxsize=1)
 def _http_result_validator() -> Draft202012Validator:
     """Load the vendored result schema used for every successful response."""
-    path = (
-        Path(__file__).resolve().parents[3]
-        / "fixtures"
-        / "cedh"
-        / "contracts"
-        / "cedh-simulation-result.v3.schema.json"
+    path = files("sabermetrics.cedh").joinpath(
+        "contracts", "cedh-simulation-result.v3.schema.json"
     )
     schema = json.loads(path.read_text(encoding="utf-8"))
     return Draft202012Validator(schema, format_checker=FormatChecker())

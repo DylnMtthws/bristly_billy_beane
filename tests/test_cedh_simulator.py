@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import stat
+from importlib.resources import files
+from pathlib import Path
 
 import httpx
 import pytest
@@ -138,6 +140,14 @@ def _result_headers():
 
 
 class TestContractValidation:
+    def test_packaged_schema_matches_vendored_contract(self):
+        name = "cedh-simulation-result.v3.schema.json"
+        packaged = files("sabermetrics.cedh").joinpath("contracts", name)
+        vendored = (
+            Path(__file__).resolve().parents[1] / "fixtures/cedh/contracts" / name
+        )
+        assert packaged.read_bytes() == vendored.read_bytes()
+
     def test_a_valid_payload_parses(self, candidate):
         result = _parse_http_result(
             _result_payload(candidate), candidate, httpx.Headers(_result_headers())
