@@ -1,0 +1,55 @@
+.feedback-launcher {
+    position: fixed; right: max(20px, env(safe-area-inset-right));
+    bottom: max(20px, env(safe-area-inset-bottom)); z-index: 40;
+    display: flex; align-items: center; gap: 9px; min-height: 48px;
+    padding: 0 17px; border: 1px solid #46506b; border-radius: 999px;
+    color: #e6e8f0; background: #1b233d; font-size: 13px; font-weight: 600;
+    box-shadow: 0 3px 16px #0005; cursor: pointer;
+}
+.feedback-launcher:hover { background: #27314c; border-color: #e94560; }
+.feedback-panel {
+    position: fixed; inset: auto max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) auto;
+    margin: 0; padding: 22px; width: min(390px, calc(100vw - 32px));
+    max-width: none; max-height: calc(100dvh - 40px); overflow-y: auto;
+    color: #e6e8f0; background: #151b30; border: 1px solid #3a4564;
+    border-radius: 18px; box-shadow: 0 14px 60px #0008; font-size: 14px;
+    line-height: 1.5; overscroll-behavior: contain;
+}
+.feedback-panel::backdrop { background: #0b102038; }
+.feedback-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.feedback-heading h2 { font-size: 19px; font-weight: 650; margin: 0; }
+.feedback-heading p, .feedback-dropzone p { color: #abb4ce; font-size: 12px; margin: 4px 0 0; }
+.feedback-icon-button { min-width: 44px; min-height: 44px; font-size: 27px; border-radius: 8px; color: #c7cee0; background: transparent; cursor: pointer; }
+.feedback-panel fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.feedback-panel label { display: block; margin: 12px 0 6px; font-weight: 550; font-size: 13px; }
+.feedback-panel input, .feedback-panel textarea, .feedback-panel select { max-width: 100%; font: inherit; }
+.feedback-panel textarea, .feedback-panel select { width: 100%; padding: 10px 11px; border-radius: 9px; border: 1px solid #3a4564; background: #1e2740; color: #e6e8f0; }
+.feedback-panel textarea { min-height: 108px; resize: vertical; }
+.feedback-panel textarea::placeholder { color: #9aa3c0; }
+.feedback-dropzone { margin-top: 14px; padding: 10px 12px; border: 1px dashed #46506b; border-radius: 10px; }
+.feedback-dropzone label { margin-top: 0; }
+.feedback-dropzone span { color: #abb4ce; font-weight: normal; }
+.feedback-dropzone input { font-size: 12px; width: 100%; }
+.feedback-dropzone input::file-selector-button { padding: 7px 9px; margin-right: 8px; border: 1px solid #46506b; border-radius: 6px; color: #e6e8f0; background: #27314c; cursor: pointer; }
+.feedback-dropzone.is-dragging { border-color: #ff6b81; background: #e9456010; }
+#feedback-preview { margin: 12px 0; }
+#feedback-preview img { max-height: 160px; max-width: 100%; border-radius: 7px; object-fit: contain; }
+#feedback-preview figcaption { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+#feedback-image-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+#feedback-remove { min-height: 44px; color: #ff889a; white-space: nowrap; cursor: pointer; }
+.feedback-disclosure { font-size: 11px; line-height: 1.6; color: #abb4ce; margin: 13px 0; }
+#feedback-status { font-size: 13px; color: #ffc1ca; margin: 10px 0; }
+#feedback-signin { font-size: 13px; margin: 10px 0; }
+#feedback-signin a { color: #ff889a; text-decoration: underline; }
+.feedback-submit { width: 100%; min-height: 44px; padding: 10px 14px; border: 0; border-radius: 9px; color: #fff; background: #c92544; font-weight: 650; cursor: pointer; }
+.feedback-submit:hover { background: #df3453; }
+.feedback-panel :disabled { opacity: .65; cursor: default; }
+.feedback-panel :focus-visible, .feedback-launcher:focus-visible { outline: 2px solid #ff889a; outline-offset: 3px; }
+.feedback-launcher[hidden], .feedback-panel [hidden] { display: none; }
+#feedback-success p { margin: 0 0 22px; }
+@media (max-width: 480px) {
+    .feedback-launcher { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); width: 48px; padding: 0; justify-content: center; }
+    .feedback-launcher span { display: none; }
+    .feedback-panel { right: 16px; padding: 18px; max-height: calc(100dvh - 32px); }
+    .feedback-panel textarea, .feedback-panel select { font-size: 16px; }
+}

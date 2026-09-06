@@ -1,5 +1,8 @@
 # Deployment
 
+For the signed-in issue-report widget and private Linear image uploads, see
+[Linear feedback setup and rollout](linear-feedback.md).
+
 Production is one Python 3.11 container on one managed machine, behind the
 platform TLS proxy, with SQLite app state on a persistent volume at `/data`.
 The image binds `0.0.0.0:8080` **inside the container only**. Do not expose that

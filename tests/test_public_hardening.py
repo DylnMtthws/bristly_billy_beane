@@ -79,6 +79,11 @@ def test_csrf_rejects_every_post_route_including_build_jobs(tmp_path, monkeypatc
     client = app.test_client()
     for path in post_urls:
         response = client.post(path)
+        if path == "/feedback/submit":
+            # Uploads reject anonymous callers before CSRF parses image bytes.
+            # Authenticated CSRF rejection is covered in test_issue_feedback.
+            assert response.status_code == 401, path
+            continue
         assert response.status_code == 400, path
 
 
