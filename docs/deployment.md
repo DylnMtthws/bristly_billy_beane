@@ -144,6 +144,23 @@ admin creates an inactive account and a one-time invite; the tester opens the
 link, chooses their own password, and becomes active. There is no
 self-registration.
 
+With the Resend settings above configured, **Create & send invite** automatically
+emails the link from `SABER_EMAIL_FROM`. **Resend invite** sends a fresh link to
+an existing invited user without creating another account. Links use the
+trusted `SABER_PUBLIC_URL`, never the request's Host header, and expire after
+seven days. The admin request waits for the email API response (10-second HTTP
+timeouts); success means the provider accepted the email, not proof of inbox
+delivery. A failed or unconfirmed send leaves the account invited and displays
+a retry message. No invite link is flashed into the admin session in email mode.
+Disabled/active accounts cannot be reinvited; accepting an invite still preserves
+the role and quota the admin assigned. Invitations share Resend's sending quota
+with password recovery. No new secrets or services are needed.
+
+Private/local deployments without email settings retain manual links. A public
+deployment without email configuration reports email as unavailable instead of
+silently requiring manual delivery. Console `invite-user` remains a manual
+operator workflow.
+
 ```bash
 SABER_DB_PATH=/data/sabermetrics.db sabermetrics invite-user \
   --email alice@example.com --display-name "Alice" \

@@ -86,11 +86,13 @@
         </div>
         {% endif %}
 
+        {% block flash_messages %}
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% for category, message in messages %}
           <div class="mb-4 rounded-xl px-4 py-3 text-sm {% if category == 'error' %}border border-brand/40 bg-brand/10 text-brand-hover{% elif category == 'success' %}border border-emerald-500/40 bg-emerald-500/10 text-emerald-400{% else %}border border-line bg-panel text-body{% endif %}">{{ message }}</div>
           {% endfor %}
         {% endwith %}
+        {% endblock %}
 
         {% block content %}{% endblock %}
     </main>
