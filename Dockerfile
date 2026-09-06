@@ -2,6 +2,9 @@ FROM python:3.11-slim-bookworm
 
 LABEL org.opencontainers.image.version="0.1.0"
 
+ARG SABER_BUILD_SHA=unknown
+ENV SABER_BUILD_SHA=$SABER_BUILD_SHA
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \

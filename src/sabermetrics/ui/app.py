@@ -114,6 +114,9 @@ def create_app(db_path: Path | None = None) -> Flask:
     from sabermetrics.ui.extensions import csrf, limiter
 
     login_manager.init_app(app)
+    from sabermetrics.ui.issue_feedback import init_feedback
+
+    init_feedback(app)
     csrf.init_app(app)
     limiter.init_app(app)
 

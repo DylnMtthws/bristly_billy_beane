@@ -88,6 +88,11 @@ jobs:
           docker run --rm --interactive --network none --workdir /tmp
           decklab-ci python -I - < scripts/smoke_password_recovery.py
 
+      - name: Validate installed feedback widget with mock Linear delivery
+        run: >-
+          docker run --rm --interactive --network none --workdir /tmp
+          decklab-ci python -I - < scripts/smoke_issue_feedback.py
+
       - name: Start container
         run: >-
           docker run --detach --name decklab-ci

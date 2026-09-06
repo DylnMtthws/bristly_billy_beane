@@ -20,6 +20,7 @@ dependencies = [
     "mtg-parser",
     "mtgsdk",
     "numpy",
+    "Pillow>=12.3,<13",
     "pydantic>=2.0",
     "pyyaml",
     "waitress",

@@ -406,6 +406,21 @@ DDL_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_deck_feedback_deck ON deck_feedback(deck_id)",
     "CREATE INDEX IF NOT EXISTS idx_deck_feedback_user ON deck_feedback(user_id)",
+    # Delivery receipts only: no report text, email, image bytes or signed URLs.
+    """
+    CREATE TABLE IF NOT EXISTS issue_feedback_receipts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        fingerprint TEXT NOT NULL,
+        issue_id TEXT NOT NULL UNIQUE,
+        created_at REAL NOT NULL,
+        lease_until REAL NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('sending', 'retry', 'sent')),
+        attempted INTEGER NOT NULL DEFAULT 0,
+        asset_url TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_issue_feedback_user_created ON issue_feedback_receipts(user_id, created_at)",
 ]
 
 

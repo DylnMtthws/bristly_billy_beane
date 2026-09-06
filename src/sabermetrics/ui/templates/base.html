@@ -32,6 +32,9 @@
       };
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% if config.LINEAR_FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='issue-feedback.css') }}">
+    {% endif %}
     {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-ink text-body font-sans antialiased flex flex-col">
@@ -143,6 +146,10 @@
     })();
     </script>
 
+    {% if config.LINEAR_FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
+    {% include "partials/issue_feedback.html" %}
+    <script src="{{ url_for('static', filename='issue-feedback.js') }}" defer></script>
+    {% endif %}
     {% block scripts %}{% endblock %}
 </body>
 </html>
