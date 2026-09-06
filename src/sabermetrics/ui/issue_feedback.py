@@ -59,7 +59,13 @@ def page_context(value: str) -> tuple[str, str]:
             return "Unavailable", "Unavailable"
         adapter = current_app.url_map.bind("localhost")
         endpoint, _values = adapter.match(path, method="GET")
-        if endpoint.split(".")[0] not in {"main", "cedh", "admin"}:
+        if endpoint.split(".")[0] not in {
+            "main",
+            "cedh",
+            "admin",
+            "builder",
+            "research",
+        }:
             return "Unavailable", "Unavailable"
         # Only the path is sent; query strings/fragments never reach Linear.
         return path[:500], endpoint.split(".")[-1].replace("_", " ").capitalize()
@@ -168,10 +174,14 @@ def submit():
         return {"error": "Invalid feedback form."}, 400
     category = request.form.get("category", "")
     description = request.form.get("description", "").strip()
+    details = request.form.get("details", "").strip()
+    include_context = request.form.get("include_context", "1") == "1"
     if (
         category not in CATEGORIES
         or not 10 <= len(description) <= 5000
+        or len(details) > 3000
         or "\x00" in description
+        or "\x00" in details
     ):
         return {
             "error": "Choose a category and describe the issue in 10–5,000 characters."
@@ -192,13 +202,20 @@ def submit():
     claimed = False
     sent = False
     try:
-        screenshot = sanitize_image(files[0][1]) if files else None
-        path, page = page_context(request.form.get("page_path", ""))
+        screenshot = sanitize_image(files[0][1]) if files and include_context else None
+        path, page = (
+            page_context(request.form.get("page_path", ""))
+            if include_context
+            else ("/", "Not attached")
+        )
+        report_text = description
+        if details:
+            report_text += f"\n\nAdditional detail:\n{details}"
         fingerprint = hashlib.sha256(
             json.dumps(
                 [
                     category,
-                    description,
+                    report_text,
                     path,
                     (
                         hashlib.sha256(screenshot.content).hexdigest()
@@ -225,14 +242,15 @@ def submit():
             "category": CATEGORIES[category],
             "reporter": current_user.display_name,
             "email": current_user.email,
-            "page": page,
-            "path": path,
             "reported_at": datetime.now(UTC).isoformat(),
             "app_version": version("sabermetrics"),
             "build": os.environ.get("SABER_BUILD_SHA", "unknown")[:80],
-            **device_context(),
         }
-        body = "## User report\n\n" + code_block(description)
+        if include_context:
+            context.update({"page": page, "path": path, **device_context()})
+        else:
+            context["optional_context"] = "not attached"
+        body = "## User report\n\n" + code_block(report_text)
         body += "\n\n## Context\n\n" + code_block(
             json.dumps(context, indent=2, ensure_ascii=False)
         )

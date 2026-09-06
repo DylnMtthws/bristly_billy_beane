@@ -1,0 +1,44 @@
+{% extends "deck_lab/base.html" %}
+{% block title %}{{ document.title }} · Deck Lab{% endblock %}
+{% block body_class %}dl-workspace-body{% endblock %}
+{% block shell %}
+{% if shared %}<div class="dl-shared-banner">Read-only shared deck · changes are disabled</div>{% endif %}
+<header class="dl-workspace-header">
+    {% if shared %}<a class="dl-wordmark" href="#"><span class="dl-mark"><i></i><i></i><i></i></span>Deck Lab</a>{% else %}<a class="dl-icon-button" href="{{ url_for('builder.library') }}" aria-label="Back to Build">‹</a>{% endif %}
+    <div class="dl-workspace-title"><h1 id="deck-title">{{ document.title }}</h1><small id="deck-validation">{{ document.validation.library_count }} + {{ document.validation.commander_count }} · {{ 'legal' if document.validation.legal else 'draft' }}</small></div>
+    {% if not shared %}<button class="dl-save-state" id="save-state" type="button" title="Click to retry a failed save">Saved</button>{% if document.source_kind == 'generated' %}<a class="dl-button desktop-only" href="{{ url_for('main.view_deck',deck_id=document.source_id) }}">Original report</a>{% elif document.source_kind == 'candidate' %}<a class="dl-button desktop-only" href="{{ url_for('cedh.candidate',candidate_id=document.source_id) }}">Original evidence</a>{% endif %}{% endif %}
+    {% if config.DECK_LAB_PLAYMAT_ENABLED %}<div class="dl-segments" aria-label="Builder view"><button type="button" data-view="playmat" aria-pressed="false">Playmat</button><button type="button" data-view="table" aria-pressed="true">Table</button></div>{% endif %}
+    {% if not shared %}<details class="dl-account-menu"><summary><span>{{ current_user.avatar_emoji or '🎣' }}</span><span aria-hidden="true">▾</span></summary><div class="dl-account-popover"><strong>{{ current_user.display_name }}</strong><span>{{ current_user.email }}</span><a href="{{ url_for('builder.library') }}">Build</a>{% if config.DECK_LAB_RESEARCH_ENABLED %}<a href="{{ url_for('research.index') }}">Research</a>{% endif %}<a href="{{ url_for('main.profile') }}">Profile</a>{% if current_user.is_admin %}<a href="{{ url_for('admin.overview') }}">Admin</a>{% endif %}<a href="{{ url_for('auth.logout') }}">Sign out</a></div></details>{% endif %}
+</header>
+{% endblock %}
+{% block main_class %}dl-main-wide{% endblock %}
+{% block content %}
+<div class="dl-builder" data-shared="{{ 'true' if shared else 'false' }}" data-playmat-enabled="{{ 'true' if config.DECK_LAB_PLAYMAT_ENABLED else 'false' }}">
+    <section class="dl-builder-main">
+        <div class="dl-builder-toolbar">
+            <div class="dl-segments" aria-label="Table display"><button data-display="text" aria-pressed="true">Text</button><button data-display="grid" aria-pressed="false">Grid</button><button data-display="spoiler" aria-pressed="false">Spoiler</button></div>
+            <label class="desktop-only">Group <select class="dl-zone-select" data-group><option value="zone">Zone</option><option value="type">Type</option></select></label>
+            <label class="desktop-only">Sort <select class="dl-zone-select" data-sort><option value="manual">Manual</option><option value="name">Name</option><option value="mana_value">Mana value</option></select></label>
+            {% if not shared %}<div class="dl-bulk-controls desktop-only"><span class="dl-mono" data-selected-count>0 selected</span><select class="dl-zone-select" data-bulk-zone aria-label="Bulk move destination"></select><button class="dl-button" type="button" data-bulk-move disabled>Move</button></div>{% endif %}
+            <span class="push"></span>
+            {% if not shared %}<button class="dl-button" type="button" data-add-open>Add cards</button><button class="dl-button desktop-only" type="button" data-new-zone>New zone</button>{% if config.DECK_LAB_PLAYMAT_ENABLED %}<button class="dl-button desktop-only" type="button" data-playmat-picker>Playmat…</button>{% endif %}<a class="dl-button desktop-only" href="{{ url_for('builder.export',deck_id=document.id) }}">Export</a><button class="dl-button desktop-only" type="button" data-share>Share</button>{% endif %}
+        </div>
+        <div class="dl-builder-content" id="table-view" aria-live="polite"></div>
+        {% if config.DECK_LAB_PLAYMAT_ENABLED %}<div class="dl-builder-content dl-playmat-view" id="playmat-view" hidden><div class="dl-playmat" id="playmat"></div><div class="dl-zoom"><button class="dl-icon-button" data-zoom="out">−</button><span class="dl-mono" id="zoom-label">100%</span><button class="dl-icon-button" data-zoom="in">+</button><button class="dl-button" data-zoom="fit">Fit</button></div></div>{% endif %}
+    </section>
+    <aside class="dl-stats-rail"><div class="dl-eyebrow">Deck</div><div class="dl-stat-list" id="deck-stats"></div><h2>Zones</h2><div class="dl-stat-list" id="zone-stats"></div><div id="validation-issues"></div></aside>
+</div>
+
+{% if not shared %}
+<aside class="dl-add-panel" id="add-panel" aria-hidden="true">
+    <div class="dl-add-head"><div><div><div class="dl-eyebrow">Add cards</div><h2>Search the corpus</h2></div><button class="dl-icon-button" data-add-close aria-label="Close add cards">×</button></div><div class="dl-segments" style="margin-top:12px"><button data-search-mode="simple" aria-pressed="true">Simple</button><button data-search-mode="advanced" aria-pressed="false">Advanced</button></div><input class="dl-field" data-card-search placeholder="Card name" autocomplete="off" style="margin-top:12px"><div class="dl-advanced" data-advanced hidden><input class="dl-field" data-oracle-search placeholder="Oracle text"><input class="dl-field" data-type-search placeholder="Type line"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input class="dl-field" data-mana-search type="number" min="0" placeholder="Max MV"><select class="dl-field" data-rarity-search><option value="">Any rarity</option><option>common</option><option>uncommon</option><option>rare</option><option>mythic</option></select></div><button class="dl-button" data-card-search-submit>Search</button></div></div>
+    <div class="dl-add-destination">Into <select class="dl-zone-select" data-add-zone></select><span class="dl-muted" data-search-scope>{% if document.validation.commander_count %}Commander identity{% else %}Unrestricted draft · choose a commander to lock legality{% endif %}</span></div>
+    <div class="dl-add-results" data-card-results><p class="dl-muted">Type a card name to begin.</p></div>
+</aside>
+{% if config.DECK_LAB_PLAYMAT_ENABLED %}<dialog class="dl-dialog" id="playmat-picker"><form method="dialog"><div class="dl-dialog-head"><div><div class="dl-eyebrow">Playmat</div><h2>Choose a surface</h2></div><button class="dl-icon-button" value="cancel" aria-label="Close">×</button></div><p class="dl-muted">Preview changes here. Done saves them to this deck; closing cancels them.</p><div class="dl-surface-grid">{% for key,label in [('slate-grid','Slate Grid'),('felt-weave','Felt Weave'),('deep-field','Deep Field'),('graph-paper','Graph Paper'),('void','Void')] %}<button type="button" class="dl-surface {{ key }}" data-surface="{{ key }}"><span>{{ label }}</span></button>{% endfor %}</div><label>Upload your own<input type="file" accept="image/png,image/jpeg,image/webp" data-playmat-upload><small class="dl-muted">Up to 10 MB and 25 megapixels. Metadata is removed. Upload starts when you choose Done.</small></label><output class="dl-muted" data-playmat-upload-status></output><label><input type="checkbox" data-setting="snap_to_grid"> Snap cards and zones to grid</label><label><input type="checkbox" data-setting="show_zone_outlines"> Show zone outlines</label><label><input type="checkbox" data-setting="dim_inactive"> Dim cards outside the active zone</label><button class="dl-button dl-button-primary" value="done">Done</button></form></dialog>{% endif %}
+<div class="dl-bottom-action"><button class="dl-button dl-button-primary" type="button" data-add-open>Add cards</button></div>
+{% endif %}
+<script id="deck-document-data" type="application/json">{{ document|tojson }}</script>
+{% endblock %}
+{% block footer %}{% endblock %}
+{% block scripts %}<script src="{{ url_for('static',filename='deck-lab-builder.js') }}" defer></script>{% endblock %}

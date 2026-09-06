@@ -160,6 +160,11 @@ def _execute_build_job(db_path: Path, job_id: str, owner_id: str) -> None:
 @bp.route("/")
 def index():
     """Lab home: supported packs, constraints form, this user's candidates."""
+    if (
+        current_app.config.get("DECK_LAB_BUILDER_ENABLED")
+        and request.args.get("generator") != "1"
+    ):
+        return redirect(url_for("builder.library"))
     db_path = _db_path()
     lab, modes = build_default_lab(db_path=str(db_path))
     settings = load_cedh_settings()

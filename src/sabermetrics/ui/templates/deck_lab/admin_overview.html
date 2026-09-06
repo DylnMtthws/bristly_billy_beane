@@ -1,0 +1,13 @@
+{% extends "deck_lab/admin_base.html" %}
+{% block title %}Admin Overview · Deck Lab{% endblock %}
+{% block content %}
+<header class="dl-page-head"><div><h1>Overview</h1><p>Private beta · {{ dashboard.active_users }} active people</p></div><div><a class="dl-button" href="{{ url_for('admin.feedback_export') }}">Export analytics</a> <a class="dl-button dl-button-primary" href="{{ url_for('admin.users') }}#invite">Invite person</a></div></header>
+<div class="dl-eyebrow">{% if dashboard.first_visit %}First overview · last {{ dashboard.period_days }} days{% else %}Since your last visit · {{ dashboard.period_days }} days{% endif %}</div>
+<section class="dl-admin-kpis">
+{% for tile in dashboard.tiles %}<a class="dl-card dl-admin-kpi" href="{% if tile.key=='verdicts' %}{{ url_for('admin.feedback') }}{% elif tile.key=='builders' %}{{ url_for('admin.users',status='active') }}{% else %}{{ url_for('builder.library') }}{% endif %}"><span>{{ tile.label }}</span><b>{{ tile.value }}</b><small>{% if tile.delta is none %}comparison starts after this visit{% elif tile.delta>0 %}▲ {{ tile.delta }}{% elif tile.delta<0 %}▼ {{ tile.delta|abs }}{% else %}— no change{% endif %}</small></a>{% endfor %}
+</section>
+<div class="dl-admin-columns">
+    <section><div class="dl-detail-section-head"><div><div class="dl-eyebrow">Needs your attention</div><h2>{{ dashboard.attention|length }}</h2></div></div><div class="dl-card">{% for item in dashboard.attention %}<a class="dl-attention" href="{{ item.href }}"><div><strong>{{ item.label }}</strong><small>{{ item.detail }}</small></div><span>View</span></a>{% else %}<div class="dl-empty">Nothing needs attention.</div>{% endfor %}</div></section>
+    <section><div class="dl-detail-section-head"><div><div class="dl-eyebrow">Recent activity</div><h2>Latest changes</h2></div></div><div class="dl-card">{% for event in dashboard.recent %}<div class="dl-activity"><span><strong>{{ event.display_name or 'System' }}</strong> {{ event.action|replace('.', ' ') }}{% if event.deck_title %} <b>{{ event.deck_title }}</b>{% endif %}</span><time>{{ event.created_at }}</time></div>{% else %}<div class="dl-empty">Activity begins with the redesigned builder. Historical events were not invented.</div>{% endfor %}</div></section>
+</div>
+{% endblock %}

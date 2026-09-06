@@ -473,6 +473,16 @@ def test_sensitive_or_unknown_paths_excluded(client, provider, path):
     assert '"path": "Unavailable"' in body and "private-token" not in body
 
 
+def test_redesigned_routes_are_valid_feedback_context(client, provider):
+    response = client.post(
+        "/feedback/submit", data=form_data(client, page_path="/research")
+    )
+    assert response.status_code == 200
+    body = next(iter(provider["issues"].values()))["description"]
+    assert '"path": "/research"' in body
+    assert '"page": "Index"' in body
+
+
 def test_duplicate_fields_and_multiple_images_rejected(client, provider):
     data = MultiDict(form_data(client))
     data.add("category", "ux")

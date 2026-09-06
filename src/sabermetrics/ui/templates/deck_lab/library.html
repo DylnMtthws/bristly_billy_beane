@@ -1,0 +1,77 @@
+{% extends "deck_lab/base.html" %}
+{% block title %}Build · Deck Lab{% endblock %}
+{% block content %}
+<header class="dl-page-head">
+    <div><h1>Build</h1><p>{{ documents|length }} editable decks · {{ quota_used }} / {{ quota }} generated builds this month</p></div>
+    <button class="dl-button dl-button-primary" type="button" data-new-deck>New deck</button>
+</header>
+
+<form class="dl-toolbar" method="get" action="{{ url_for('builder.library') }}">
+    <input class="dl-field" type="search" name="q" value="{{ query }}" placeholder="Filter by name or commander" aria-label="Filter decks">
+    <div class="dl-segments" aria-label="Deck filters">
+        <a href="{{ url_for('builder.library', q=query, sort=sort) }}" {% if active_filter == 'all' %}aria-current="page"{% endif %}>All {{ documents|length }}</a>
+        <a href="{{ url_for('builder.library', q=query, filter='favorites', sort=sort) }}" {% if active_filter == 'favorites' %}aria-current="page"{% endif %}>♥ Favorites</a>
+        <a href="{{ url_for('builder.library', q=query, filter='recent', sort=sort) }}" {% if active_filter == 'recent' %}aria-current="page"{% endif %}>Recently edited</a>
+    </div>
+    <select class="dl-field" name="sort" aria-label="Sort decks"><option value="edited" {% if sort=='edited' %}selected{% endif %}>Recently edited</option><option value="name" {% if sort=='name' %}selected{% endif %}>Name A–Z</option></select>
+    <input type="hidden" name="filter" value="{{ active_filter }}">
+    <button class="dl-button" type="submit">Filter</button>
+</form>
+
+{% if documents %}
+<section class="dl-library-grid" aria-label="Your editable decks">
+{% for d in documents %}
+    <article class="dl-card dl-deck-card">
+        <div class="dl-deck-card-head">
+            <div><h2>{{ d.title }}</h2><p>{{ d.commander_names or 'Commander not chosen' }}</p></div>
+            <div style="display:flex;align-items:center"><span class="dl-deck-count">{% if d.library_count == 99 and d.commander_count in [1,2] %}✓{% endif %} {{ d.library_count }} + {{ d.commander_count }}</span><form method="post" action="{{ url_for('builder.favorite_deck',deck_id=d.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-icon-button{% if d.favorite %} active{% endif %}" aria-label="Favorite {{ d.title }}">♥</button></form></div>
+        </div>
+        <div class="dl-zone-print">
+        {% for zone in d.zones %}<span>{{ zone.name }} {{ zone.count }}</span>{% endfor %}
+        {% if not d.zones %}<span>Unsorted 0</span>{% endif %}
+        </div>
+        <div class="dl-deck-card-foot"><time>Edited {{ d.updated_at }}</time><a class="dl-button{% if loop.first %} dl-button-primary{% endif %}" href="{{ url_for('builder.deck', deck_id=d.id) }}">Open builder</a></div>
+    </article>
+{% endfor %}
+</section>
+{% elif query or active_filter == 'favorites' %}
+<div class="dl-empty">No decks match this view.</div>
+{% else %}
+<div class="dl-empty"><p>You do not have an editable deck yet.</p><button class="dl-button dl-button-primary" data-new-deck>Create your first deck</button></div>
+{% endif %}
+
+{% if jobs %}
+<section class="dl-legacy">
+    <div class="dl-eyebrow" style="margin-bottom:12px">Strategy pack builds</div>
+    <div class="dl-card">{% for job in jobs %}<div class="dl-legacy-row"><div><strong>Build {{ job.status }}</strong><div class="dl-muted" style="font-size:12px">Started {{ job.created_at }}{% if job.status=='failed' %} · This build did not complete.{% endif %}</div></div><a class="dl-button" href="{{ url_for('cedh.job_status',job_id=job.id) }}">{% if job.status=='failed' %}Review failure{% else %}View progress{% endif %}</a></div>{% endfor %}</div>
+</section>
+{% endif %}
+
+{% if generated or candidates %}
+<section class="dl-legacy">
+    <div class="dl-eyebrow" style="margin-bottom:12px">Ready to edit</div>
+    <div class="dl-card">
+    {% for d in generated %}
+        <div class="dl-legacy-row"><div><strong>{{ d.deck_name or d.commander_name }}</strong><div class="dl-muted" style="font-size:12px">{{ d.commander_name }} · generated list</div></div><form method="post" action="{{ url_for('builder.import_generated', generated_id=d.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-button" type="submit">Open in builder</button></form></div>
+    {% endfor %}
+    {% for c in candidates %}
+        <div class="dl-legacy-row"><div><strong>{{ c.commander_name }}</strong><div class="dl-muted" style="font-size:12px">{{ c.pack_id }} · cEDH candidate{% if c.simulation_status %} · {{ c.simulation_status }}{% endif %}</div></div><form method="post" action="{{ url_for('builder.import_candidate', candidate_id=c.candidate_id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-button" type="submit">Open in builder</button></form></div>
+    {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<dialog id="new-deck-dialog" class="dl-dialog">
+    <form method="post" action="{{ url_for('builder.create_deck') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="dl-dialog-head"><div><div class="dl-eyebrow">New deck</div><h2>Start an empty draft</h2></div><button class="dl-icon-button" type="button" data-dialog-close aria-label="Close">×</button></div>
+        <label>Deck name<input class="dl-field" name="title" value="Untitled deck" maxlength="160" required></label>
+        <label>Commander <span class="dl-muted">(optional)</span><input class="dl-field" type="search" data-commander-search placeholder="Search commanders" autocomplete="off"><input type="hidden" name="commander_card_id" data-commander-id></label>
+        <div class="dl-commander-results" data-commander-results></div>
+        <button class="dl-button dl-button-primary" type="submit">Create deck</button>
+        <p class="dl-disclosure"><a href="{{ url_for('cedh.index',generator='1') }}">Start from a cEDH strategy pack</a>; completed candidates appear in this library.</p>
+    </form>
+</dialog>
+<div class="dl-bottom-action"><button class="dl-button dl-button-primary" type="button" data-new-deck>New deck</button></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='deck-lab-library.js') }}" defer></script>{% endblock %}

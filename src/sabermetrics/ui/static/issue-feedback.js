@@ -7,7 +7,10 @@
     const form = document.getElementById('feedback-form');
     const fields = document.getElementById('feedback-fields');
     const description = document.getElementById('feedback-description');
+    const details = document.getElementById('feedback-details');
+    const includeContext = document.getElementById('feedback-context');
     const input = document.getElementById('feedback-image');
+    const capture = document.getElementById('feedback-capture');
     const zone = document.getElementById('feedback-dropzone');
     const preview = document.getElementById('feedback-preview');
     const previewImage = document.getElementById('feedback-preview-image');
@@ -25,10 +28,11 @@
     let pendingImage = 0;
     let imageLoading = false;
 
-    function dirty() { return description.value.trim() || attachment || frozen; }
+    function dirty() { return description.value.trim() || details.value.trim() || attachment || frozen; }
     function close() { panel.close(); }
     function reset() {
         form.reset(); removeImage(); frozen = null; fields.disabled = false;
+        zone.hidden = false;
         requestID = crypto.randomUUID(); status.textContent = '';
         submit.textContent = 'Send feedback';
         signin.hidden = true; refreshSession = false;
@@ -80,6 +84,33 @@
         launcher.setAttribute('aria-expanded', 'false'); launcher.focus();
     });
     input.addEventListener('change', function () { chooseImage(input.files[0]); });
+    if (capture && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+        capture.hidden = false;
+        capture.addEventListener('click', async function () {
+            if (!includeContext.checked || busy || frozen) return;
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
+                const video = document.createElement('video');
+                video.srcObject = stream; video.muted = true;
+                await video.play();
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                const blob = await new Promise(function (resolve) { canvas.toBlob(resolve, 'image/png'); });
+                if (!blob) throw new Error('capture');
+                await chooseImage(new File([blob], 'deck-lab-screenshot.png', {type: 'image/png'}));
+            } catch (error) {
+                if (error.name !== 'NotAllowedError') status.textContent = 'Screen capture is unavailable. Choose or paste an image instead.';
+            } finally {
+                if (stream) stream.getTracks().forEach(function (track) { track.stop(); });
+            }
+        });
+    }
+    includeContext.addEventListener('change', function () {
+        zone.hidden = !includeContext.checked;
+        if (!includeContext.checked) removeImage();
+    });
     document.getElementById('feedback-remove').addEventListener('click', function () { if (!frozen && !busy) removeImage(); });
     zone.addEventListener('dragover', function (e) { e.preventDefault(); if (!frozen && !busy) zone.classList.add('is-dragging'); });
     zone.addEventListener('dragleave', function () { zone.classList.remove('is-dragging'); });
@@ -102,6 +133,7 @@
             frozen = new FormData(form);
             frozen.append('submission_id', requestID);
             frozen.append('page_path', window.location.pathname);
+            frozen.append('include_context', includeContext.checked ? '1' : '0');
             frozen.append('viewport_width', String(window.innerWidth));
             frozen.append('viewport_height', String(window.innerHeight));
             if (attachment) frozen.append('screenshot', attachment, attachment.name);

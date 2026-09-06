@@ -1,0 +1,39 @@
+{% extends "deck_lab/base.html" %}
+{% block title %}{{ commander.name }} · Research{% endblock %}
+{% block content %}
+<nav class="dl-eyebrow"><a href="{{ url_for('research.index') }}">Research</a> / Commanders / {{ commander.name }}</nav>
+<section class="dl-detail-head" style="margin-top:20px">
+    {% if commander.image_uri %}<img class="dl-card-art" src="{{ commander.image_uri }}" alt="{{ commander.name }} card art" loading="eager">{% else %}<div class="dl-card-art" role="img" aria-label="Card image unavailable"></div>{% endif %}
+    <div class="dl-detail-title">
+        <div class="dl-eyebrow">Commander profile</div><h1>{{ commander.name }}</h1>
+        <p class="dl-muted">{{ commander.type_line }} · MV {{ commander.cmc }}</p>
+        <div class="dl-chip-row">{% for color in commander.color_identity %}<span class="mana mana-{{ color }}">{{ color }}</span>{% endfor %}</div>
+        <div class="dl-detail-actions"><form method="post" action="{{ url_for('research.build_commander',card_id=commander.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-button dl-button-primary">Start a build</button></form><a class="dl-button" href="{{ url_for('research.compare',left=commander.id,window=commander.metrics.window_days) }}">Compare</a><button class="dl-button{% if favorite %} active{% endif %}" data-fav-commander data-id="{{ commander.id }}" aria-pressed="{{ 'true' if favorite else 'false' }}">♥ Favorite</button></div>
+        <div class="dl-eyebrow">Last {{ commander.metrics.window_days }} days</div>
+        <div class="dl-stat-grid" style="margin-top:10px">
+            <div class="dl-stat"><span>Meta share</span><b>{% if commander.metrics.meta_share is not none %}{{ '%.1f'|format(commander.metrics.meta_share*100) }}%{% else %}—{% endif %}</b></div>
+            <div class="dl-stat"><span>Top 16 rate</span><b>{% if commander.metrics.top16_rate is not none %}{{ '%.1f'|format(commander.metrics.top16_rate*100) }}%{% else %}—{% endif %}</b></div>
+            <div class="dl-stat"><span>Entries</span><b>{{ commander.metrics.entries }}</b></div>
+            <div class="dl-stat"><span>Events</span><b>{{ commander.metrics.events }}</b></div>
+            <div class="dl-stat"><span>Avg. nonland MV</span><b>{% if commander.metrics.average_nonland_mv is not none %}{{ '%.2f'|format(commander.metrics.average_nonland_mv) }}{% else %}—{% endif %}</b></div>
+        </div>
+        <p class="dl-disclosure">Top 16 uses {{ commander.metrics.finish_coverage }} entries with known finishes. Unknown finishes are excluded, not counted as misses.</p>
+    </div>
+</section>
+
+<section class="dl-detail-section">
+    <div class="dl-detail-section-head"><div><div class="dl-eyebrow">Commonly played</div><h2>Cards in recorded lists</h2></div><span class="dl-disclosure">% of {{ commander.inclusion_denominator }} eligible lists</span></div>
+    {% if commander.inclusions %}<div class="dl-card">
+    {% for card in commander.inclusions %}<div class="dl-inclusion-row"><a href="{{ url_for('research.card',card_id=card.id) }}"><strong>{{ card.name }}</strong><small class="dl-muted" style="display:block">{{ card.type_line }}</small></a><div class="dl-percent"><b>{% if commander.inclusion_denominator %}{{ '%.0f'|format(card.decks_including/commander.inclusion_denominator*100) }}%{% else %}—{% endif %}</b><span class="dl-bar"><i style="width:{% if commander.inclusion_denominator %}{{ card.decks_including/commander.inclusion_denominator*100 }}{% else %}0{% endif %}%"></i></span></div><span class="dl-mono dl-muted">{{ card.decks_including }} lists</span><button class="dl-icon-button" type="button" data-add-from-research data-card-id="{{ card.id }}" title="Start a deck with this card" aria-label="Add {{ card.name }} to a new {{ commander.name }} deck">+</button></div>{% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('research.build_commander',card_id=commander.id) }}" style="margin-top:15px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="top" value="40"><button class="dl-button">Add top 40 to a new deck</button></form>
+    {% else %}<div class="dl-empty">Card inclusion is unavailable for this commander and window. This is different from a measured zero.</div>{% endif %}
+</section>
+
+<section class="dl-detail-section"><div class="dl-eyebrow">Winning lines</div><h2>Evidence from recorded lists</h2><p class="dl-muted">Structured combo-line evidence is not present in the configured corpus, so no winning lines are inferred from card co-occurrence.</p></section>
+
+<section class="dl-detail-section"><div class="dl-eyebrow">Recent lists</div><h2>Recorded tournament entries</h2>{% if commander.recent_lists %}<div class="dl-card">{% for item in commander.recent_lists %}<div class="dl-inclusion-row"><strong>{{ item.player_name or 'Unknown player' }}</strong><span class="dl-mono">{% if item.standing is not none %}#{{ item.standing }}{% else %}finish —{% endif %}</span><time class="dl-muted">{{ item.tournament_date }}</time><span></span></div>{% endfor %}</div>{% else %}<p class="dl-muted">No lists are recorded for this commander in the selected window.</p>{% endif %}</section>
+
+<section class="dl-detail-section"><div class="dl-eyebrow">Rulings</div><h2>Official card rulings</h2>{% if commander.rulings %}<div class="dl-card">{% for ruling in commander.rulings %}<div style="padding:15px;border-bottom:1px solid var(--line)"><span class="dl-mono dl-muted" style="font-size:10px">{{ ruling.ruling_date }}</span><p>{{ ruling.ruling_text }}</p></div>{% endfor %}</div>{% else %}<p class="dl-muted">No rulings are present in the configured corpus.</p>{% endif %}</section>
+{% endblock %}
+{% block scripts %}<script>document.querySelectorAll('[data-add-from-research]').forEach(function(b){b.addEventListener('click',function(){var f=document.createElement('form');f.method='post';f.action='{{ url_for('research.build_commander',card_id=commander.id) }}';[['csrf_token','{{ csrf_token() }}'],['card_id',b.dataset.cardId]].forEach(function(pair){var c=document.createElement('input');c.type='hidden';c.name=pair[0];c.value=pair[1];f.appendChild(c)});document.body.appendChild(f);f.submit()})})</script>{% endblock %}

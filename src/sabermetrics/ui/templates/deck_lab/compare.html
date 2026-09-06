@@ -1,0 +1,27 @@
+{% extends "deck_lab/base.html" %}
+{% block title %}Compare commanders · Research{% endblock %}
+{% block content %}
+<nav class="dl-eyebrow"><a href="{{ url_for('research.index') }}">Research</a> / Compare</nav>
+<header class="dl-page-head"><div><h1>Compare commanders</h1><p>Both sides use the same tournament window and denominator rules.</p></div></header>
+<form class="dl-card dl-compare-form" method="get">
+    <label>First commander<select class="dl-field" name="left"><option value="">Choose a commander</option>{% for item in choices %}<option value="{{ item.id }}" {% if item.id==left_id %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></label>
+    <label>Second commander<select class="dl-field" name="right"><option value="">Choose a commander</option>{% for item in choices %}<option value="{{ item.id }}" {% if item.id==right_id %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></label>
+    <label>Window<select class="dl-field" name="window">{% for days in [30,90,180] %}<option value="{{ days }}" {% if days==window_days %}selected{% endif %}>Last {{ days }} days</option>{% endfor %}</select></label>
+    <button class="dl-button dl-button-primary" type="submit">Compare</button>
+</form>
+<div class="dl-compare-grid">
+{% for commander in [left,right] %}
+    {% if commander %}<article class="dl-card dl-compare-card">
+        <div class="dl-eyebrow">Commander</div><h2><a href="{{ url_for('research.commander',card_id=commander.id,window=window_days) }}">{{ commander.name }}</a></h2>
+        <div class="dl-chip-row">{% for color in commander.color_identity %}<span class="mana mana-{{ color }}">{{ color }}</span>{% endfor %}</div>
+        <div class="dl-stat-list">
+            <div><span>Meta share</span><b>{% if commander.metrics.meta_share is not none %}{{ '%.1f'|format(commander.metrics.meta_share*100) }}%{% else %}—{% endif %}</b></div>
+            <div><span>Top 16 rate</span><b>{% if commander.metrics.top16_rate is not none %}{{ '%.1f'|format(commander.metrics.top16_rate*100) }}%{% else %}—{% endif %}</b></div>
+            <div><span>Entries</span><b>{{ commander.metrics.entries }}</b></div>
+            <div><span>Known finishes</span><b>{{ commander.metrics.finish_coverage }}</b></div>
+            <div><span>Trend</span><b>{% if commander.metrics.trend is not none %}{{ '%+.1f'|format(commander.metrics.trend*100) }} pp{% else %}—{% endif %}</b></div>
+        </div>
+    </article>{% else %}<div class="dl-empty">Choose a commander above.</div>{% endif %}
+{% endfor %}
+</div>
+{% endblock %}

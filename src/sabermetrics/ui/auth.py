@@ -279,13 +279,21 @@ class InviteAcceptForm(FlaskForm):
 # --- Routes --------------------------------------------------------------
 
 
-def _safe_next(target: str | None) -> str:
+def _safe_next(target: str | None, user_id: str | None = None) -> str:
     """Return a same-site redirect target, defaulting to the home page.
 
     Rejects absolute/off-site URLs to avoid open-redirect abuse.
     """
     if target and target.startswith("/") and not target.startswith("//"):
         return target
+    if current_app.config.get("DECK_LAB_BUILDER_ENABLED") and user_id:
+        from sabermetrics.deck_documents import DeckDocumentRepo
+
+        path = current_app.config["DB_PATH"]
+        if DeckDocumentRepo(path).list_for_owner(user_id, limit=1) or db.DecksRepo(
+            path
+        ).list_for_owner(user_id, limit=1):
+            return url_for("builder.library")
     return url_for("main.index")
 
 
@@ -301,7 +309,7 @@ def login():
     both cases.
     """
     if current_user.is_authenticated:
-        return redirect(url_for("main.index"))
+        return redirect(_safe_next(request.args.get("next"), current_user.id))
 
     identity = current_tailscale_identity() if tailscale_mode() else None
 
@@ -349,7 +357,7 @@ def login():
                 users.touch_login(row["id"])
                 login_user(AuthUser(row))
                 logger.info("Login success for %s", row.get("email"))
-                return redirect(_safe_next(request.args.get("next")))
+                return redirect(_safe_next(request.args.get("next"), row["id"]))
         else:
             if row is not None and users.register_failed_login(
                 row["id"],

@@ -38,6 +38,23 @@ def create_app(db_path: Path | None = None) -> Flask:
 
     db_path = resolve_db_path(db_path)
     app.config["DB_PATH"] = db_path
+    app.config["DECK_LAB_ASSET_DIR"] = Path(
+        os.environ.get(
+            "SABER_DECK_LAB_ASSET_DIR", str(db_path.parent / "deck-lab-assets")
+        )
+    )
+    redesign_enabled = _env_bool("SABER_DECK_LAB_REDESIGN", False)
+    app.config["DECK_LAB_REDESIGN_ENABLED"] = redesign_enabled
+    app.config["DECK_LAB_BUILDER_ENABLED"] = _env_bool(
+        "SABER_DECK_LAB_BUILDER", redesign_enabled
+    )
+    app.config["DECK_LAB_RESEARCH_ENABLED"] = _env_bool(
+        "SABER_DECK_LAB_RESEARCH", redesign_enabled
+    )
+    app.config["DECK_LAB_PLAYMAT_ENABLED"] = _env_bool(
+        "SABER_DECK_LAB_PLAYMAT", redesign_enabled
+    )
+    app.config["DECK_LAB_DEV_MODE"] = _env_bool("SABER_DECK_LAB_DEV", False)
 
     # --- Auth mode ---
     # `tailscale`: identity comes from the tailscale serve proxy headers.
@@ -56,6 +73,16 @@ def create_app(db_path: Path | None = None) -> Flask:
     public = _env_bool("SABER_PUBLIC", False)
     app.config["PUBLIC_DEPLOYMENT"] = public
     logger.info("Auth mode: %s (public=%s)", mode, public)
+
+    if app.config["DECK_LAB_DEV_MODE"]:
+        resolved = db_path.expanduser().resolve()
+        protected = Path("/data/sabermetrics.db")
+        repository_db = (Path.cwd() / "data" / "sabermetrics.db").resolve()
+        if public or resolved == protected or resolved == repository_db:
+            raise ValueError(
+                "SABER_DECK_LAB_DEV requires a non-public deployment and an "
+                "explicit disposable database outside data/sabermetrics.db."
+            )
 
     # --- Secret key: required for signed session cookies + CSRF ---
     secret = os.environ.get("SABER_SECRET_KEY")
@@ -122,16 +149,35 @@ def create_app(db_path: Path | None = None) -> Flask:
 
     # --- Blueprints ---
     from sabermetrics.ui.admin_routes import bp as admin_bp
+    from sabermetrics.ui.builder_routes import bp as builder_bp
     from sabermetrics.ui.cedh_routes import bp as cedh_bp
+    from sabermetrics.ui.research_routes import bp as research_bp
     from sabermetrics.ui.routes import bp as main_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(cedh_bp)
+    app.register_blueprint(builder_bp)
+    app.register_blueprint(research_bp)
     app.register_blueprint(main_bp)
     from sabermetrics.ui.recovery import init_recovery
 
     init_recovery(app)
+
+    @app.context_processor
+    def _deck_lab_shell_context() -> dict[str, object]:
+        if not app.config.get("DECK_LAB_REDESIGN_ENABLED"):
+            return {}
+        from flask_login import current_user
+
+        if not current_user.is_authenticated:
+            return {"shell_quota_used": 0, "shell_quota": 0}
+        generated = db.DecksRepo(db_path).count_this_month(current_user.id)
+        candidates = db.CedhCandidatesRepo(db_path).count_this_month(current_user.id)
+        return {
+            "shell_quota_used": generated + candidates,
+            "shell_quota": current_user.monthly_deck_quota,
+        }
 
     # A thread-pool job cannot survive a process restart. Make that state
     # explicit on boot instead of leaving a status page polling forever.
@@ -194,6 +240,12 @@ def run_server(
             "SABER_AUTH_MODE=tailscale is unsafe with SABER_PUBLIC=1 and "
             "SABER_BIND_HOST=0.0.0.0; use hybrid auth"
         )
+    if _env_bool("SABER_DECK_LAB_DEV", False) and host not in {
+        "127.0.0.1",
+        "localhost",
+        "::1",
+    }:
+        raise ValueError("SABER_DECK_LAB_DEV previews must bind to localhost.")
 
     app = create_app(db_path)
     logger.info("Effective bind: %s:%s (trusted proxy: %s)", host, port, trusted_proxy)

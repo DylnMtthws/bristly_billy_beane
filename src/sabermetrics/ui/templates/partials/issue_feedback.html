@@ -4,31 +4,36 @@
 </button>
 <dialog id="feedback-panel" class="feedback-panel" aria-labelledby="feedback-title" aria-describedby="feedback-intro">
     <div class="feedback-heading">
-        <div><h2 id="feedback-title">Send feedback</h2><p id="feedback-intro">Help us make Deck Lab better.</p></div>
+        <div><h2 id="feedback-title">Tell us what broke</h2><p id="feedback-intro">File a private issue for the Deck Lab team.</p></div>
         <button id="feedback-close" type="button" class="feedback-icon-button" aria-label="Close feedback">×</button>
     </div>
     <form id="feedback-form" action="{{ url_for('issue_feedback.submit') }}" method="post" enctype="multipart/form-data">
         <fieldset id="feedback-fields">
-            <label for="feedback-category">What kind of feedback?</label>
-            <select id="feedback-category" name="category" required>
-                <option value="bug">Bug</option><option value="ux">UX</option><option value="suggestion">Suggestion</option>
-            </select>
+            <div class="feedback-categories" aria-label="Feedback type">
+                <label><input type="radio" name="category" value="bug" checked><span>Bug</span></label>
+                <label><input type="radio" name="category" value="suggestion"><span>Idea</span></label>
+            </div>
             <label for="feedback-description">What happened?</label>
-            <textarea id="feedback-description" name="description" minlength="10" maxlength="5000" rows="4" required placeholder="What were you trying to do, and what happened instead?"></textarea>
+            <textarea id="feedback-description" name="description" minlength="10" maxlength="2000" rows="3" required placeholder="Cards snap back when I drag into Lands"></textarea>
+            <label for="feedback-details">Anything else <span class="feedback-optional">(optional)</span></label>
+            <textarea id="feedback-details" name="details" maxlength="3000" rows="2" placeholder="Only when the zone is fanned…"></textarea>
+            <label class="feedback-context"><input id="feedback-context" type="checkbox" checked><span>Attach a screenshot, the page URL, and my browser</span></label>
             <div id="feedback-dropzone" class="feedback-dropzone">
-                <label for="feedback-image">Screenshot or photo <span>(optional)</span></label>
+                <label for="feedback-image">Screenshot or photo <span>(optional; choose, drop, or paste)</span></label>
                 <input id="feedback-image" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="feedback-image-help">
-                <p id="feedback-image-help">Choose, drop, or paste one PNG, JPEG, or WebP. Up to 10 MB and 25 megapixels.</p>
+                <button id="feedback-capture" class="feedback-capture" type="button" hidden>Capture screen</button>
+                <p id="feedback-image-help">PNG, JPEG, or WebP. Up to 10 MB and 25 megapixels.</p>
             </div>
             <figure id="feedback-preview" hidden>
                 <img id="feedback-preview-image" alt="Your attached screenshot">
                 <figcaption><span id="feedback-image-name"></span><button id="feedback-remove" type="button">Remove image</button></figcaption>
             </figure>
         </fieldset>
-        <p class="feedback-disclosure">Your account email, current page, and basic device details will be included. Review screenshots for personal information.</p>
+        <p class="feedback-disclosure">Your account identifies the report. Optional context includes this page and basic device details. Review screenshots for personal information.</p>
         <p id="feedback-status" role="status" aria-live="polite" aria-atomic="true"></p>
         <p id="feedback-signin" hidden><a href="{{ url_for('auth.login') }}" target="_blank" rel="noopener">Sign in in a new tab</a>, then retry here.</p>
-        <button id="feedback-submit" class="feedback-submit" type="submit">Send feedback</button>
+        <div class="feedback-destination">Files as a private Linear issue</div>
+        <button id="feedback-submit" class="feedback-submit" type="submit">Send</button>
     </form>
     <div id="feedback-success" hidden tabindex="-1">
         <p>Thanks—your feedback was sent.</p>

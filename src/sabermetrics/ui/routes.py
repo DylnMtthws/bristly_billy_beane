@@ -107,6 +107,27 @@ def index():
     db_path = _db_path()
     user_id = current_user.id
 
+    if current_app.config.get("DECK_LAB_REDESIGN_ENABLED"):
+        from sabermetrics.deck_documents import DeckDocumentRepo
+
+        documents = DeckDocumentRepo(db_path).list_for_owner(user_id, limit=6)
+        with db.connect(db_path) as conn:
+            player_count = int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM users WHERE status='active'"
+                ).fetchone()[0]
+            )
+            commander_count = int(
+                conn.execute("SELECT COUNT(*) FROM commander_candidates").fetchone()[0]
+            )
+        return render_template(
+            "deck_lab/home.html",
+            recent_documents=documents,
+            document_count=len(DeckDocumentRepo(db_path).list_for_owner(user_id)),
+            player_count=player_count,
+            commander_count=commander_count,
+        )
+
     decks_repo = db.DecksRepo(db_path)
     favs = db.FavoritesRepo(db_path)
 
@@ -139,6 +160,8 @@ def index():
 @bp.route("/explore")
 def explore():
     """Browse legal commanders with color/ability/price/CMC filters."""
+    if current_app.config.get("DECK_LAB_RESEARCH_ENABLED"):
+        return redirect(url_for("research.index", **request.args))
     db_path = _db_path()
     eq = build_explore_query(request.args)
 
@@ -181,6 +204,8 @@ def explore():
 @bp.route("/decks")
 def decks():
     """List the current user's generated decks (with optional name search)."""
+    if current_app.config.get("DECK_LAB_BUILDER_ENABLED"):
+        return redirect(url_for("builder.library", **request.args))
     db_path = _db_path()
     query = request.args.get("q", "").strip().lower()
 
@@ -200,6 +225,8 @@ def decks():
 @bp.route("/favorites/commanders")
 def favorite_commanders():
     """Grid of the user's favorited commanders."""
+    if current_app.config.get("DECK_LAB_RESEARCH_ENABLED"):
+        return redirect(url_for("research.index", favorites="1"))
     db_path = _db_path()
     commanders = db.FavoritesRepo(db_path).list_commanders(current_user.id)
     for c in commanders:
@@ -210,6 +237,8 @@ def favorite_commanders():
 @bp.route("/favorites/decks")
 def favorite_decks():
     """List the user's favorited decks."""
+    if current_app.config.get("DECK_LAB_BUILDER_ENABLED"):
+        return redirect(url_for("builder.library", filter="favorites"))
     db_path = _db_path()
     decks_list = db.FavoritesRepo(db_path).list_decks(current_user.id)
     return render_template("favorites_decks.html", decks=decks_list)

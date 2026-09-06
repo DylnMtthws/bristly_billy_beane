@@ -60,43 +60,85 @@ def _invites() -> db.InviteRepo:
     return db.InviteRepo(current_app.config["DB_PATH"])
 
 
-def _deliver_invite(user_id: str, email: str) -> None:
+def _deliver_invite(user_id: str, email: str) -> dict[str, str | bool]:
     """Send automatically when email is configured; report failures honestly."""
     token = _invites().create(user_id)
+    invite = _invites().get(token) or {}
+    link = url_for("auth.accept_invite", token=token, _external=True)
+    result: dict[str, str | bool] = {
+        "email": email,
+        "link": link,
+        "expires_at": str(invite.get("expires_at") or ""),
+        "delivered": False,
+    }
     mailer = current_app.extensions.get("recovery_mailer")
     if mailer is not None:
         if mailer.send_invite(email, token):
             flash(f"Invitation email sent to {email}.", "success")
+            result["delivered"] = True
+            result["message"] = "Invitation email accepted for delivery."
         else:
             flash(
                 f"The account for {email} is saved, but we couldn't confirm that "
                 "the invitation email was sent. Try Resend invite.",
                 "error",
             )
-        return
+            result["message"] = "Email delivery was not confirmed."
+        return result
     if current_app.config.get("PUBLIC_DEPLOYMENT"):
         flash(
             "The account is saved, but invitation email is unavailable. "
             "Configure email delivery, then use Resend invite.",
             "error",
         )
-        return
+        result["message"] = "Email delivery is unavailable."
+        return result
     # Keep manual onboarding available for the private/local deployment that
     # intentionally has no outbound email service.
-    link = url_for("auth.accept_invite", token=token, _external=True)
     flash(f"Invited {email}. Send this one-time link:", "success")
     flash(link, "invite")
+    result["message"] = "Invitation created for manual delivery."
+    return result
+
+
+def _redesign_users(invite_result: dict | None = None):
+    from sabermetrics.admin_dashboard import DeckLabAdminRepo
+
+    query = (request.args.get("q") or "").strip()
+    status = (request.args.get("status") or "").strip()
+    users, counts = DeckLabAdminRepo(current_app.config["DB_PATH"]).users(
+        query=query, status=status
+    )
+    return render_template(
+        "deck_lab/admin_users.html",
+        users=users,
+        counts=counts,
+        query=query,
+        status=status,
+        invite_result=invite_result,
+    )
 
 
 @bp.route("/")
 def overview():
     """Admin landing: KPIs across users, decks, spend, and feedback."""
+    if current_app.config.get("DECK_LAB_REDESIGN_ENABLED"):
+        from sabermetrics.admin_dashboard import DeckLabAdminRepo
+
+        return render_template(
+            "deck_lab/admin_overview.html",
+            dashboard=DeckLabAdminRepo(current_app.config["DB_PATH"]).overview(
+                current_user.id
+            ),
+        )
     return render_template("admin/overview.html", kpi=_analytics().overview())
 
 
 @bp.route("/users")
 def users():
     """List all users with per-user stats (decks, spend, feedback, last login)."""
+    if current_app.config.get("DECK_LAB_REDESIGN_ENABLED"):
+        return _redesign_users()
     return render_template("admin/users.html", users=_analytics().per_user_stats())
 
 
@@ -149,8 +191,10 @@ def create_user():
         monthly_deck_quota=quota,
         invited_by=current_user.id,
     )
-    _deliver_invite(user_id, email)
+    invite_result = _deliver_invite(user_id, email)
     logger.info("Admin %s invited %s", current_user.email, email)
+    if current_app.config.get("DECK_LAB_REDESIGN_ENABLED"):
+        return _redesign_users(invite_result)
     return redirect(url_for("admin.users"))
 
 
@@ -182,9 +226,17 @@ def set_quota(user_id: str):
         try:
             quota = max(0, int(raw))
         except ValueError:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return {"error": "Quota must be a whole number."}, 400
             flash("Quota must be a whole number.", "error")
             return redirect(url_for("admin.users"))
     _users().set_quota(user_id, quota)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return {
+            "ok": True,
+            "quota": quota,
+            "label": quota if quota is not None else "default",
+        }
     flash("Quota updated.", "success")
     return redirect(url_for("admin.users"))
 
@@ -204,7 +256,9 @@ def reinvite(user_id: str):
             "error",
         )
         return redirect(url_for("admin.users"))
-    _deliver_invite(user_id, target["email"])
+    invite_result = _deliver_invite(user_id, target["email"])
+    if current_app.config.get("DECK_LAB_REDESIGN_ENABLED"):
+        return _redesign_users(invite_result)
     return redirect(url_for("admin.users"))
 
 
@@ -216,6 +270,16 @@ def feedback():
     """Feedback explorer: per-card rollup + recent deck verdicts."""
     sort = request.args.get("sort", "total_desc")
     analytics = _analytics()
+    if current_app.config.get("DECK_LAB_REDESIGN_ENABLED"):
+        return render_template(
+            "deck_lab/admin_analytics.html",
+            cards=analytics.card_feedback_aggregate(sort=sort),
+            deck_feedback=analytics.deck_feedback_list(),
+            costs=analytics.cost_totals(),
+            generated=analytics.popular_generated(),
+            favorited=analytics.popular_favorited(),
+            sort=sort,
+        )
     return render_template(
         "admin/feedback.html",
         cards=analytics.card_feedback_aggregate(sort=sort),
