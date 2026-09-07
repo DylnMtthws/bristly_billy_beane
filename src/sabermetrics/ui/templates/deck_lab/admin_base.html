@@ -1,0 +1,9 @@
+{% extends "deck_lab/base.html" %}
+{% block shell %}
+<header class="dl-nav dl-admin-nav">
+    <a class="dl-wordmark" href="{{ url_for('admin.overview') }}">{% include 'partials/brand_mark.html' %}<span>Deck Lab</span><small>ADMIN</small></a>
+    <nav class="dl-nav-links" aria-label="Admin"><a href="{{ url_for('admin.overview') }}" {% if request.endpoint=='admin.overview' %}aria-current="page"{% endif %}>Overview</a><a href="{{ url_for('admin.users') }}" {% if request.endpoint=='admin.users' %}aria-current="page"{% endif %}>Users</a><a href="{{ url_for('admin.feedback') }}" {% if request.endpoint in ['admin.feedback','admin.costs','admin.commanders'] %}aria-current="page"{% endif %}>Analytics</a><a href="{{ url_for('builder.library') }}">← Player app</a></nav>
+    <div class="dl-nav-account">{% include 'partials/account_menu.html' %}<button class="dl-menu-button" type="button" aria-label="Open admin navigation" aria-controls="dl-mobile-drawer" aria-expanded="false">{% from 'partials/avatar.html' import avatar %}{{ avatar(account_avatar, avatar_icons) }}<span aria-hidden="true">▾</span></button></div>
+</header>
+<div class="dl-drawer-backdrop" data-drawer-close hidden></div><aside class="dl-drawer" id="dl-mobile-drawer" aria-hidden="true"><div class="dl-drawer-head"><strong>Deck Lab · ADMIN</strong><button data-drawer-close>×</button></div><nav><a href="{{ url_for('admin.overview') }}">Overview</a><a href="{{ url_for('admin.users') }}">Users</a><a href="{{ url_for('admin.feedback') }}">Analytics</a><a href="{{ url_for('builder.library') }}">Player app</a></nav><div class="dl-drawer-bottom"><a href="{{ url_for('main.profile') }}">Profile</a><a href="{{ url_for('auth.logout') }}">Sign out</a></div></aside>
+{% endblock %}

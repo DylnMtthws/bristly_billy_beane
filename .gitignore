@@ -1,6 +1,7 @@
 data/
 !data/.gitkeep
 .venv/
+.deck-lab-dev/
 .env
 *.pyc
 __pycache__/

@@ -1,4 +1,4 @@
-"""cEDH Deck Lab routes: auth, ownership, quota, and visible provenance."""
+"""cEDH Deck Lab routes: auth, ownership, and visible provenance."""
 
 from __future__ import annotations
 
@@ -101,8 +101,8 @@ class TestLabIndex:
         body = client.get("/lab/").data.decode()
         assert "synthetic fixture" in body
 
-    def test_shows_the_quota(self, client):
-        assert "builds used this month" in client.get("/lab/").data.decode()
+    def test_has_no_quota_display(self, client):
+        assert "builds used this month" not in client.get("/lab/").data.decode()
 
 
 class TestBuild:
@@ -211,8 +211,8 @@ class TestOwnership:
         assert "Your candidates" not in body
 
 
-class TestQuotaAndCeiling:
-    def test_lab_builds_count_against_the_shared_quota(self, db_path, client):
+class TestBuildPersistenceAndCeiling:
+    def test_lab_builds_are_saved_for_the_owner(self, db_path, client):
         _build(client)
         repo = db.CedhCandidatesRepo(db_path)
         owner = repo.list_for_owner(
@@ -220,15 +220,15 @@ class TestQuotaAndCeiling:
         )
         assert len(owner) == 1
 
-    def test_an_exhausted_quota_blocks_the_build(self, app, db_path, client):
+    def test_retired_zero_quota_does_not_block_builds(self, db_path, client):
         user = db.UsersRepo(db_path).get_by_email("owner@example.com")
-        db.UsersRepo(db_path).set_quota(user["id"], 0)
-        response = client.post(
-            "/lab/build",
-            data={"pack_id": "kinnan_basalt"},
-            follow_redirects=True,
-        )
-        assert b"Monthly limit reached" in response.data
+        with db.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE users SET monthly_deck_quota = 0 WHERE id = ?", (user["id"],)
+            )
+            conn.commit()
+        location = _build(client)
+        assert client.get(location).status_code == 200
 
     def test_the_global_cost_ceiling_pauses_the_lab(self, db_path, client):
         import sqlite3

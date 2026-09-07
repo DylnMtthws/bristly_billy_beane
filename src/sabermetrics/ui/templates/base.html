@@ -32,9 +32,10 @@
       };
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    {% if config.LINEAR_FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
+    {% if config.FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
     <link rel="stylesheet" href="{{ url_for('static', filename='issue-feedback.css') }}">
     {% endif %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='avatar.css') }}">
     {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-ink text-body font-sans antialiased flex flex-col">
@@ -69,7 +70,7 @@
                 {% endif %}
                 <a href="{{ url_for('main.profile') }}"
                    class="ml-1 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-colors {% if ep == 'main.profile' %}bg-brand/15 text-brand{% else %}text-muted hover:bg-white/5 hover:text-body{% endif %}">
-                    <span>{{ current_user.avatar_emoji or '🧙' }}</span>
+                    {% from 'partials/avatar.html' import avatar %}{{ avatar(account_avatar, avatar_icons) }}
                     <span class="hidden sm:inline">{{ current_user.display_name }}</span>
                 </a>
                 <a href="{{ url_for('auth.logout') }}"
@@ -146,7 +147,7 @@
     })();
     </script>
 
-    {% if config.LINEAR_FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
+    {% if config.FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
     {% include "partials/issue_feedback.html" %}
     <script src="{{ url_for('static', filename='issue-feedback.js') }}" defer></script>
     {% endif %}

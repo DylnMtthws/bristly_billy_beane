@@ -1,17 +1,30 @@
 .feedback-launcher {
-    position: fixed; right: max(20px, env(safe-area-inset-right));
-    bottom: max(20px, env(safe-area-inset-bottom)); z-index: 40;
-    display: flex; align-items: center; gap: 9px; min-height: 48px;
-    padding: 0 17px; border: 1px solid #46506b; border-radius: 999px;
-    color: #e6e8f0; background: #1b233d; font-size: 13px; font-weight: 600;
-    box-shadow: 0 3px 16px #0005; cursor: pointer;
+    position: fixed; right: max(16px, env(safe-area-inset-right));
+    bottom: max(20px, env(safe-area-inset-bottom)); z-index: 70;
+    display: grid; place-items: center; width: 44px; height: 44px;
+    padding: 0; border: 1px solid rgba(233, 69, 96, .42); border-radius: 99px;
+    color: #ff8093; background: rgba(233, 69, 96, .15); backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .5); cursor: pointer;
 }
-.feedback-launcher:hover { background: #27314c; border-color: #e94560; }
+.feedback-launcher:hover { background: rgba(233, 69, 96, .24); border-color: #e94560; }
+.feedback-launcher-icon {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    gap: 2.5px; width: 17px; height: 12.5px;
+    border: 1.5px solid #ff8093; border-radius: 4px;
+}
+.feedback-launcher-icon i {
+    width: 2px; height: 2px; border-radius: 99px; background: #ff8093;
+}
+.feedback-launcher-icon b {
+    position: absolute; left: 2.5px; bottom: -5px; width: 0; height: 0;
+    border-top: 5px solid #ff8093; border-right: 5px solid transparent;
+}
 .feedback-panel {
     position: fixed; inset: auto max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) auto;
     margin: 0; padding: 22px; width: min(390px, calc(100vw - 32px));
     max-width: none; max-height: calc(100dvh - 40px); overflow-y: auto;
-    color: #e6e8f0; background: #151b30; border: 1px solid #3a4564;
+    color: #e8eaf2; background: #12172a; border: 1px solid #262e4a;
+    border-top: 3px solid #e94560;
     border-radius: 18px; box-shadow: 0 14px 60px #0008; font-size: 14px;
     line-height: 1.5; overscroll-behavior: contain;
 }
@@ -23,7 +36,7 @@
 .feedback-panel fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .feedback-panel label { display: block; margin: 12px 0 6px; font-weight: 550; font-size: 13px; }
 .feedback-panel input, .feedback-panel textarea, .feedback-panel select { max-width: 100%; font: inherit; }
-.feedback-panel textarea, .feedback-panel select { width: 100%; padding: 10px 11px; border-radius: 9px; border: 1px solid #3a4564; background: #1e2740; color: #e6e8f0; }
+.feedback-panel textarea, .feedback-panel select { width: 100%; padding: 10px 11px; border-radius: 9px; border: 1px solid #262e4a; background: #1b2238; color: #e8eaf2; }
 .feedback-panel textarea { min-height: 108px; resize: vertical; }
 .feedback-panel textarea::placeholder { color: #9aa3c0; }
 .feedback-dropzone { margin-top: 14px; padding: 10px 12px; border: 1px dashed #46506b; border-radius: 10px; }
@@ -31,7 +44,17 @@
 .feedback-dropzone span { color: #abb4ce; font-weight: normal; }
 .feedback-dropzone input { font-size: 12px; width: 100%; }
 .feedback-dropzone input::file-selector-button { padding: 7px 9px; margin-right: 8px; border: 1px solid #46506b; border-radius: 6px; color: #e6e8f0; background: #27314c; cursor: pointer; }
+.feedback-capture { min-height: 40px; margin-top: 8px; padding: 0 12px; border: 1px solid #46506b; border-radius: 8px; color: #e6e8f0; background: transparent; cursor: pointer; }
 .feedback-dropzone.is-dragging { border-color: #ff6b81; background: #e9456010; }
+.feedback-categories { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; border-radius: 10px; background: #1b2238; }
+.feedback-categories label { margin: 0; cursor: pointer; }
+.feedback-categories input { position: absolute; opacity: 0; pointer-events: none; }
+.feedback-categories span { min-height: 40px; display: grid; place-items: center; border-radius: 8px; color: #98a0bd; }
+.feedback-categories input:checked + span { color: #e8eaf2; background: #12172a; box-shadow: 0 1px 5px #0005; }
+.feedback-optional { color: #98a0bd; font-weight: 400; }
+.feedback-context { display: flex !important; align-items: center; gap: 10px; padding: 10px; border: 1px solid #262e4a; border-radius: 9px; cursor: pointer; }
+.feedback-context input { width: 18px; height: 18px; accent-color: #e94560; }
+.feedback-destination { margin: 12px 0 7px; color: #98a0bd; font: 10px "SFMono-Regular", Consolas, monospace; letter-spacing: .06em; text-transform: uppercase; text-align: center; }
 #feedback-preview { margin: 12px 0; }
 #feedback-preview img { max-height: 160px; max-width: 100%; border-radius: 7px; object-fit: contain; }
 #feedback-preview figcaption { display: flex; align-items: center; gap: 10px; font-size: 12px; }
@@ -41,15 +64,14 @@
 #feedback-status { font-size: 13px; color: #ffc1ca; margin: 10px 0; }
 #feedback-signin { font-size: 13px; margin: 10px 0; }
 #feedback-signin a { color: #ff889a; text-decoration: underline; }
-.feedback-submit { width: 100%; min-height: 44px; padding: 10px 14px; border: 0; border-radius: 9px; color: #fff; background: #c92544; font-weight: 650; cursor: pointer; }
+.feedback-submit { width: 100%; min-height: 44px; padding: 10px 14px; border: 0; border-radius: 9px; color: #06080d; background: #e94560; font-weight: 650; cursor: pointer; }
 .feedback-submit:hover { background: #df3453; }
 .feedback-panel :disabled { opacity: .65; cursor: default; }
 .feedback-panel :focus-visible, .feedback-launcher:focus-visible { outline: 2px solid #ff889a; outline-offset: 3px; }
 .feedback-launcher[hidden], .feedback-panel [hidden] { display: none; }
 #feedback-success p { margin: 0 0 22px; }
 @media (max-width: 480px) {
-    .feedback-launcher { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); width: 48px; padding: 0; justify-content: center; }
-    .feedback-launcher span { display: none; }
-    .feedback-panel { right: 16px; padding: 18px; max-height: calc(100dvh - 32px); }
+    .feedback-launcher { bottom: max(20px, env(safe-area-inset-bottom)); }
+    .feedback-panel { inset: auto 0 0 0; width: 100%; border-radius: 18px 18px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); max-height: 92dvh; }
     .feedback-panel textarea, .feedback-panel select { font-size: 16px; }
 }

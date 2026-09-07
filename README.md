@@ -20,7 +20,7 @@ discussion and the official rules.
 > is a separate, competitive-only path that reads card and tournament facts from
 > the `mtg_v1` contract published by a sibling ingestion repository, builds from
 > curated strategy packs deterministically, and hands its result to a goldfishing
-> simulator. It shares this app's accounts, quota and cost ceiling and nothing
+> simulator. It shares this app's accounts and model cost ceiling and nothing
 > else. New work goes there.
 
 ## Architecture in one paragraph
@@ -106,9 +106,9 @@ store and no cache server. Cost attribution uses a `ContextVar` so that rows
 written to `cost_log` by the model wrapper carry the user and deck they belong
 to, which works correctly for web builds without threading identifiers through
 every call signature and degrades cleanly to unattributed for CLI and scheduled
-runs. Per-user monthly deck quotas and a global spend ceiling are both evaluated
-against this same database, and generation traces are persisted for later
-inspection.
+runs. Deck creation has no per-user monthly quota. The global model spend
+ceiling is evaluated against this database, and generation traces are persisted
+for later inspection.
 
 ---
 

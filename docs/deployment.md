@@ -1,5 +1,34 @@
 # Deployment
 
+## Refactor production release
+
+Use the root `fly.production.toml` for `dylnmtthws-decklab`; the older
+`deploy/fly.toml` remains a platform draft. Pass the immutable release SHA as
+the `SABER_BUILD_SHA` build argument. Keep one machine and the original volume.
+The four `SABER_DECK_LAB_*` rollout flags are enabled in production and
+`SABER_DECK_LAB_DEV=0`. Follow [the rollout runbook](refactor-production-rollout.md).
+
+`SABER_RESEARCH_SYNC=1` refreshes Research/editor card facts and tournament
+evidence from the existing `MTG_V1_DSN`, using only published `mtg_v1` views.
+It populates the initially empty local corpus before serving, then checks every
+six hours in one background thread. Card reads use `card_any_medium`, including
+Reserved List cards. Tournament cohorts contain submitted lists with resolved
+commanders at events with at least 16 players. Partner commanders each receive
+the entry; global denominators count the source entry once. The page displays
+refresh and event coverage dates. Source refresh does not run ingestion, activate
+the ingestion nightly, or call a model/provider. Rulings unavailable in the
+published contract remain explicitly absent.
+
+Refreshes are atomic and preserve existing card IDs, accounts, saved candidates,
+editable documents, feedback, and other app state. A failed initial refresh with
+no snapshot stops startup; later failures retain the last complete snapshot and
+log the exception type without connection details. Inspect `research_source_state`
+and logs for stale data. Network reads are spooled before the SQLite write lock;
+the machine needs temporary disk space for the source deck-card stream.
+
+Back up both SQLite (avatars are stored there) and `/data/deck-lab-assets`
+(custom playmats). The built-in playmat is packaged in the installed image.
+
 For the signed-in issue-report widget and private Linear image uploads, see
 [Linear feedback setup and rollout](linear-feedback.md).
 
@@ -120,7 +149,7 @@ IPs. The total reserves room for up to 40 password-change notifications within
 Resend's 100/day free allowance; other applications sharing the account also
 consume its allowance. Failed delivery attempts count toward these limits.
 
-Successful recovery preserves all profile, role, ownership and quota fields,
+Successful recovery preserves all profile, role and ownership fields,
 clears login lockout, and invalidates previous password sessions, other reset
 links, and outstanding invite/setup links. A notification is sent and the user
 signs in normally. Trusted Tailscale identity remains a separate login method.
@@ -156,7 +185,7 @@ timeouts); success means the provider accepted the email, not proof of inbox
 delivery. A failed or unconfirmed send leaves the account invited and displays
 a retry message. No invite link is flashed into the admin session in email mode.
 Disabled/active accounts cannot be reinvited; accepting an invite still preserves
-the role and quota the admin assigned. Invitations share Resend's sending quota
+the role the admin assigned. Invitations share Resend's sending quota
 with password recovery. No new secrets or services are needed.
 
 Private/local deployments without email settings retain manual links. A public
@@ -192,7 +221,7 @@ SABER_DB_PATH=/data/backups/sabermetrics-2026-09-04.db \
 
 The schema is created automatically on an empty mounted volume. Any build job
 left nonterminal by a restart is surfaced as `failed(interrupted)` and can be
-rebuilt; only a completed candidate counts against quota.
+rebuilt; only completed candidates appear in the saved candidate library.
 
 ### Integration hand-off
 

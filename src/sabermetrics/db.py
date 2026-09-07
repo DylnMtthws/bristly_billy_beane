@@ -221,10 +221,6 @@ class SourceHealthRepo:
         return [dict(row) for row in rows]
 
 
-# Default per-user monthly deck quota when a user's own quota is NULL.
-DEFAULT_MONTHLY_DECK_QUOTA = 20
-
-
 class UsersRepo:
     """Read/write access to the ``users`` table.
 
@@ -246,7 +242,6 @@ class UsersRepo:
         tailscale_login: str | None = None,
         avatar_emoji: str | None = None,
         invited_by: str | None = None,
-        monthly_deck_quota: int | None = None,
         user_id: str | None = None,
     ) -> str:
         """Insert a new user and return its id.
@@ -265,9 +260,9 @@ class UsersRepo:
             conn.execute(
                 """INSERT INTO users
                 (id, email, display_name, avatar_emoji, password_hash,
-                 tailscale_login, role, status, monthly_deck_quota,
+                 tailscale_login, role, status,
                  invited_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     uid,
                     email,
@@ -277,7 +272,6 @@ class UsersRepo:
                     tailscale_login,
                     role,
                     status,
-                    monthly_deck_quota,
                     invited_by,
                     datetime.now().isoformat(timespec="seconds"),
                 ),
@@ -433,15 +427,6 @@ class UsersRepo:
             conn.execute("UPDATE users SET status = ? WHERE id = ?", (status, user_id))
             conn.commit()
 
-    def set_quota(self, user_id: str, quota: int | None) -> None:
-        """Override a user's monthly deck quota (None = use the global default)."""
-        with connect(self.db_path) as conn:
-            conn.execute(
-                "UPDATE users SET monthly_deck_quota = ? WHERE id = ?",
-                (quota, user_id),
-            )
-            conn.commit()
-
     def touch_login(self, user_id: str) -> None:
         """Record a successful login timestamp."""
         with connect(self.db_path) as conn:
@@ -554,7 +539,7 @@ class PasswordResetRepo:
         """Change a password once; return the recipient for a change notice.
 
         Serializing validation with the update prevents two concurrent uses.
-        Role/profile/ownership/quota are untouched. Revoke outstanding invites
+        Role/profile/ownership are untouched. Revoke outstanding invites
         too: an old setup link must not undo a successful password recovery.
         """
         with connect(self.db_path) as conn:
@@ -779,7 +764,7 @@ class FavoritesRepo:
 
 
 class DecksRepo:
-    """Owner-scoped access to generated decks (privacy + quota counting)."""
+    """Owner-scoped access to generated decks (privacy + activity counting)."""
 
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = db_path
@@ -1062,7 +1047,7 @@ class AdminAnalyticsRepo:
         with connect(self.db_path) as conn:
             rows = conn.execute(
                 """SELECT u.id, u.email, u.display_name, u.role, u.status,
-                          u.monthly_deck_quota, u.last_login_at,
+                          u.last_login_at,
                           (SELECT COUNT(*) FROM generated_decks gd WHERE gd.owner_id=u.id) AS decks,
                           (SELECT COALESCE(SUM(cost_usd),0) FROM cost_log cl WHERE cl.user_id=u.id) AS spend,
                           (SELECT COUNT(*) FROM card_feedback cf WHERE cf.user_id=u.id) AS card_fb,
@@ -1212,12 +1197,7 @@ class CedhCandidatesRepo:
             return [dict(r) for r in rows]
 
     def count_this_month(self, user_id: str) -> int:
-        """Candidates this user has built since the 1st of the month.
-
-        Counted against the same per-user quota as the casual generator: a lab
-        run spends tokens, and a quota that only counted one of the two paths
-        would not be a quota.
-        """
+        """Candidates this user has built since the 1st of the month."""
         with connect(self.db_path) as conn:
             row = conn.execute(
                 "SELECT COUNT(*) FROM cedh_candidates WHERE owner_id = ? "

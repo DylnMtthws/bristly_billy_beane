@@ -3,6 +3,7 @@
 import logging
 import os
 import secrets
+from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
 
@@ -12,6 +13,18 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from sabermetrics.config import resolve_db_path
 
 logger = logging.getLogger(__name__)
+
+
+def _short_date(value: object) -> str:
+    """Turn an ISO timestamp into compact, consumer-facing calendar text."""
+    try:
+        stamp = datetime.fromisoformat(str(value))
+    except ValueError:
+        return "recently"
+    label = f"{stamp.strftime('%b')} {stamp.day}"
+    if stamp.year != datetime.now(stamp.tzinfo).year:
+        label += f", {stamp.year}"
+    return label
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -35,9 +48,27 @@ def create_app(db_path: Path | None = None) -> Flask:
         template_folder=str(Path(__file__).parent / "templates"),
         static_folder=str(Path(__file__).parent / "static"),
     )
+    app.jinja_env.filters["short_date"] = _short_date
 
     db_path = resolve_db_path(db_path)
     app.config["DB_PATH"] = db_path
+    app.config["DECK_LAB_ASSET_DIR"] = Path(
+        os.environ.get(
+            "SABER_DECK_LAB_ASSET_DIR", str(db_path.parent / "deck-lab-assets")
+        )
+    )
+    redesign_enabled = _env_bool("SABER_DECK_LAB_REDESIGN", False)
+    app.config["DECK_LAB_REDESIGN_ENABLED"] = redesign_enabled
+    app.config["DECK_LAB_BUILDER_ENABLED"] = _env_bool(
+        "SABER_DECK_LAB_BUILDER", redesign_enabled
+    )
+    app.config["DECK_LAB_RESEARCH_ENABLED"] = _env_bool(
+        "SABER_DECK_LAB_RESEARCH", redesign_enabled
+    )
+    app.config["DECK_LAB_PLAYMAT_ENABLED"] = _env_bool(
+        "SABER_DECK_LAB_PLAYMAT", redesign_enabled
+    )
+    app.config["DECK_LAB_DEV_MODE"] = _env_bool("SABER_DECK_LAB_DEV", False)
 
     # --- Auth mode ---
     # `tailscale`: identity comes from the tailscale serve proxy headers.
@@ -56,6 +87,16 @@ def create_app(db_path: Path | None = None) -> Flask:
     public = _env_bool("SABER_PUBLIC", False)
     app.config["PUBLIC_DEPLOYMENT"] = public
     logger.info("Auth mode: %s (public=%s)", mode, public)
+
+    if app.config["DECK_LAB_DEV_MODE"]:
+        resolved = db_path.expanduser().resolve()
+        protected = Path("/data/sabermetrics.db")
+        repository_db = (Path.cwd() / "data" / "sabermetrics.db").resolve()
+        if public or resolved == protected or resolved == repository_db:
+            raise ValueError(
+                "SABER_DECK_LAB_DEV requires a non-public deployment and an "
+                "explicit disposable database outside data/sabermetrics.db."
+            )
 
     # --- Secret key: required for signed session cookies + CSRF ---
     secret = os.environ.get("SABER_SECRET_KEY")
@@ -117,26 +158,64 @@ def create_app(db_path: Path | None = None) -> Flask:
     from sabermetrics.ui.issue_feedback import init_feedback
 
     init_feedback(app)
+
+    @app.before_request
+    def _limit_avatar_upload():
+        from flask import request
+
+        if request.endpoint == "main.profile_avatar" and request.method == "POST":
+            # Bound the multipart body before CSRF processing parses the form.
+            request.max_content_length = 10_000_000 + 65_536
+
     csrf.init_app(app)
     limiter.init_app(app)
 
     # --- Blueprints ---
     from sabermetrics.ui.admin_routes import bp as admin_bp
+    from sabermetrics.ui.builder_routes import bp as builder_bp
     from sabermetrics.ui.cedh_routes import bp as cedh_bp
+    from sabermetrics.ui.research_routes import bp as research_bp
     from sabermetrics.ui.routes import bp as main_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(cedh_bp)
+    app.register_blueprint(builder_bp)
+    app.register_blueprint(research_bp)
     app.register_blueprint(main_bp)
     from sabermetrics.ui.recovery import init_recovery
 
     init_recovery(app)
 
+    from sabermetrics import db
+    from sabermetrics.avatars import (
+        DEFAULT_EMOJI,
+        EMOJIS,
+        ICONS,
+        avatar_for,
+        ensure_avatar_schema,
+    )
+
+    if db_path.exists():
+        with db.connect(db_path) as conn:
+            ensure_avatar_schema(conn)
+            conn.commit()
+
+    @app.context_processor
+    def _avatar_context():
+        from flask_login import current_user
+
+        avatar = {"kind": "emoji", "value": DEFAULT_EMOJI}
+        if current_user.is_authenticated:
+            avatar = avatar_for(db_path, current_user.id, current_user.avatar_emoji)
+        return {
+            "account_avatar": avatar,
+            "avatar_icons": ICONS,
+            "avatar_emojis": EMOJIS,
+        }
+
     # A thread-pool job cannot survive a process restart. Make that state
     # explicit on boot instead of leaving a status page polling forever.
-    from sabermetrics import db
-
     interrupted = (
         db.BuildJobsRepo(db_path).fail_interrupted() if db_path.exists() else 0
     )
@@ -194,8 +273,20 @@ def run_server(
             "SABER_AUTH_MODE=tailscale is unsafe with SABER_PUBLIC=1 and "
             "SABER_BIND_HOST=0.0.0.0; use hybrid auth"
         )
+    if _env_bool("SABER_DECK_LAB_DEV", False) and host not in {
+        "127.0.0.1",
+        "localhost",
+        "::1",
+    }:
+        raise ValueError("SABER_DECK_LAB_DEV previews must bind to localhost.")
 
     app = create_app(db_path)
+    if _env_bool("SABER_RESEARCH_SYNC", False):
+        if app.config["DECK_LAB_DEV_MODE"] or not os.environ.get("MTG_V1_DSN"):
+            raise ValueError("Research sync requires MTG_V1_DSN and dev mode disabled")
+        from sabermetrics.research_sync import start_refresh_worker
+
+        start_refresh_worker(Path(app.config["DB_PATH"]))
     logger.info("Effective bind: %s:%s (trusted proxy: %s)", host, port, trusted_proxy)
     print(f"Sabermetrics UI running at http://{host}:{port}")
 

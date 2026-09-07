@@ -578,6 +578,197 @@ def ensure_cedh_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
+    """Create the additive, editable Deck Lab document schema.
+
+    These tables deliberately sit beside ``generated_decks`` and
+    ``cedh_candidates``. Generated artifacts remain immutable evidence; users
+    edit a document created from an artifact instead.
+    """
+    tournament_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(tournament_results)")
+    }
+    if "source_entry_id" not in tournament_columns:
+        conn.execute("ALTER TABLE tournament_results ADD COLUMN source_entry_id TEXT")
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS research_source_state (
+            id INTEGER PRIMARY KEY CHECK(id=1),
+            state_json TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS deck_documents (
+            id TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL REFERENCES users(id),
+            title TEXT NOT NULL,
+            format TEXT NOT NULL DEFAULT 'commander',
+            source_kind TEXT,
+            source_id TEXT,
+            revision INTEGER NOT NULL DEFAULT 0,
+            favorite INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(owner_id, source_kind, source_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_deck_documents_owner_updated
+            ON deck_documents(owner_id, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS deck_zones (
+            id TEXT PRIMARY KEY,
+            deck_id TEXT NOT NULL REFERENCES deck_documents(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL,
+            layout_mode TEXT NOT NULL DEFAULT 'spread',
+            x REAL,
+            y REAL,
+            width REAL,
+            height REAL,
+            UNIQUE(deck_id, name COLLATE NOCASE),
+            UNIQUE(deck_id, sort_order)
+        );
+        CREATE INDEX IF NOT EXISTS idx_deck_zones_deck
+            ON deck_zones(deck_id, sort_order);
+
+        CREATE TABLE IF NOT EXISTS deck_entries (
+            id TEXT PRIMARY KEY,
+            deck_id TEXT NOT NULL REFERENCES deck_documents(id) ON DELETE CASCADE,
+            zone_id TEXT REFERENCES deck_zones(id) ON DELETE SET NULL,
+            card_id TEXT,
+            oracle_id TEXT,
+            name TEXT NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0 AND quantity <= 99),
+            is_commander INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            role TEXT,
+            type_line TEXT,
+            mana_cost TEXT,
+            mana_value REAL,
+            oracle_text TEXT,
+            color_identity TEXT,
+            image_uri TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_deck_entries_deck_zone
+            ON deck_entries(deck_id, is_commander DESC, zone_id, sort_order);
+        CREATE INDEX IF NOT EXISTS idx_deck_entries_oracle
+            ON deck_entries(deck_id, oracle_id);
+
+        CREATE TABLE IF NOT EXISTS deck_view_preferences (
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            deck_id TEXT NOT NULL REFERENCES deck_documents(id) ON DELETE CASCADE,
+            view_mode TEXT NOT NULL DEFAULT 'playmat',
+            display_mode TEXT NOT NULL DEFAULT 'text',
+            group_mode TEXT NOT NULL DEFAULT 'zone',
+            sort_mode TEXT NOT NULL DEFAULT 'manual',
+            density TEXT NOT NULL DEFAULT 'compact',
+            collapsed_json TEXT NOT NULL DEFAULT '[]',
+            PRIMARY KEY(owner_id, deck_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS deck_presentations (
+            deck_id TEXT PRIMARY KEY REFERENCES deck_documents(id) ON DELETE CASCADE,
+            surface TEXT NOT NULL DEFAULT 'slate-grid',
+            custom_surface_path TEXT,
+            snap_to_grid INTEGER NOT NULL DEFAULT 1,
+            show_zone_outlines INTEGER NOT NULL DEFAULT 1,
+            dim_inactive INTEGER NOT NULL DEFAULT 0,
+            pan_x REAL NOT NULL DEFAULT 0,
+            pan_y REAL NOT NULL DEFAULT 0,
+            zoom REAL NOT NULL DEFAULT 1,
+            canvas_width INTEGER NOT NULL DEFAULT 1600,
+            canvas_height INTEGER NOT NULL DEFAULT 900
+        );
+
+        CREATE TABLE IF NOT EXISTS deck_mutations (
+            deck_id TEXT NOT NULL REFERENCES deck_documents(id) ON DELETE CASCADE,
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            mutation_id TEXT NOT NULL,
+            response_revision INTEGER NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(deck_id, owner_id, mutation_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS deck_share_grants (
+            id TEXT PRIMARY KEY,
+            deck_id TEXT NOT NULL REFERENCES deck_documents(id) ON DELETE CASCADE,
+            token_digest TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            revoked_at TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS deck_tags (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            normalized_name TEXT NOT NULL UNIQUE,
+            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_deck_tags_name
+            ON deck_tags(name COLLATE NOCASE);
+
+        CREATE TABLE IF NOT EXISTS deck_tag_assignments (
+            deck_id TEXT NOT NULL REFERENCES deck_documents(id) ON DELETE CASCADE,
+            tag_id TEXT NOT NULL REFERENCES deck_tags(id) ON DELETE CASCADE,
+            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(deck_id, tag_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_deck_tag_assignments_tag
+            ON deck_tag_assignments(tag_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS activity_events (
+            id TEXT PRIMARY KEY,
+            actor_id TEXT REFERENCES users(id),
+            action TEXT NOT NULL,
+            subject_kind TEXT NOT NULL,
+            subject_id TEXT,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_activity_events_created
+            ON activity_events(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_activity_events_actor
+            ON activity_events(actor_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS admin_visits (
+            user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            last_overview_at TIMESTAMP NOT NULL
+        );
+        """)
+    presentation_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(deck_presentations)")
+    }
+    if "canvas_width" not in presentation_columns:
+        conn.execute(
+            "ALTER TABLE deck_presentations ADD COLUMN canvas_width "
+            "INTEGER NOT NULL DEFAULT 1600"
+        )
+    if "canvas_height" not in presentation_columns:
+        conn.execute(
+            "ALTER TABLE deck_presentations ADD COLUMN canvas_height "
+            "INTEGER NOT NULL DEFAULT 900"
+        )
+    conn.executemany(
+        "INSERT OR IGNORE INTO deck_tags(id,name,normalized_name) VALUES(?,?,?)",
+        [
+            ("tag-turbo", "Turbo", "turbo"),
+            ("tag-midrange", "Midrange", "midrange"),
+            ("tag-control", "Control", "control"),
+            ("tag-stax", "Stax", "stax"),
+            ("tag-combo", "Combo", "combo"),
+            ("tag-tempo", "Tempo", "tempo"),
+            ("tag-toolbox", "Toolbox", "toolbox"),
+            ("tag-reanimator", "Reanimator", "reanimator"),
+        ],
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO _schema_version(version, description) "
+        "VALUES ('deck-documents-v1', 'Editable Deck Lab documents and activity')"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO _schema_version(version, description) "
+        "VALUES ('deck-tags-v1', 'Global deck tags and per-deck assignments')"
+    )
+    conn.commit()
+
+
 def setup_database(db_path: Path) -> None:
     """Create all tables and indexes in the database.
 
@@ -600,6 +791,7 @@ def setup_database(db_path: Path) -> None:
         # Idempotent column/view migrations for pre-existing databases
         ensure_portal_schema(conn)
         ensure_cedh_schema(conn)
+        ensure_deck_document_schema(conn)
 
         # Insert initial schema version
         conn.execute(

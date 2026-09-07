@@ -1,0 +1,10 @@
+{% from 'partials/avatar.html' import avatar %}
+<details class="dl-account-menu">
+    <summary aria-label="Open account menu" title="Account menu">{{ avatar(account_avatar, avatar_icons) }}<svg class="account-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></summary>
+    <div class="dl-account-popover">
+        <strong>{{ current_user.display_name }}</strong><span>{{ current_user.email or '' }}</span>
+        <a href="{{ url_for('main.profile') }}">Profile</a>
+        {% if current_user.is_admin %}<a href="{{ url_for('admin.overview') }}">Admin</a>{% endif %}
+        <a href="{{ url_for('auth.logout') }}">Sign out</a>
+    </div>
+</details>

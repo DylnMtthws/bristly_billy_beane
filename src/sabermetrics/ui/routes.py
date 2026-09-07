@@ -11,6 +11,7 @@ Endpoints:
 import json
 import logging
 import sqlite3
+from io import BytesIO
 from pathlib import Path
 
 from flask import (
@@ -22,6 +23,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     url_for,
 )
 from flask_login import current_user
@@ -63,17 +65,6 @@ def _monthly_spend(db_path: Path) -> float:
         conn.close()
 
 
-def _quota_reset_label() -> str:
-    """Human label for when the per-user monthly quota next resets."""
-    from datetime import date
-
-    today = date.today()
-    year, month = (
-        (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
-    )
-    return date(year, month, 1).strftime("%B 1")
-
-
 def _generation_blocked(is_ajax: bool, message: str, status: int):
     """Return a blocked-generation response (JSON for XHR, else flash+redirect)."""
     if is_ajax:
@@ -103,9 +94,18 @@ def _db_path() -> Path:
 
 @bp.route("/")
 def index():
-    """Home dashboard: quota meter, recent decks, favorite quick-builds, stats."""
+    """Home dashboard: recent decks, favorite quick-builds, stats."""
     db_path = _db_path()
     user_id = current_user.id
+
+    if current_app.config.get("DECK_LAB_REDESIGN_ENABLED"):
+        from sabermetrics.deck_documents import DeckDocumentRepo
+
+        documents = DeckDocumentRepo(db_path).list_for_owner(user_id, limit=6)
+        return render_template(
+            "deck_lab/home.html",
+            recent_documents=documents,
+        )
 
     decks_repo = db.DecksRepo(db_path)
     favs = db.FavoritesRepo(db_path)
@@ -115,17 +115,11 @@ def index():
     for c in fav_commanders:
         c["color_identity"] = _parse_json_col(c.get("color_identity"))
 
-    used = decks_repo.count_this_month(user_id)
-    quota = current_user.monthly_deck_quota
     total_decks = len(decks_repo.list_for_owner(user_id))
 
     stats = {
         "decks": total_decks,
         "favorites": len(fav_commanders),
-        "quota_used": used,
-        "quota": quota,
-        "quota_remaining": max(0, quota - used),
-        "quota_pct": min(100, round(used / quota * 100)) if quota else 0,
     }
 
     return render_template(
@@ -139,6 +133,8 @@ def index():
 @bp.route("/explore")
 def explore():
     """Browse legal commanders with color/ability/price/CMC filters."""
+    if current_app.config.get("DECK_LAB_RESEARCH_ENABLED"):
+        return redirect(url_for("research.index", **request.args))
     db_path = _db_path()
     eq = build_explore_query(request.args)
 
@@ -181,6 +177,8 @@ def explore():
 @bp.route("/decks")
 def decks():
     """List the current user's generated decks (with optional name search)."""
+    if current_app.config.get("DECK_LAB_BUILDER_ENABLED"):
+        return redirect(url_for("builder.library", **request.args))
     db_path = _db_path()
     query = request.args.get("q", "").strip().lower()
 
@@ -200,6 +198,8 @@ def decks():
 @bp.route("/favorites/commanders")
 def favorite_commanders():
     """Grid of the user's favorited commanders."""
+    if current_app.config.get("DECK_LAB_RESEARCH_ENABLED"):
+        return redirect(url_for("research.index", favorites="1"))
     db_path = _db_path()
     commanders = db.FavoritesRepo(db_path).list_commanders(current_user.id)
     for c in commanders:
@@ -210,6 +210,8 @@ def favorite_commanders():
 @bp.route("/favorites/decks")
 def favorite_decks():
     """List the user's favorited decks."""
+    if current_app.config.get("DECK_LAB_BUILDER_ENABLED"):
+        return redirect(url_for("builder.library", filter="favorites"))
     db_path = _db_path()
     decks_list = db.FavoritesRepo(db_path).list_decks(current_user.id)
     return render_template("favorites_decks.html", decks=decks_list)
@@ -245,7 +247,9 @@ def profile():
 
     if request.method == "POST":
         display_name = (request.form.get("display_name") or "").strip()
-        avatar = (request.form.get("avatar_emoji") or "").strip() or None
+        avatar = (
+            request.form.get("avatar_emoji", current_user.avatar_emoji) or ""
+        ).strip() or None
         if not display_name:
             flash("Display name can't be empty.", "error")
         else:
@@ -253,16 +257,65 @@ def profile():
             flash("Profile updated.", "success")
         return redirect(url_for("main.profile"))
 
-    decks_repo = db.DecksRepo(db_path)
-    used = decks_repo.count_this_month(current_user.id)
-    quota = current_user.monthly_deck_quota
-    return render_template(
-        "profile.html",
-        used=used,
-        quota=quota,
-        remaining=max(0, quota - used),
-        total_decks=len(decks_repo.list_for_owner(current_user.id)),
+    template = (
+        "deck_lab/profile.html"
+        if current_app.config.get("DECK_LAB_REDESIGN_ENABLED")
+        else "profile.html"
     )
+    return render_template(template)
+
+
+@bp.route("/profile/avatar", methods=["GET", "POST"])
+def profile_avatar():
+    """Read or replace only the authenticated account's avatar."""
+    from sabermetrics.avatars import avatar_for, image_bytes, save_avatar
+
+    if request.method == "GET":
+        with db.connect(_db_path()) as conn:
+            row = conn.execute(
+                "SELECT image FROM user_avatars WHERE user_id = ? AND kind = 'image'",
+                (current_user.id,),
+            ).fetchone()
+        if not row:
+            abort(404)
+        response = send_file(BytesIO(row["image"]), mimetype="image/png")
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
+
+    kind = request.form.get("avatar_kind", "emoji")
+    value = (
+        request.form.get("avatar_emoji" if kind == "emoji" else "avatar_icon") or ""
+    ).strip()
+    try:
+        image = None
+        if kind == "image":
+            upload = request.files.get("avatar_image")
+            if upload and upload.filename:
+                image = image_bytes(upload)
+            elif (
+                avatar_for(_db_path(), current_user.id, current_user.avatar_emoji)[
+                    "kind"
+                ]
+                == "image"
+            ):
+                flash("Profile picture saved.", "success")
+                return redirect(url_for("main.profile"))
+        save_avatar(_db_path(), current_user.id, kind, value, image)
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.profile"))
+    flash("Profile picture saved.", "success")
+    return redirect(url_for("main.profile"))
+
+
+@bp.post("/profile/avatar/remove")
+def remove_profile_avatar():
+    """Restore the default emoji and delete the previous avatar image."""
+    from sabermetrics.avatars import DEFAULT_EMOJI, save_avatar
+
+    save_avatar(_db_path(), current_user.id, "emoji", DEFAULT_EMOJI)
+    flash("Profile picture reset.", "success")
+    return redirect(url_for("main.profile"))
 
 
 @bp.route("/profile/password", methods=["POST"])
@@ -390,18 +443,6 @@ def generate_deck():
             503,
         )
 
-    # Per-user monthly quota (admin-overridable; global default otherwise).
-    decks_repo = db.DecksRepo(db_path)
-    used = decks_repo.count_this_month(current_user.id)
-    quota = current_user.monthly_deck_quota
-    if used >= quota:
-        return _generation_blocked(
-            is_ajax,
-            f"Monthly limit reached ({used}/{quota} decks). "
-            f"Your quota resets {_quota_reset_label()}.",
-            429,
-        )
-
     import uuid as _uuid
 
     from sabermetrics.errors import LLMCostCeilingExceeded
@@ -425,7 +466,7 @@ def generate_deck():
         # Attribute every LLM cost this build incurs to this user + deck.
         with cost_attribution(current_user.id, deck_id):
             result = builder.build(req)
-        # Claim ownership so the deck is scoped to this user (privacy + quota).
+        # Claim ownership so the deck is scoped to this user (privacy).
         db.DecksRepo(db_path).set_owner(result.deck.id, current_user.id)
         deck_url = url_for("main.view_deck", deck_id=result.deck.id)
 

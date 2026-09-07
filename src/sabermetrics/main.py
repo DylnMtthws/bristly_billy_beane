@@ -838,8 +838,8 @@ def cedh_build(
 ) -> None:
     """Build a cEDH candidate and report its provenance.
 
-    CLI builds are unattributed: no user owns them, so they are not counted
-    against anyone's quota. The global cost ceiling still applies.
+    CLI builds are unattributed: no user owns them.
+    The global cost ceiling still applies.
     """
     from sabermetrics.cedh.domain import BuildConstraints, LabRequest, MetagameWindow
     from sabermetrics.cedh.factory import build_default_lab
@@ -922,17 +922,10 @@ def cedh_build(
 @click.argument("tailscale_login")
 @click.option("--name", "display_name", default=None, help="Display name.")
 @click.option("--admin", "as_admin", is_flag=True, help="Grant the admin role.")
-@click.option(
-    "--quota",
-    type=int,
-    default=None,
-    help="Monthly deck quota override (default: the global quota).",
-)
 def grant_access(
     tailscale_login: str,
     display_name: str | None,
     as_admin: bool,
-    quota: int | None,
 ) -> None:
     """Give a tailnet identity an account. The whole provisioning story.
 
@@ -942,7 +935,7 @@ def grant_access(
 
     There is no invite link, no password and no email to send: Tailscale has
     already authenticated them, so this only records what they may do. Re-run it
-    to change a role or quota; it updates an existing account rather than
+    to change a role or display name; it updates an existing account rather than
     failing.
     """
     from sabermetrics import db
@@ -968,8 +961,6 @@ def grant_access(
 
     if existing is not None:
         users.set_status(existing["id"], "active")
-        if quota is not None:
-            users.set_quota(existing["id"], quota)
         with db.connect(db_path) as conn:
             conn.execute(
                 "UPDATE users SET role = ? WHERE id = ?", (role, existing["id"])
@@ -988,7 +979,6 @@ def grant_access(
         display_name=display_name or tailscale_login.split("@", 1)[0],
         role=role,
         status="active",
-        monthly_deck_quota=quota,
     )
     click.echo(f"Granted access to {tailscale_login} (role={role}).")
     if as_admin:

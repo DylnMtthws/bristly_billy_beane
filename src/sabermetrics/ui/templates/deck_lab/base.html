@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="theme-color" content="#0a0d16">
+    <title>{% block title %}Deck Lab{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='deck-lab.css') }}">
+    {% if config.FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='issue-feedback.css') }}">
+    {% endif %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='avatar.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="dl-body {% block body_class %}{% endblock %}">
+{% block shell %}
+<header class="dl-nav" data-app-shell>
+    <a class="dl-wordmark" href="{{ url_for('main.index') }}" aria-label="Deck Lab home">
+        {% include 'partials/brand_mark.html' %}
+        <span>Deck Lab</span>
+    </a>
+    <nav class="dl-nav-links" aria-label="Primary">
+        {% if config.DECK_LAB_RESEARCH_ENABLED %}<a href="{{ url_for('research.index') }}" {% if request.endpoint and request.endpoint.startswith('research.') %}aria-current="page"{% endif %}>Research</a>{% endif %}
+        {% if config.DECK_LAB_BUILDER_ENABLED %}<a href="{{ url_for('builder.library') }}" {% if request.endpoint and request.endpoint.startswith('builder.') %}aria-current="page"{% endif %}>Build</a>{% endif %}
+    </nav>
+    <div class="dl-nav-account">
+        {% include 'partials/account_menu.html' %}
+        <button class="dl-menu-button" type="button" aria-label="Open navigation" aria-controls="dl-mobile-drawer" aria-expanded="false">{% from 'partials/avatar.html' import avatar %}{{ avatar(account_avatar, avatar_icons) }}<span aria-hidden="true">▾</span></button>
+    </div>
+</header>
+<div class="dl-drawer-backdrop" data-drawer-close hidden></div>
+<aside class="dl-drawer" id="dl-mobile-drawer" aria-label="Navigation" aria-hidden="true">
+    <div class="dl-drawer-head">
+        <span class="dl-wordmark">{% include 'partials/brand_mark.html' %}Deck Lab</span>
+        <button type="button" data-drawer-close aria-label="Close navigation">×</button>
+    </div>
+    <div class="dl-drawer-user">{% from 'partials/avatar.html' import avatar %}{{ avatar(account_avatar, avatar_icons) }}<div><strong>{{ current_user.display_name }}</strong><small>{{ current_user.email }}</small></div></div>
+    <nav>
+        {% if config.DECK_LAB_RESEARCH_ENABLED %}<a href="{{ url_for('research.index') }}">Research</a>{% endif %}
+        {% if config.DECK_LAB_BUILDER_ENABLED %}<a href="{{ url_for('builder.library') }}">Build</a>{% endif %}
+        {% if current_user.is_admin %}<a href="{{ url_for('admin.overview') }}">Admin</a>{% endif %}
+    </nav>
+    <div class="dl-drawer-bottom">
+        <a href="{{ url_for('main.profile') }}">Profile</a>
+        <a href="{{ url_for('auth.logout') }}">Sign out</a>
+    </div>
+</aside>
+{% endblock %}
+
+<main class="dl-main {% block main_class %}{% endblock %}" id="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}<div class="dl-flash dl-flash-{{ category }}" role="status">{{ message }}</div>{% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+</main>
+
+{% block footer %}<footer class="dl-footer">© 2026 Deck Lab</footer>{% endblock %}
+
+{% if config.FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
+{% include "partials/issue_feedback.html" %}
+<script src="{{ url_for('static', filename='issue-feedback.js') }}" defer></script>
+{% endif %}
+<script src="{{ url_for('static', filename='deck-lab-shell.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

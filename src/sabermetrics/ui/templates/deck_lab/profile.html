@@ -1,0 +1,25 @@
+{% extends "deck_lab/base.html" %}
+{% block title %}Profile · Deck Lab{% endblock %}
+{% block content %}
+<header class="dl-page-head"><div><div class="dl-eyebrow">Your account</div><h1>Profile</h1><p>{{ current_user.email or current_user.display_name }}</p></div></header>
+<div class="dl-profile-grid">
+    {% include 'partials/avatar_form.html' %}
+    <div class="dl-profile-details">
+        <form method="post" action="{{ url_for('main.profile') }}" class="dl-card dl-profile-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <h2>About you</h2><label>Display name<input class="dl-field" name="display_name" value="{{ current_user.display_name }}" required maxlength="100"></label>
+            <button class="dl-button dl-button-primary">Save name</button>
+        </form>
+        {% if config.AUTH_MODE in ['password', 'hybrid'] %}
+        <form method="post" action="{{ url_for('main.change_password') }}" class="dl-card dl-profile-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><h2>Change password</h2>
+            <label>Current password<input class="dl-field" type="password" name="current_password" autocomplete="current-password" required></label>
+            <label>New password<input class="dl-field" type="password" name="new_password" autocomplete="new-password" required></label>
+            <label>Confirm new password<input class="dl-field" type="password" name="confirm_password" autocomplete="new-password" required></label>
+            <button class="dl-button">Update password</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='profile-avatar.js') }}" defer></script>{% endblock %}

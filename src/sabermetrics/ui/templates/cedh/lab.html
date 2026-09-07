@@ -56,9 +56,6 @@
 
 <section class="mb-8 rounded-2xl border border-line bg-panel p-5 shadow-panel">
     <h2 class="mb-1 text-base font-semibold text-body">Build a candidate</h2>
-    <p class="mb-4 text-xs text-muted">
-        {{ quota_used }} of {{ quota }} builds used this month.
-    </p>
     <form method="post" action="{{ url_for('cedh.build') }}" class="space-y-4">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 

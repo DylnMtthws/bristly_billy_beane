@@ -57,7 +57,7 @@ sabermetrics = "sabermetrics.main:cli"
 where = ["src"]
 
 [tool.setuptools.package-data]
-sabermetrics = ["ui/templates/**/*.html", "ui/static/*", "cedh/contracts/*.json"]
+sabermetrics = ["ui/templates/**/*.html", "ui/static/*", "ui/static/playmats/*", "cedh/contracts/*.json"]
 
 [tool.black]
 line-length = 88

@@ -1,0 +1,48 @@
+# Production: exactly one machine and its existing SQLite volume.
+app = 'dylnmtthws-decklab'
+primary_region = 'ord'
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SABER_DECK_LAB_REDESIGN = "1"
+  SABER_DECK_LAB_BUILDER = "1"
+  SABER_DECK_LAB_RESEARCH = "1"
+  SABER_DECK_LAB_PLAYMAT = "1"
+  SABER_DECK_LAB_DEV = "0"
+  SABER_DECK_LAB_ASSET_DIR = "/data/deck-lab-assets"
+  SABER_RESEARCH_SYNC = "1"
+  LINEAR_FEEDBACK_ENABLED = 'true'
+  LINEAR_LABEL_IDS = '{"bug": "9088d815-67f6-4a36-ab8b-a4215db7431d", "suggestion": "fc1966ac-7f51-4065-bcb1-e02afcc08b11", "user-feedback": "f0714a22-917b-407d-a88d-123ae160deb8", "ux": "6cc9936c-c52f-435c-a9fa-841fc0e07bd5"}'
+  LINEAR_PROJECT_ID = 'a250d8f0-f9bf-4bfb-a51f-eb0222b10de3'
+  LINEAR_TEAM_ID = '3ae1d242-a6ec-40e1-8c54-e47428d91ae0'
+  LINEAR_TRIAGE_STATE_ID = 'd73476fa-54fb-43f5-b85d-9fe6c849a894'
+  SABER_AUTH_MODE = 'hybrid'
+  SABER_BIND_HOST = '0.0.0.0'
+  SABER_DB_PATH = '/data/sabermetrics.db'
+  SABER_EMAIL_FROM = 'Deck Lab <accounts@decklab.studio>'
+  SABER_PORT = '8080'
+  SABER_PUBLIC = '1'
+  SABER_PUBLIC_URL = 'https://dylnmtthws-decklab.fly.dev'
+  SABER_TRUSTED_PROXY = '*'
+
+[[mounts]]
+  source = 'decklab_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = '30s'
+    path = '/healthz'
+    grace_period = '60s'
+    timeout = '5s'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'

@@ -93,7 +93,15 @@ jobs:
           docker run --rm --interactive --network none --workdir /tmp
           decklab-ci python -I - < scripts/smoke_issue_feedback.py
 
-      - name: Start container
+      - name: Validate installed Deck Lab refactor
+        # Refactor assets and persistence must work from the installed package.
+        # Keep integrations offline and use a disposable database.
+        # The following step runs with redesign enabled and dev mode disabled.
+        run: >-
+          docker run --rm --interactive --network none --workdir /tmp
+          decklab-ci python -I - < scripts/smoke_deck_lab.py
+
+      - name: Start HTTP container
         run: >-
           docker run --detach --name decklab-ci
           --tmpfs /data:rw,uid=1001,gid=1001

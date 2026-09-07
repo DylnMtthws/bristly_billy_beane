@@ -1,0 +1,52 @@
+{% extends "deck_lab/base.html" %}
+{% block title %}Deck Lab{% endblock %}
+{% block content %}
+<section class="dl-home-hero">
+    <div>
+        <h1>Research the format.<br>Build the deck.</h1>
+        <p>Deck Lab reads competitive Commander tournament results to show what is actually being played, then gives you a workspace to organize the ninety-nine the way you play it.</p>
+        <div class="dl-home-actions">
+            {% if config.DECK_LAB_RESEARCH_ENABLED %}<a class="dl-button dl-button-primary" href="{{ url_for('research.index') }}">Research the format</a>{% endif %}
+            {% if config.DECK_LAB_BUILDER_ENABLED %}<a class="dl-button" href="{{ url_for('builder.library') }}">Open your decks</a>{% endif %}
+        </div>
+    </div>
+    <div class="dl-hero-mat" aria-label="Example deck arranged into zones">
+        <div class="dl-hero-zone"><b>FAST MANA · 9</b><div class="dl-mini-cards"><i></i><i></i><i></i></div></div>
+        <div class="dl-hero-zone"><b>INTERACTION · 13</b><div class="dl-mini-cards"><i></i><i></i><i></i></div></div>
+    </div>
+</section>
+
+<section class="dl-door-grid" aria-label="Deck Lab areas">
+    {% if config.DECK_LAB_RESEARCH_ENABLED %}<article class="dl-card dl-door">
+        <h2>Find out what is actually winning</h2>
+        <p>Compare meta share and top-16 finishes against a stated window. Open any commander to see the cards its recorded lists run.</p>
+        <div class="dl-door-actions"><a class="dl-button dl-button-primary" href="{{ url_for('research.index') }}">Open Research</a></div>
+    </article>{% endif %}
+    {% if config.DECK_LAB_BUILDER_ENABLED %}<article class="dl-card dl-door">
+        <h2>Lay it out like it is on the table</h2>
+        <p class="desktop-copy">Name your own zones and switch between a list, grid, spoiler, and desktop playmat without converting the deck.</p><p class="mobile-copy">Name your own zones and switch between list, grid, and spoiler views without changing the deck.</p>
+        <div class="dl-door-actions"><a class="dl-button dl-button-primary" href="{{ url_for('builder.library') }}">New deck</a><a class="dl-button" href="{{ url_for('builder.library') }}">Open decks</a></div>
+    </article>{% endif %}
+</section>
+
+<section class="dl-how">
+    <div class="dl-eyebrow" style="margin-bottom:14px">How it goes</div>
+    <div class="dl-how-grid">
+        <article class="dl-step"><b>01</b><h3>Pick a commander</h3><p>Start from the metagame table or a card you already want to build around.</p></article>
+        <article class="dl-step"><b>02</b><h3>Take the staples</h3><p>Add cards from recorded lists one at a time or bring the top forty into a draft.</p></article>
+        <article class="dl-step"><b>03</b><h3>Arrange the deck</h3><p>Sort everything into your own zones until the list reads the way you play it.</p></article>
+    </div>
+</section>
+
+{% if recent_documents and config.DECK_LAB_BUILDER_ENABLED %}
+<section>
+    <div class="dl-page-head"><div><div class="dl-eyebrow">Pick up where you left off</div></div><a class="dl-button dl-button-quiet" href="{{ url_for('builder.library') }}">All decks →</a></div>
+    <div class="dl-library-grid">
+    {% for d in recent_documents[:2] %}
+        {% set card_count = d.library_count + d.commander_count %}
+        <a class="dl-card dl-deck-card" href="{{ url_for('builder.deck', deck_id=d.id) }}"><div><h2>{{ d.title }}</h2><p>{{ d.commander_names or 'Commander not chosen' }}</p></div><div class="dl-deck-recency"><span>{{ card_count }} card{% if card_count != 1 %}s{% endif %}</span><span aria-hidden="true">·</span><time datetime="{{ d.updated_at }}">Updated {{ d.updated_at|short_date }}</time></div></a>
+    {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}

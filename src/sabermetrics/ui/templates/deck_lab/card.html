@@ -1,0 +1,10 @@
+{% extends "deck_lab/base.html" %}
+{% block title %}{{ card.name }} · Research{% endblock %}
+{% block content %}
+<nav class="dl-eyebrow"><a href="{{ url_for('research.index',tab='cards') }}">Research</a> / Cards / {{ card.name }}</nav>
+<section class="dl-detail-head" style="margin-top:20px">
+    {% if card.image_uri %}<img class="dl-card-art" src="{{ card.image_uri }}" alt="{{ card.name }} card art">{% else %}<div class="dl-card-art"></div>{% endif %}
+    <div class="dl-detail-title"><div class="dl-eyebrow">Card</div><h1>{{ card.name }}</h1><p class="dl-muted">{{ card.type_line }} · MV {{ card.cmc }}</p><div class="dl-chip-row">{% for color in card.color_identity %}<span class="mana mana-{{ color }}">{{ color }}</span>{% endfor %}</div><div class="dl-card" style="padding:20px;margin-top:24px"><div class="dl-eyebrow">Oracle text</div><p style="line-height:1.6">{{ card.oracle_text or 'No oracle text in the configured corpus.' }}</p></div><a class="dl-button dl-button-primary" href="{{ url_for('builder.library') }}" style="margin-top:16px">Open a deck to add this card</a></div>
+</section>
+{% if card.rulings %}<section class="dl-detail-section"><div class="dl-eyebrow">Rulings</div>{% for ruling in card.rulings %}<p><span class="dl-mono dl-muted">{{ ruling.ruling_date }}</span> · {{ ruling.ruling_text }}</p>{% endfor %}</section>{% endif %}
+{% endblock %}

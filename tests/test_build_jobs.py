@@ -1,4 +1,4 @@
-"""W5 asynchronous cEDH build lifecycle, migration, quota, and ownership."""
+"""W5 asynchronous cEDH build lifecycle, migration, persistence, and ownership."""
 
 from __future__ import annotations
 
@@ -211,7 +211,9 @@ class TestLifecycle:
         assert status.status_code == 200
         assert b"The 99" in status.data
 
-    def test_unsupported_request_fails_visibly_without_using_quota(self, app, db_path):
+    def test_unsupported_request_fails_visibly_without_saving_a_candidate(
+        self, app, db_path
+    ):
         client = _client(app, db_path, "owner@example.com")
         response = _post_json(client, pack_id="not-a-pack")
         job = client.get(f"{response.json['status_url']}.json").json
@@ -220,7 +222,7 @@ class TestLifecycle:
         owner = db.UsersRepo(db_path).get_by_email("owner@example.com")
         assert db.CedhCandidatesRepo(db_path).count_this_month(owner["id"]) == 0
 
-    def test_worker_exception_is_persisted_and_does_not_use_quota(
+    def test_worker_exception_is_persisted_and_does_not_save_a_candidate(
         self, app, db_path, monkeypatch
     ):
         def explode(**kwargs):
@@ -245,7 +247,7 @@ class TestLifecycle:
         assert job["status"] == "failed"
         assert job["error_code"] == "enqueue_failed"
 
-    def test_queued_job_does_not_use_quota(self, app, db_path, monkeypatch):
+    def test_queued_job_does_not_save_a_candidate(self, app, db_path, monkeypatch):
         monkeypatch.setattr(cedh_routes, "_BUILD_EXECUTOR", HoldingExecutor())
         client = _client(app, db_path, "owner@example.com")
         assert _post_json(client).status_code == 202
@@ -277,13 +279,18 @@ class TestErrorsAndOwnership:
         assert response.status_code == 400
         assert response.json["error"] == "invalid_request"
 
-    def test_quota_rejection_is_429_json(self, app, db_path):
+    def test_retired_zero_quota_accepts_json_build(self, app, db_path):
         client = _client(app, db_path, "owner@example.com")
         owner = db.UsersRepo(db_path).get_by_email("owner@example.com")
-        db.UsersRepo(db_path).set_quota(owner["id"], 0)
+        with db.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE users SET monthly_deck_quota = 0 WHERE id = ?", (owner["id"],)
+            )
+            conn.commit()
         response = _post_json(client)
-        assert response.status_code == 429
-        assert response.json["error"] == "quota_exhausted"
+        assert response.status_code == 202
+        job = db.BuildJobsRepo(db_path).get(response.json["job_id"])
+        assert job["status"] == "done"
 
     def test_another_user_cannot_see_job_html_or_json(self, app, db_path):
         owner = _client(app, db_path, "owner@example.com")

@@ -118,7 +118,7 @@ def test_create_user_rejects_duplicate(app, db_path) -> None:
     assert b"already exists" in resp.data
 
 
-def test_create_admin_role_and_quota(app, db_path) -> None:
+def test_create_admin_ignores_retired_quota_field(app, db_path) -> None:
     client, _ = _admin_client(app, db_path)
     client.post(
         "/admin/users/create",
@@ -126,7 +126,7 @@ def test_create_admin_role_and_quota(app, db_path) -> None:
     )
     row = db.UsersRepo(db_path).get_by_email("coadmin@local")
     assert row["role"] == "admin"
-    assert row["monthly_deck_quota"] == 50
+    assert row["monthly_deck_quota"] is None
 
 
 def test_disable_and_enable_user(app, db_path) -> None:
@@ -146,14 +146,13 @@ def test_admin_cannot_disable_self(app, db_path) -> None:
     assert db.UsersRepo(db_path).get(admin_id)["status"] == "active"
 
 
-def test_set_and_clear_quota(app, db_path) -> None:
+def test_quota_endpoint_is_removed(app, db_path) -> None:
     client, _ = _admin_client(app, db_path)
     target = _seed(db_path, "q@local", role="user")
-
-    client.post(f"/admin/users/{target}/quota", data={"monthly_deck_quota": "5"})
-    assert db.UsersRepo(db_path).get(target)["monthly_deck_quota"] == 5
-
-    client.post(f"/admin/users/{target}/quota", data={"monthly_deck_quota": ""})
+    response = client.post(
+        f"/admin/users/{target}/quota", data={"monthly_deck_quota": "5"}
+    )
+    assert response.status_code == 404
     assert db.UsersRepo(db_path).get(target)["monthly_deck_quota"] is None
 
 
