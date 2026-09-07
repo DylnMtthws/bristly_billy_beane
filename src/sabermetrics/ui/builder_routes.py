@@ -117,7 +117,15 @@ def create_deck():
         deck_id = _repo().create(
             current_user.id,
             title=str(values.get("title") or "Untitled deck"),
-            commander_card_id=str(values.get("commander_card_id") or "") or None,
+            commander_card_ids=(
+                values.get("commander_card_ids")
+                if "commander_card_ids" in values
+                else [
+                    str(values[key])
+                    for key in ("commander_card_id", "partner_card_id")
+                    if values.get(key)
+                ]
+            ),
         )
     except InvalidCommand as exc:
         if request.is_json:
@@ -238,6 +246,16 @@ def commands(deck_id: str):
         )
     except (InvalidCommand, TypeError, ValueError) as exc:
         return jsonify(error="invalid_command", detail=str(exc)), 400
+
+
+@bp.get("/api/commanders/partners")
+def partners():
+    return jsonify(
+        results=_repo().partner_choices(
+            str(request.args.get("commander_id") or ""),
+            query=str(request.args.get("q") or "")[:120],
+        )
+    )
 
 
 @bp.get("/api/cards")

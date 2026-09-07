@@ -6,7 +6,7 @@
 <header class="dl-page-head">
     <div><h1>Research</h1><p>Study the format, then build against it.</p></div>
 </header>
-{% if research_source %}<p class="dl-disclosure">Tournament evidence: submitted decklists with resolved commanders at events with at least {{ research_source.min_event_size }} players. Latest recorded event: {{ research_source.latest_event or 'none' }}. Data refreshed {{ research_source.refreshed_at[:10] }}. Partner commanders each count toward their own results; the field denominator counts each entry once.</p>{% endif %}
+{% if research_source %}<p class="dl-disclosure">Tournament evidence: submitted decklists with resolved commanders at events with at least {{ research_source.min_event_size }} players. Latest recorded event: {{ research_source.latest_event or 'none' }}. Data refreshed {{ research_source.refreshed_at[:10] }}. Each commander pair is a separate deck identity. Both its results and the field denominator count each entry once.</p>{% endif %}
 <form method="get" class="dl-research-search">
     <input type="hidden" name="tab" value="{{ tab }}">{% if tab == 'metagame' %}<input type="hidden" name="window" value="{{ window_days }}">{% endif %}
     <svg aria-hidden="true" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5"></circle><path d="m12.7 12.7 4 4"></path></svg>

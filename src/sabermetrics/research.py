@@ -8,6 +8,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+from sabermetrics.research_identities import attach_members
+
 
 def _colors(value: Any) -> list[str]:
     try:
@@ -32,8 +34,9 @@ class ResearchRepo:
         """Return a bounded alphabetical list for comparison controls."""
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT id,name FROM commander_candidates "
-                "ORDER BY name COLLATE NOCASE LIMIT ?",
+                "SELECT c.id,c.name FROM research_commanders c "
+                "ORDER BY EXISTS(SELECT 1 FROM tournament_results r WHERE "
+                "COALESCE(r.commander_identity_id,r.commander_id)=c.id) DESC, c.name COLLATE NOCASE LIMIT ?",
                 (max(1, min(limit, 500)),),
             ).fetchall()
         return [{"id": str(row["id"]), "name": str(row["name"])} for row in rows]
@@ -93,7 +96,7 @@ class ResearchRepo:
             params.append(mana_max)
         if plays_card:
             where.append(
-                "EXISTS (SELECT 1 FROM tournament_results trp "
+                "EXISTS (SELECT 1 FROM research_results trp "
                 "JOIN deck_cards dcp ON dcp.deck_id=trp.deck_id "
                 "JOIN cards cp ON cp.id=dcp.card_id "
                 "WHERE trp.commander_id=cc.id AND cp.name LIKE ?)"
@@ -121,13 +124,13 @@ class ResearchRepo:
         with self._connect() as conn:
             total_entries = int(
                 conn.execute(
-                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
+                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM research_results WHERE tournament_date>=? AND tournament_date<?",
                     (start, end),
                 ).fetchone()[0]
             )
             prior_entries = int(
                 conn.execute(
-                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
+                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM research_results WHERE tournament_date>=? AND tournament_date<?",
                     (prior, start),
                 ).fetchone()[0]
             )
@@ -142,19 +145,21 @@ class ResearchRepo:
             having_sql = f" HAVING {' AND '.join(having)}" if having else ""
             count = int(
                 conn.execute(
-                    f"""SELECT COUNT(*) FROM (
+                    f"""WITH cohort_results AS MATERIALIZED (SELECT * FROM research_results)
+                    SELECT COUNT(*) FROM (
                         SELECT cc.id,
                           COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) * 1.0 / NULLIF(?,0) AS meta_share
-                        FROM commander_candidates cc
-                        LEFT JOIN tournament_results tr ON tr.commander_id=cc.id
+                        FROM research_commanders cc
+                        LEFT JOIN cohort_results tr ON tr.commander_id=cc.id
                         WHERE {' AND '.join(where)} GROUP BY cc.id{having_sql}
                     )""",
                     [start, end, total_entries, *params, *having_params],
                 ).fetchone()[0]
             )
             rows = conn.execute(
-                f"""SELECT cc.id, cc.oracle_id, cc.name, cc.type_line,
-                    cc.color_identity, cc.mana_cost, cc.cmc, cc.image_uri,
+                f"""WITH cohort_results AS MATERIALIZED (SELECT * FROM research_results)
+                    SELECT cc.id, cc.oracle_id, cc.name, cc.type_line,
+                    cc.color_identity, cc.mana_cost, cc.cmc, cc.image_uri, cc.card_ids,
                     COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) AS entries,
                     COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? AND tr.standing IS NOT NULL THEN 1 END) AS finish_coverage,
                     COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? AND tr.standing BETWEEN 1 AND 16 THEN 1 END) AS top16,
@@ -164,8 +169,8 @@ class ResearchRepo:
                         NULLIF(COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? AND tr.standing IS NOT NULL THEN 1 END),0) AS top16_rate,
                     (COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) * 1.0 / NULLIF(?,0)) -
                     (COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) * 1.0 / NULLIF(?,0)) AS trend
-                    FROM commander_candidates cc
-                    LEFT JOIN tournament_results tr ON tr.commander_id=cc.id
+                    FROM research_commanders cc
+                    LEFT JOIN cohort_results tr ON tr.commander_id=cc.id
                     WHERE {' AND '.join(where)} GROUP BY cc.id{having_sql}
                     ORDER BY {order} LIMIT ? OFFSET ?""",
                 [
@@ -197,6 +202,9 @@ class ResearchRepo:
                 ],
             ).fetchall()
         results = [dict(row) for row in rows]
+        with self._connect() as conn:
+            for row in results:
+                attach_members(conn, row)
         for row in results:
             row["color_identity"] = _colors(row.get("color_identity"))
             row["favorited"] = row["id"] in (favorites or set())
@@ -278,21 +286,21 @@ class ResearchRepo:
         start, end, prior = self._scope(window_days)
         with self._connect() as conn:
             card = conn.execute(
-                "SELECT id,oracle_id,name,type_line,mana_cost,cmc,oracle_text,color_identity,image_uri "
-                "FROM commander_candidates WHERE id=?",
+                "SELECT id,oracle_id,name,type_line,mana_cost,cmc,oracle_text,color_identity,image_uri,card_ids "
+                "FROM research_commanders WHERE id=?",
                 (card_id,),
             ).fetchone()
             if card is None:
                 return None
             current_total = int(
                 conn.execute(
-                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
+                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM research_results WHERE tournament_date>=? AND tournament_date<?",
                     (start, end),
                 ).fetchone()[0]
             )
             prior_total = int(
                 conn.execute(
-                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
+                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM research_results WHERE tournament_date>=? AND tournament_date<?",
                     (prior, start),
                 ).fetchone()[0]
             )
@@ -301,13 +309,13 @@ class ResearchRepo:
                     COUNT(CASE WHEN standing IS NOT NULL THEN 1 END) AS finish_coverage,
                     COUNT(CASE WHEN standing BETWEEN 1 AND 16 THEN 1 END) AS top16,
                     COUNT(DISTINCT tournament_id) AS events
-                   FROM tournament_results WHERE commander_id=?
+                   FROM research_results WHERE commander_id=?
                    AND tournament_date>=? AND tournament_date<?""",
                 (card_id, start, end),
             ).fetchone()
             previous = int(
                 conn.execute(
-                    "SELECT COUNT(*) FROM tournament_results WHERE commander_id=? "
+                    "SELECT COUNT(*) FROM research_results WHERE commander_id=? "
                     "AND tournament_date>=? AND tournament_date<?",
                     (card_id, prior, start),
                 ).fetchone()[0]
@@ -315,7 +323,7 @@ class ResearchRepo:
             denominator = int(
                 conn.execute(
                     """SELECT COUNT(DISTINCT tr.deck_id)
-                       FROM tournament_results tr
+                       FROM research_results tr
                        WHERE tr.commander_id=? AND tr.deck_id IS NOT NULL
                          AND tr.tournament_date>=? AND tr.tournament_date<?
                          AND EXISTS (SELECT 1 FROM deck_cards dc WHERE dc.deck_id=tr.deck_id)""",
@@ -327,7 +335,7 @@ class ResearchRepo:
                    FROM (
                      SELECT tr.deck_id,
                        SUM(c.cmc * dc.quantity) * 1.0 / NULLIF(SUM(dc.quantity),0) AS deck_mv
-                     FROM tournament_results tr
+                     FROM research_results tr
                      JOIN deck_cards dc ON dc.deck_id=tr.deck_id AND dc.is_commander=0
                      JOIN cards c ON c.id=dc.card_id
                      WHERE tr.commander_id=? AND tr.tournament_date>=? AND tr.tournament_date<?
@@ -339,7 +347,7 @@ class ResearchRepo:
             inclusions = conn.execute(
                 """SELECT c.id,c.oracle_id,c.name,c.type_line,c.mana_cost,c.cmc,
                           c.image_uri,COUNT(DISTINCT tr.deck_id) AS decks_including
-                   FROM tournament_results tr
+                   FROM research_results tr
                    JOIN deck_cards dc ON dc.deck_id=tr.deck_id
                    JOIN cards c ON c.id=dc.card_id
                    WHERE tr.commander_id=? AND tr.tournament_date>=? AND tr.tournament_date<?
@@ -348,18 +356,21 @@ class ResearchRepo:
                 (card_id, start, end),
             ).fetchall()
             rulings = conn.execute(
-                "SELECT ruling_date,ruling_text FROM card_rulings WHERE card_oracle_id=? "
+                "SELECT ruling_date,ruling_text FROM card_rulings WHERE card_oracle_id IN "
+                "(SELECT oracle_id FROM cards WHERE id IN (SELECT value FROM json_each(?))) "
                 "ORDER BY ruling_date DESC LIMIT 20",
-                (card["oracle_id"],),
+                (card["card_ids"],),
             ).fetchall()
             recent_lists = conn.execute(
                 """SELECT deck_id,player_name,standing,tournament_date
-                   FROM tournament_results WHERE commander_id=? AND deck_id IS NOT NULL
+                   FROM research_results WHERE commander_id=? AND deck_id IS NOT NULL
                      AND tournament_date>=? AND tournament_date<?
                    ORDER BY tournament_date DESC,standing IS NULL,standing LIMIT 12""",
                 (card_id, start, end),
             ).fetchall()
         result = dict(card)
+        with self._connect() as conn:
+            attach_members(conn, result)
         result["color_identity"] = _colors(result.get("color_identity"))
         result["metrics"] = {
             **dict(metrics),

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from sabermetrics import db
+from sabermetrics.commander_pairs import compatible_pair, pair_id
 
 
 class DeckDocumentError(Exception):
@@ -152,12 +153,34 @@ class DeckDocumentRepo:
         )
         return entry_id
 
+    def _commander_cards(
+        self, conn: sqlite3.Connection, ids: list[str]
+    ) -> list[dict[str, Any]]:
+        if (
+            not isinstance(ids, list)
+            or len(ids) > 2
+            or any(not isinstance(key, str) for key in ids)
+        ):
+            raise InvalidCommand("Choose up to two commanders.")
+        cards = []
+        for key in ids:
+            card = self._card_row(conn, key)
+            if not card or not card.get("is_legal_commander"):
+                raise InvalidCommand("Choose a legal commander.")
+            cards.append(card)
+        if len(cards) == 2 and not compatible_pair(*cards):
+            raise InvalidCommand(
+                "The two commanders do not form a recognized legal pair."
+            )
+        return cards
+
     def create(
         self,
         owner_id: str,
         *,
         title: str = "Untitled deck",
         commander_card_id: str | None = None,
+        commander_card_ids: list[str] | None = None,
         source_kind: str | None = None,
         source_id: str | None = None,
     ) -> str:
@@ -193,10 +216,12 @@ class DeckDocumentRepo:
                 "VALUES (?,1600,900)",
                 (deck_id,),
             )
-            if commander_card_id:
-                card = self._card_row(conn, commander_card_id)
-                if card is None or not card.get("is_legal_commander"):
-                    raise InvalidCommand("Choose a legal commander.")
+            ids = (
+                commander_card_ids
+                if commander_card_ids is not None
+                else ([commander_card_id] if commander_card_id else [])
+            )
+            for card in self._commander_cards(conn, ids):
                 self._insert_card(
                     conn, deck_id=deck_id, zone_id=None, card=card, is_commander=True
                 )
@@ -389,6 +414,7 @@ class DeckDocumentRepo:
             out = [dict(row) for row in rows]
             commander_colors_by_deck: dict[str, set[str]] = {}
             commander_decks: set[str] = set()
+            commander_oracles: dict[str, list[str]] = {}
             commander_card_by_deck: dict[str, str] = {}
             commander_image_by_deck: dict[str, str] = {}
             tags_by_deck: dict[str, list[dict[str, Any]]] = {}
@@ -396,7 +422,7 @@ class DeckDocumentRepo:
                 deck_ids = [str(item["id"]) for item in out]
                 placeholders = ",".join("?" for _ in deck_ids)
                 commander_rows = conn.execute(
-                    "SELECT e.deck_id,e.card_id,e.color_identity,"
+                    "SELECT e.deck_id,e.card_id,e.oracle_id,e.color_identity,"
                     "COALESCE(e.image_uri,c.image_uri) AS image_uri "
                     "FROM deck_entries e LEFT JOIN cards c ON c.id=e.card_id "
                     f"WHERE e.is_commander=1 AND e.deck_id IN ({placeholders}) "
@@ -406,6 +432,9 @@ class DeckDocumentRepo:
                 for commander in commander_rows:
                     deck_id = str(commander["deck_id"])
                     commander_decks.add(deck_id)
+                    commander_oracles.setdefault(deck_id, []).append(
+                        str(commander["oracle_id"])
+                    )
                     if commander["card_id"] and deck_id not in commander_card_by_deck:
                         commander_card_by_deck[deck_id] = str(commander["card_id"])
                     if (
@@ -437,6 +466,18 @@ class DeckDocumentRepo:
                     deck_id in commander_decks and not commander_colors
                 )
                 item["commander_card_id"] = commander_card_by_deck.get(deck_id)
+                identity = (
+                    pair_id(commander_oracles[deck_id])
+                    if len(commander_oracles.get(deck_id, [])) == 2
+                    else item["commander_card_id"]
+                )
+                item["commander_identity_id"] = (
+                    identity
+                    if conn.execute(
+                        "SELECT 1 FROM research_commanders WHERE id=?", (identity,)
+                    ).fetchone()
+                    else None
+                )
                 item["commander_image_uri"] = commander_image_by_deck.get(deck_id)
                 tags = tags_by_deck.get(deck_id, [])
                 item["tags"] = tags[:4]
@@ -593,25 +634,11 @@ class DeckDocumentRepo:
         elif commanders == 2 and len(commander_entries) != 2:
             issues.append("Each commander in a pair must be a different card.")
         elif commanders == 2:
-            first, second = commander_entries[:2]
-            first_text = (first.get("oracle_text") or "").casefold()
-            second_text = (second.get("oracle_text") or "").casefold()
-            first_type = (first.get("type_line") or "").casefold()
-            second_type = (second.get("type_line") or "").casefold()
-            compatible = (
-                ("partner" in first_text and "partner" in second_text)
-                or (
-                    "friends forever" in first_text and "friends forever" in second_text
-                )
-                or ("choose a background" in first_text and "background" in second_type)
-                or ("choose a background" in second_text and "background" in first_type)
-                or ("doctor's companion" in first_text and "doctor" in second_type)
-                or ("doctor's companion" in second_text and "doctor" in first_type)
-            )
-            if not compatible:
+            if not compatible_pair(*commander_entries):
                 issues.append("The two commanders do not form a recognized legal pair.")
-        if library != 99:
-            issues.append(f"The library has {library} of 99 cards.")
+        library_target = 100 - commanders if commanders in (1, 2) else 99
+        if library != library_target:
+            issues.append(f"The library has {library} of {library_target} cards.")
         library_entries = [e for e in entries if not e["is_commander"]]
         counts = Counter(
             e.get("oracle_id") or e["name"].casefold() for e in library_entries
@@ -635,7 +662,7 @@ class DeckDocumentRepo:
             if entry["is_commander"]
             for color in _json(entry.get("color_identity"), [])
         }
-        if allowed and any(
+        if commander_entries and any(
             not set(_json(entry.get("color_identity"), [])).issubset(allowed)
             for entry in library_entries
         ):
@@ -643,10 +670,30 @@ class DeckDocumentRepo:
         return {
             "commander_count": commanders,
             "library_count": library,
+            "library_target": library_target,
             "total_count": commanders + library,
             "legal": not issues,
             "issues": issues,
         }
+
+    def partner_choices(
+        self, commander_id: str, *, query: str = ""
+    ) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            first = self._card_row(conn, commander_id)
+            if not first or not first.get("is_legal_commander"):
+                return []
+            candidates = conn.execute(
+                "SELECT * FROM cards WHERE is_legal_commander=1 AND name LIKE ? ORDER BY name,id",
+                (f"%{query}%",),
+            ).fetchall()
+        matches: dict[str, dict[str, Any]] = {}
+        for row in candidates:
+            card = dict(row)
+            if compatible_pair(first, card):
+                card["color_identity"] = _json(card.get("color_identity"), [])
+                matches.setdefault(str(card["oracle_id"]), card)
+        return list(matches.values())[:40]
 
     def search_cards(
         self,
@@ -921,6 +968,29 @@ class DeckDocumentRepo:
             conn.execute(
                 "UPDATE deck_zones SET layout_mode=? WHERE id=?", (layout, zone_id)
             )
+        elif kind == "set_commanders":
+            cards = self._commander_cards(conn, command.get("card_ids", []))
+            # Replacement is atomic and shares the revision/undo event path.
+            conn.execute(
+                "DELETE FROM deck_entries WHERE deck_id=? AND is_commander=1",
+                (deck_id,),
+            )
+            for commander_card in cards:
+                existing = conn.execute(
+                    "SELECT 1 FROM deck_entries WHERE deck_id=? AND oracle_id=?",
+                    (deck_id, commander_card["oracle_id"]),
+                ).fetchone()
+                if existing:
+                    raise InvalidCommand(
+                        "Remove that card from the library before making it a commander."
+                    )
+                self._insert_card(
+                    conn,
+                    deck_id=deck_id,
+                    zone_id=None,
+                    card=commander_card,
+                    is_commander=True,
+                )
         elif kind == "add_card":
             card_id = str(command.get("card_id") or "")
             card = self._card_row(conn, card_id)
@@ -929,6 +999,20 @@ class DeckDocumentRepo:
             is_commander = bool(command.get("is_commander"))
             if is_commander and not card.get("is_legal_commander"):
                 raise InvalidCommand("That card is not a legal commander.")
+            if is_commander:
+                current = [
+                    dict(row)
+                    for row in conn.execute(
+                        "SELECT * FROM deck_entries WHERE deck_id=? AND is_commander=1",
+                        (deck_id,),
+                    )
+                ]
+                if len(current) >= 2 or (
+                    current and not compatible_pair(current[0], card)
+                ):
+                    raise InvalidCommand(
+                        "Choose a legal partner for the current commander."
+                    )
             if not is_commander and not card.get("is_legal_in_99"):
                 raise InvalidCommand("That card is not legal in a Commander library.")
             if not is_commander:

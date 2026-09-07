@@ -671,20 +671,25 @@ class FavoritesRepo:
 
     def toggle_commander(self, user_id: str, commander_id: str) -> bool:
         """Toggle a commander favorite. Returns the new state (True = favorited)."""
+        table = (
+            "favorite_commander_pairs"
+            if commander_id.startswith("pair-")
+            else "favorite_commanders"
+        )
         with connect(self.db_path) as conn:
             exists = conn.execute(
-                "SELECT 1 FROM favorite_commanders WHERE user_id = ? AND commander_id = ?",
+                f"SELECT 1 FROM {table} WHERE user_id = ? AND commander_id = ?",
                 (user_id, commander_id),
             ).fetchone()
             if exists:
                 conn.execute(
-                    "DELETE FROM favorite_commanders WHERE user_id = ? AND commander_id = ?",
+                    f"DELETE FROM {table} WHERE user_id = ? AND commander_id = ?",
                     (user_id, commander_id),
                 )
                 conn.commit()
                 return False
             conn.execute(
-                "INSERT INTO favorite_commanders (user_id, commander_id, created_at) "
+                f"INSERT INTO {table} (user_id, commander_id, created_at) "
                 "VALUES (?, ?, ?)",
                 (user_id, commander_id, datetime.now().isoformat(timespec="seconds")),
             )
@@ -695,8 +700,9 @@ class FavoritesRepo:
         """Return the set of commander ids this user has favorited."""
         with connect(self.db_path) as conn:
             rows = conn.execute(
-                "SELECT commander_id FROM favorite_commanders WHERE user_id = ?",
-                (user_id,),
+                "SELECT commander_id FROM favorite_commanders WHERE user_id = ? "
+                "UNION SELECT commander_id FROM favorite_commander_pairs WHERE user_id = ?",
+                (user_id, user_id),
             ).fetchall()
         return {r[0] for r in rows}
 

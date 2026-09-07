@@ -288,6 +288,17 @@
   }
   document.querySelectorAll("[data-card-type]").forEach(function (button) { button.addEventListener("click", function () { activeCardType = button.dataset.cardType; document.querySelectorAll("[data-card-type]").forEach(function (item) { item.setAttribute("aria-pressed", item === button ? "true" : "false"); }); runSearch(); }); }); document.querySelectorAll("[data-oracle-search],[data-type-search],[data-mana-search],[data-rarity-search]").forEach(function (input) { input.addEventListener("change", runSearch); });
 
+  var commandersDialog = document.getElementById("commanders-dialog");
+  document.querySelectorAll("[data-commanders-open]").forEach(function (button) { button.addEventListener("click", function () {
+    commandersDialog.querySelector("[data-commander-picker]").dispatchEvent(new CustomEvent("commanders:load", { detail: state.entries.filter(function (entry) { return !!entry.is_commander; }) }));
+    commandersDialog.returnValue = ""; commandersDialog.showModal();
+  }); });
+  if (commandersDialog) commandersDialog.addEventListener("close", function () {
+    if (commandersDialog.returnValue !== "save") return;
+    var ids = [commandersDialog.querySelector("[data-commander-id]").value, commandersDialog.querySelector("[data-partner-id]").value].filter(Boolean);
+    command([{ type: "set_commanders", card_ids: ids }]).then(runSearch);
+  });
+
   var tagsDialog = document.getElementById("deck-tags-dialog"), tagInput = document.querySelector("[data-tag-input]"), tagError = document.querySelector("[data-tag-error]"), tagSearchTimer, tagSearchController; function tagMessage(message) { if (tagError) tagError.textContent = message || ""; } function addTag() { if (!tagInput) return; var name = tagInput.value.normalize("NFKC").trim().replace(/\s+/g, " "); if (name.length < 2 || name.length > 32) return tagMessage("Use between 2 and 32 characters."); if ((state.tags || []).some(function (tag) { return tag.name.toLowerCase() === name.toLowerCase(); })) return tagMessage("That tag is already on this deck."); if ((state.tags || []).length >= 6) return tagMessage("A deck can have up to six tags."); tagMessage(""); tagInput.value = ""; command([{ type: "add_tag", name: name }]); }
   document.querySelectorAll("[data-tags-open]").forEach(function (button) { button.addEventListener("click", function () { tagMessage(""); tagsDialog.showModal(); if (tagInput) tagInput.focus(); }); }); var tagAdd = document.querySelector("[data-tag-add]"); if (tagAdd) tagAdd.addEventListener("click", addTag); if (tagInput) { tagInput.addEventListener("keydown", function (event) { if (event.key === "Enter") { event.preventDefault(); addTag(); } }); tagInput.addEventListener("input", function () { clearTimeout(tagSearchTimer); tagSearchTimer = setTimeout(function () { if (tagSearchController) tagSearchController.abort(); tagSearchController = new AbortController(); fetch("/api/deck-tags?q=" + encodeURIComponent(tagInput.value), { signal: tagSearchController.signal }).then(function (response) { return response.json(); }).then(function (body) { populateTagOptions(body.results || []); }); }, 180); }); }
 
