@@ -205,6 +205,9 @@ def apply_snapshot(
             "INSERT INTO deck_cards(deck_id,card_id,quantity,is_commander) VALUES(?,?,?,?)",
             card_rows,
         )
+        from sabermetrics.research_identities import refresh_identities
+
+        refresh_identities(conn)
         dates = [row[5] for row in result_rows]
         state = {
             "refreshed_at": now,

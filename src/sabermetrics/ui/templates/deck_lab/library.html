@@ -57,7 +57,7 @@
                 <div class="dl-deck-action-menu" id="deck-actions-{{ d.id }}" role="menu">
                     <a href="{{ url_for('builder.deck', deck_id=d.id) }}" role="menuitem">Open builder</a>
                     <a href="{{ url_for('builder.deck', deck_id=d.id, panel='tags') }}" role="menuitem">Manage tags</a>
-                    {% if config.DECK_LAB_RESEARCH_ENABLED %}<a href="{{ url_for('research.index', tab='cards') }}" role="menuitem">Research cards</a>{% if d.commander_card_id %}<a href="{{ url_for('research.commander', card_id=d.commander_card_id) }}" role="menuitem">Research commander</a>{% endif %}{% endif %}
+                    {% if config.DECK_LAB_RESEARCH_ENABLED %}<a href="{{ url_for('research.index', tab='cards') }}" role="menuitem">Research cards</a>{% if d.commander_identity_id %}<a href="{{ url_for('research.commander', card_id=d.commander_identity_id) }}" role="menuitem">Research commander</a>{% endif %}{% endif %}
                     <button type="button" role="menuitem" data-share-deck data-deck-id="{{ d.id }}">Copy share link</button>
                     <a href="{{ url_for('builder.export', deck_id=d.id) }}" role="menuitem" download>Export decklist</a>
                     <form class="dl-deck-delete-form" method="post" action="{{ url_for('builder.delete_deck', deck_id=d.id) }}" data-deck-title="{{ d.title }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger" type="submit" role="menuitem">Delete deck</button></form>
@@ -113,12 +113,11 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="dl-dialog-head"><div><div class="dl-eyebrow">New deck</div><h2>Start an empty draft</h2></div><button class="dl-icon-button" type="button" data-dialog-close aria-label="Close">×</button></div>
         <label>Deck name<input class="dl-field" name="title" value="Untitled deck" maxlength="160" required></label>
-        <label>Commander <span class="dl-muted">(optional)</span><input class="dl-field" type="search" data-commander-search placeholder="Search commanders" autocomplete="off"><input type="hidden" name="commander_card_id" data-commander-id></label>
-        <div class="dl-commander-results" data-commander-results></div>
+        {% include 'deck_lab/_commander_picker.html' %}
         <button class="dl-button dl-button-primary" type="submit">Create deck</button>
         <p class="dl-disclosure"><a href="{{ url_for('cedh.index',generator='1') }}">Start from a cEDH strategy pack</a>; completed candidates appear in this library.</p>
     </form>
 </dialog>
 <div class="dl-bottom-action"><button class="dl-button dl-button-primary" type="button" data-new-deck>New deck</button></div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='deck-lab-library.js') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='deck-lab-commanders.js') }}" defer></script><script src="{{ url_for('static', filename='deck-lab-library.js') }}" defer></script>{% endblock %}

@@ -3,10 +3,10 @@
 {% block content %}
 <nav class="dl-eyebrow"><a href="{{ url_for('research.index') }}">Research</a> / Commanders / {{ commander.name }}</nav>
 <section class="dl-detail-head" style="margin-top:20px">
-    {% if commander.image_uri %}<img class="dl-card-art" src="{{ commander.image_uri }}" alt="{{ commander.name }} card art" loading="eager">{% else %}<div class="dl-card-art" role="img" aria-label="Card image unavailable"></div>{% endif %}
+    <div class="dl-commander-art">{% for member in commander.commanders %}{% if member.image_uri %}<img class="dl-card-art" src="{{ member.image_uri }}" alt="{{ member.name }} card art" loading="eager">{% endif %}{% endfor %}</div>
     <div class="dl-detail-title">
         <div class="dl-eyebrow">Commander profile</div><h1>{{ commander.name }}</h1>
-        <p class="dl-muted">{{ commander.type_line }} · MV {{ commander.cmc }}</p>
+        <p class="dl-muted">{{ commander.type_line }} · {% if commander.commanders|length == 2 %}Combined {% endif %}MV {{ commander.cmc }}</p>
         <div class="dl-chip-row">{% for color in commander.color_identity %}<span class="mana mana-{{ color }}">{{ color }}</span>{% endfor %}</div>
         <div class="dl-detail-actions"><form method="post" action="{{ url_for('research.build_commander',card_id=commander.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-button dl-button-primary">Start a build</button></form><a class="dl-button" href="{{ url_for('research.compare',left=commander.id,window=commander.metrics.window_days) }}">Compare</a><button class="dl-button{% if favorite %} active{% endif %}" data-fav-commander data-id="{{ commander.id }}" aria-pressed="{{ 'true' if favorite else 'false' }}">♥ Favorite</button></div>
         <div class="dl-eyebrow">{% if commander.metrics.window_days == 0 %}All time{% else %}Last {{ commander.metrics.window_days }} days{% endif %}</div>

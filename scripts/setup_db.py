@@ -585,6 +585,8 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
     ``cedh_candidates``. Generated artifacts remain immutable evidence; users
     edit a document created from an artifact instead.
     """
+    from sabermetrics.research_identities import ensure_schema
+
     tournament_columns = {
         row[1] for row in conn.execute("PRAGMA table_info(tournament_results)")
     }
@@ -766,6 +768,7 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
         "INSERT OR IGNORE INTO _schema_version(version, description) "
         "VALUES ('deck-tags-v1', 'Global deck tags and per-deck assignments')"
     )
+    ensure_schema(conn)
     conn.commit()
 
 

@@ -17,7 +17,7 @@ from flask import (
 from flask_login import current_user
 
 from sabermetrics import db
-from sabermetrics.deck_documents import DeckDocumentRepo
+from sabermetrics.deck_documents import DeckDocumentRepo, InvalidCommand
 from sabermetrics.research import ResearchRepo
 
 bp = Blueprint("research", __name__, url_prefix="/research")
@@ -175,6 +175,9 @@ def compare():
         if right_id
         else None
     )
+    for selected in (left, right):
+        if selected and all(item["id"] != selected["id"] for item in choices):
+            choices.append({"id": selected["id"], "name": selected["name"]})
     return render_template(
         "deck_lab/compare.html",
         choices=choices,
@@ -191,11 +194,14 @@ def build_commander(card_id: str):
     commander_data = _research().commander_detail(card_id)
     if commander_data is None:
         abort(404)
-    deck_id = _documents().create(
-        current_user.id,
-        title=f"{commander_data['name']} build",
-        commander_card_id=card_id,
-    )
+    try:
+        deck_id = _documents().create(
+            current_user.id,
+            title=f"{commander_data['name']} build",
+            commander_card_ids=commander_data["commander_card_ids"],
+        )
+    except InvalidCommand as exc:
+        abort(400, description=str(exc))
     document = _documents().get(current_user.id, deck_id)
     unsorted = next(z for z in document["zones"] if z["name"] == "Unsorted")
     commands = []

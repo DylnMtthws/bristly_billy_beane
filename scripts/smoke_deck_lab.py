@@ -46,6 +46,10 @@ def main():
             conn.execute("""INSERT INTO cards(id,oracle_id,name,type_line,cmc,
                 color_identity,is_legal_commander,is_legal_in_99)
                 VALUES('ring','ring','Sol Ring','Artifact',1,'[]',0,1)""")
+            conn.execute("UPDATE cards SET oracle_text='Partner' WHERE id='commander'")
+            conn.execute(
+                "INSERT INTO cards(id,oracle_id,name,type_line,oracle_text,cmc,color_identity,is_legal_commander,is_legal_in_99) VALUES('partner','partner','Test Partner','Legendary Creature','Partner',2,'[]',1,1)"
+            )
             conn.commit()
         app = create_app(path)
         app.config["TESTING"] = True
@@ -77,7 +81,10 @@ def main():
         assert client.post("/build/new", json={"title": "Rejected"}).status_code == 400
         response = client.post(
             "/build/new",
-            json={"title": "Installed release smoke", "commander_card_id": "commander"},
+            json={
+                "title": "Installed release smoke",
+                "commander_card_ids": ["commander", "partner"],
+            },
             headers=headers,
         )
         assert response.status_code == 201, response.data
@@ -100,6 +107,8 @@ def main():
         )
         assert edited.status_code == 200
         assert edited.json["validation"]["library_count"] == 1
+        assert edited.json["validation"]["commander_count"] == 2
+        assert edited.json["validation"]["library_target"] == 98
         for route in (
             "/build",
             f"/build/deck/{deck_id}",
@@ -115,6 +124,7 @@ def main():
             "avatar.css",
             "profile-avatar.js",
             "deck-lab-builder.js",
+            "deck-lab-commanders.js",
             "deck-lab-research.js",
             "deck-lab.css",
         ):

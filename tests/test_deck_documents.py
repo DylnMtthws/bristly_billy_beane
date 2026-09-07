@@ -536,3 +536,59 @@ def test_export_is_deterministic(deck_db):
         repo.export_text(document)
         == "// List\n\nCommander\n1 Kinnan Test\n\nUnsorted\n1 Sol Ring\n"
     )
+
+
+def test_pair_creation_replacement_and_98_card_library(deck_db):
+    path, owner, other = deck_db
+    repo = DeckDocumentRepo(path)
+    deck_id = repo.create(owner, commander_card_ids=["partner", "partner-two"])
+    document = repo.get(owner, deck_id)
+    assert document["validation"]["library_target"] == 98
+    assert len([e for e in document["entries"] if e["is_commander"]]) == 2
+    assert [c["id"] for c in repo.partner_choices("partner")] == ["partner-two"]
+    entries = document["entries"] + [
+        {
+            "name": "Basic",
+            "quantity": 98,
+            "is_commander": False,
+            "type_line": "Basic Land",
+            "color_identity": [],
+        }
+    ]
+    assert repo.validate(entries)["legal"]
+    entries[-1]["quantity"] = 99
+    assert not repo.validate(entries)["legal"]
+    for ids in (
+        ["partner", "commander"],
+        ["partner", "partner"],
+        ["partner", "partner-two", "commander"],
+        "partner",
+    ):
+        with pytest.raises(InvalidCommand):
+            repo.create(owner, commander_card_ids=ids)
+    with pytest.raises(DeckNotFound):
+        repo.apply_commands(
+            other,
+            deck_id,
+            expected_revision=0,
+            mutation_id="foreign",
+            commands=[{"type": "set_commanders", "card_ids": ["commander"]}],
+        )
+    with pytest.raises(InvalidCommand):
+        repo.apply_commands(
+            owner,
+            deck_id,
+            expected_revision=0,
+            mutation_id="bad-pair",
+            commands=[{"type": "set_commanders", "card_ids": ["partner", "commander"]}],
+        )
+    assert repo.get(owner, deck_id)["revision"] == 0
+    changed = repo.apply_commands(
+        owner,
+        deck_id,
+        expected_revision=0,
+        mutation_id="solo",
+        commands=[{"type": "set_commanders", "card_ids": ["commander"]}],
+    )
+    assert changed["validation"]["commander_count"] == 1
+    assert changed["validation"]["library_target"] == 99

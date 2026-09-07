@@ -220,6 +220,12 @@ def favorite_decks():
 @bp.route("/favorites/commander/<commander_id>/toggle", methods=["POST"])
 def toggle_favorite_commander(commander_id: str):
     """Async: toggle a commander favorite. Returns the new state."""
+    with db.connect(_db_path()) as conn:
+        if not conn.execute(
+            "SELECT 1 FROM cards WHERE id=? UNION ALL SELECT 1 FROM research_commander_pairs WHERE id=?",
+            (commander_id, commander_id),
+        ).fetchone():
+            return jsonify(error="not_found"), 404
     favorited = db.FavoritesRepo(_db_path()).toggle_commander(
         current_user.id, commander_id
     )
