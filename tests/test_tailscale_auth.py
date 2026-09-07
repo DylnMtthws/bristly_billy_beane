@@ -264,16 +264,20 @@ class TestOwnerScopingSurvives:
         )
         assert other_id
 
-    def test_quota_is_still_per_account(self, tailnet_app, db_path):
+    def test_retired_quota_does_not_block_tailnet_builds(self, tailnet_app, db_path):
         user_id = _grant(db_path, TESTER_LOGIN)
-        db.UsersRepo(db_path).set_quota(user_id, 0)
+        with db.connect(db_path) as conn:
+            conn.execute(
+                "UPDATE users SET monthly_deck_quota = 0 WHERE id = ?", (user_id,)
+            )
+            conn.commit()
         response = tailnet_app.test_client().post(
             "/lab/build",
             data={"pack_id": "kinnan_basalt"},
             headers={LOGIN_HEADER: TESTER_LOGIN},
-            follow_redirects=True,
         )
-        assert b"Monthly limit reached" in response.data
+        assert response.status_code == 303
+        assert "/lab/build/" in response.headers["Location"]
 
 
 # --- Mode isolation -------------------------------------------------------

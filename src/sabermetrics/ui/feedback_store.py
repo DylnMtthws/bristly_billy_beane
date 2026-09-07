@@ -1,10 +1,12 @@
-"""Durable submission identity without retaining feedback contents."""
+"""Durable feedback receipts and isolated-preview report storage."""
 
+import json
 import time
 import uuid
 from pathlib import Path
 
 from sabermetrics import db
+from sabermetrics.ui.feedback_images import FeedbackImage
 
 
 class ReceiptConflict(Exception):
@@ -88,5 +90,70 @@ class FeedbackReceipts:
             conn.execute(
                 "UPDATE issue_feedback_receipts SET status=?,lease_until=0 WHERE id=?",
                 ("sent" if sent else "retry", request_id),
+            )
+            conn.commit()
+
+
+class LocalFeedbackStore:
+    """Keep dev-preview reports in its disposable SQLite database."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        with db.connect(path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS deck_lab_dev_feedback (
+                    issue_id TEXT PRIMARY KEY,
+                    request_id TEXT NOT NULL UNIQUE,
+                    user_id TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    report_text TEXT NOT NULL,
+                    context_json TEXT NOT NULL,
+                    screenshot BLOB,
+                    screenshot_mime TEXT,
+                    created_at REAL NOT NULL
+                )
+                """)
+            conn.commit()
+
+    def exists(self, issue_id: str) -> bool:
+        with db.connect(self.path) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM deck_lab_dev_feedback WHERE issue_id=?", (issue_id,)
+            ).fetchone()
+        return row is not None
+
+    def create(
+        self,
+        *,
+        issue_id: str,
+        request_id: str,
+        user_id: str,
+        category: str,
+        title: str,
+        report_text: str,
+        context: dict,
+        screenshot: FeedbackImage | None,
+    ) -> None:
+        with db.connect(self.path) as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO deck_lab_dev_feedback (
+                    issue_id, request_id, user_id, category, title, report_text,
+                    context_json, screenshot, screenshot_mime, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    issue_id,
+                    request_id,
+                    user_id,
+                    category,
+                    title,
+                    report_text,
+                    json.dumps(context, ensure_ascii=False),
+                    screenshot.content if screenshot else None,
+                    screenshot.content_type if screenshot else None,
+                    time.time(),
+                ),
             )
             conn.commit()

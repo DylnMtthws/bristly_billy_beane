@@ -28,6 +28,7 @@ from sabermetrics.ui.feedback_linear import (
 )
 from sabermetrics.ui.feedback_store import (
     FeedbackReceipts,
+    LocalFeedbackStore,
     ReceiptBusy,
     ReceiptConflict,
     ReceiptLimit,
@@ -115,9 +116,27 @@ def device_context() -> dict:
 def init_feedback(app) -> None:
     config = LinearConfig.from_env()
     app.config["LINEAR_FEEDBACK_ENABLED"] = config is not None
+    app.config["LOCAL_FEEDBACK_ENABLED"] = bool(
+        app.config["DECK_LAB_DEV_MODE"] and config is None
+    )
+    app.config["FEEDBACK_ENABLED"] = bool(
+        app.config["LINEAR_FEEDBACK_ENABLED"] or app.config["LOCAL_FEEDBACK_ENABLED"]
+    )
+    if app.config["LOCAL_FEEDBACK_ENABLED"]:
+        app.config["FEEDBACK_INTRO"] = "Share a private note with the Deck Lab team."
+        app.config["FEEDBACK_DESTINATION"] = "Saved only in this isolated preview"
+        app.config["FEEDBACK_SUCCESS_MESSAGE"] = (
+            "Thanks—your feedback was saved in this preview."
+        )
+    else:
+        app.config["FEEDBACK_INTRO"] = "File a private issue for the Deck Lab team."
+        app.config["FEEDBACK_DESTINATION"] = "Files as a private Linear issue"
+        app.config["FEEDBACK_SUCCESS_MESSAGE"] = "Thanks—your feedback was sent."
     app.extensions["feedback_slots"] = BoundedSemaphore(1)
     if config:
         app.extensions["linear_feedback"] = LinearFeedbackClient(config)
+    elif app.config["LOCAL_FEEDBACK_ENABLED"]:
+        app.extensions["local_feedback"] = LocalFeedbackStore(app.config["DB_PATH"])
 
     # Register before CSRF's hook, which parses multipart forms. Upload limits
     # and auth must take effect before accepting any image bytes.
@@ -135,7 +154,7 @@ def init_feedback(app) -> None:
         request.max_form_parts = 12
         if not current_user.is_authenticated or not current_user.is_active:
             return {"error": "Please sign in before sending feedback."}, 401
-        if not app.config["LINEAR_FEEDBACK_ENABLED"]:
+        if not app.config["FEEDBACK_ENABLED"]:
             return {"error": "Feedback is currently unavailable."}, 503
         return None
 
@@ -230,14 +249,13 @@ def submit():
         if row["status"] == "sent":
             return SUCCESS
         claimed = True
-        client = current_app.extensions["linear_feedback"]
+        local = current_app.config["LOCAL_FEEDBACK_ENABLED"]
+        client = current_app.extensions[
+            "local_feedback" if local else "linear_feedback"
+        ]
         if row["attempted"] and client.exists(row["issue_id"]):
             sent = True
             return SUCCESS
-        asset = row["asset_url"]
-        if screenshot and not asset:
-            asset = client.upload(screenshot, row["issue_id"])
-            receipts.asset(request_id, asset)
         context = {
             "category": CATEGORIES[category],
             "reporter": current_user.display_name,
@@ -250,13 +268,34 @@ def submit():
             context.update({"page": page, "path": path, **device_context()})
         else:
             context["optional_context"] = "not attached"
+        title = f"[{CATEGORIES[category]}] " + " ".join(description.split())[:140]
+        if local:
+            receipts.attempting(request_id)
+            client.create(
+                issue_id=row["issue_id"],
+                request_id=request_id,
+                user_id=str(current_user.id),
+                category=category,
+                title=title,
+                report_text=report_text,
+                context=context,
+                screenshot=screenshot,
+            )
+            sent = True
+            return {
+                "ok": True,
+                "message": current_app.config["FEEDBACK_SUCCESS_MESSAGE"],
+            }
+        asset = row["asset_url"]
+        if screenshot and not asset:
+            asset = client.upload(screenshot, row["issue_id"])
+            receipts.asset(request_id, asset)
         body = "## User report\n\n" + code_block(report_text)
         body += "\n\n## Context\n\n" + code_block(
             json.dumps(context, indent=2, ensure_ascii=False)
         )
         if asset:
             body += f"\n\n## Screenshot\n\n![User screenshot]({private_asset(asset)})"
-        title = f"[{CATEGORIES[category]}] " + " ".join(description.split())[:140]
         receipts.attempting(request_id)
         client.create(row["issue_id"], category, title, body)
         sent = True

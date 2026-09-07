@@ -82,7 +82,6 @@ def test_create_user_sends_email_and_recipient_can_accept(app, admin_client, del
             "email": "player@example.com",
             "display_name": "Player",
             "role": "admin",
-            "monthly_deck_quota": "12",
         },
         follow_redirects=True,
     )
@@ -104,7 +103,7 @@ def test_create_user_sends_email_and_recipient_can_accept(app, admin_client, del
     users = db.UsersRepo(app.config["DB_PATH"])
     user = users.get_by_email("player@example.com")
     assert user["status"] == "invited" and user["password_hash"] is None
-    assert user["role"] == "admin" and user["monthly_deck_quota"] == 12
+    assert user["role"] == "admin"
     recipient = app.test_client()
     assert recipient.get(path).status_code == 200
     accepted = recipient.post(
@@ -118,16 +117,13 @@ def test_create_user_sends_email_and_recipient_can_accept(app, admin_client, del
     assert accepted.status_code == 302
     user = users.get(user["id"])
     assert user["status"] == "active" and user["role"] == "admin"
-    assert user["monthly_deck_quota"] == 12
     assert db.verify_password(user["password_hash"], "player-password")
     assert app.test_client().get(path).status_code == 400
 
 
 def test_resend_delivers_fresh_link_without_duplicate_user(app, admin_client, delivery):
     users = db.UsersRepo(app.config["DB_PATH"])
-    uid = users.create(
-        email="player@example.com", display_name="Player", monthly_deck_quota=7
-    )
+    uid = users.create(email="player@example.com", display_name="Player")
     old_token = db.InviteRepo(app.config["DB_PATH"]).create(uid)
     response = admin_client.post(f"/admin/users/{uid}/reinvite", follow_redirects=True)
     assert response.status_code == 200 and b"Invitation email sent" in response.data
@@ -135,7 +131,7 @@ def test_resend_delivers_fresh_link_without_duplicate_user(app, admin_client, de
     assert old_token not in delivery["messages"][0]["text"]
     assert len(users.list_all()) == 2
     row = users.get(uid)
-    assert row["status"] == "invited" and row["monthly_deck_quota"] == 7
+    assert row["status"] == "invited"
 
 
 @pytest.mark.parametrize("outcome", [401, 403, 429, 500, "timeout"])

@@ -44,11 +44,6 @@
                 <option value="admin">Admin</option>
             </select>
         </label>
-        <label class="block">
-            <span class="mb-1 block text-xs font-medium text-muted">Monthly deck quota (blank = default)</span>
-            <input type="number" name="monthly_deck_quota" min="0" placeholder="20"
-                   class="w-full rounded-lg border border-line bg-field px-3 py-1.5 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none">
-        </label>
         <div class="sm:col-span-2">
             <button type="submit"
                     class="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
@@ -69,7 +64,6 @@
                 <th class="px-4 py-3 font-medium">Spend</th>
                 <th class="px-4 py-3 font-medium">Ratings</th>
                 <th class="px-4 py-3 font-medium">Status</th>
-                <th class="px-4 py-3 font-medium">Quota</th>
                 <th class="px-4 py-3 font-medium">Last login</th>
                 <th class="px-4 py-3 font-medium">Actions</th>
             </tr>
@@ -88,17 +82,6 @@
                 <td class="px-4 py-3">
                     {% set tone = {'active': 'bg-emerald-500/15 text-emerald-400', 'invited': 'bg-amber-500/15 text-amber-400', 'disabled': 'bg-white/10 text-muted'} %}
                     <span class="rounded-full px-2 py-0.5 text-xs font-medium {{ tone.get(u.status, 'bg-white/10 text-muted') }}">{{ u.status }}</span>
-                </td>
-                <td class="px-4 py-3">
-                    <form method="post" action="{{ url_for('admin.set_quota', user_id=u.id) }}" class="flex items-center gap-1">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="number" name="monthly_deck_quota" min="0"
-                               value="{{ u.monthly_deck_quota if u.monthly_deck_quota is not none else '' }}"
-                               placeholder="default"
-                               class="w-20 rounded-md border border-line bg-field px-2 py-1 text-xs focus:border-brand focus:outline-none">
-                        <button type="submit"
-                                class="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:border-brand hover:bg-brand hover:text-white">Set</button>
-                    </form>
                 </td>
                 <td class="px-4 py-3 text-muted">{{ (u.last_login_at or '')[:16] or '—' }}</td>
                 <td class="px-4 py-3">

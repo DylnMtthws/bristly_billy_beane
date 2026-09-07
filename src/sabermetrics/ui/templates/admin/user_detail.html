@@ -6,7 +6,7 @@
 <h1 class="mt-2 text-2xl font-bold tracking-tight">{{ user.display_name or user.email }}</h1>
 <p class="mt-1 text-sm text-muted">{{ user.email }} · {{ user.role }} · {{ user.status }}</p>
 
-<div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+<div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
     <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
         <div class="text-2xl font-bold text-brand">{{ decks|length }}</div>
         <div class="mt-1 text-xs uppercase tracking-wider text-muted">Decks</div>
@@ -14,10 +14,6 @@
     <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
         <div class="text-2xl font-bold text-brand">${{ "%.2f"|format(spend or 0) }}</div>
         <div class="mt-1 text-xs uppercase tracking-wider text-muted">Spend</div>
-    </div>
-    <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
-        <div class="text-2xl font-bold text-brand">{{ user.monthly_deck_quota if user.monthly_deck_quota is not none else '20*' }}</div>
-        <div class="mt-1 text-xs uppercase tracking-wider text-muted">Quota</div>
     </div>
     <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
         <div class="text-sm font-bold text-body">{{ (user.last_login_at or '—')[:16] }}</div>

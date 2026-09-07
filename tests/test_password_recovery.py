@@ -68,7 +68,6 @@ def admin(db_path):
         role="admin",
         status="active",
         password_hash=db.hash_password("old-password"),
-        monthly_deck_quota=17,
     )
 
 

@@ -9,7 +9,7 @@
         <p class="dl-muted">{{ commander.type_line }} · MV {{ commander.cmc }}</p>
         <div class="dl-chip-row">{% for color in commander.color_identity %}<span class="mana mana-{{ color }}">{{ color }}</span>{% endfor %}</div>
         <div class="dl-detail-actions"><form method="post" action="{{ url_for('research.build_commander',card_id=commander.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-button dl-button-primary">Start a build</button></form><a class="dl-button" href="{{ url_for('research.compare',left=commander.id,window=commander.metrics.window_days) }}">Compare</a><button class="dl-button{% if favorite %} active{% endif %}" data-fav-commander data-id="{{ commander.id }}" aria-pressed="{{ 'true' if favorite else 'false' }}">♥ Favorite</button></div>
-        <div class="dl-eyebrow">Last {{ commander.metrics.window_days }} days</div>
+        <div class="dl-eyebrow">{% if commander.metrics.window_days == 0 %}All time{% else %}Last {{ commander.metrics.window_days }} days{% endif %}</div>
         <div class="dl-stat-grid" style="margin-top:10px">
             <div class="dl-stat"><span>Meta share</span><b>{% if commander.metrics.meta_share is not none %}{{ '%.1f'|format(commander.metrics.meta_share*100) }}%{% else %}—{% endif %}</b></div>
             <div class="dl-stat"><span>Top 16 rate</span><b>{% if commander.metrics.top16_rate is not none %}{{ '%.1f'|format(commander.metrics.top16_rate*100) }}%{% else %}—{% endif %}</b></div>

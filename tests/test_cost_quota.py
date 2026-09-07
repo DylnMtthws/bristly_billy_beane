@@ -1,8 +1,7 @@
-"""Tests for P4: per-user quota enforcement, global cost ceiling, and cost
+"""Tests for retired build quotas, global cost ceiling, and cost
 attribution of cost_log rows to a user + deck.
 
-Route enforcement is checked without running a real build: the quota/ceiling
-gates return before the pipeline starts.
+Builds use a stub pipeline; cost-ceiling checks return before it starts.
 """
 
 import sys
@@ -44,14 +43,13 @@ def app(db_path):
     return app
 
 
-def _user(db_path, email="a@local", quota=None):
+def _user(db_path, email="a@local"):
     return db.UsersRepo(db_path).create(
         email=email,
         display_name="A",
         role="user",
         status="active",
         password_hash=db.hash_password("password123"),
-        monthly_deck_quota=quota,
     )
 
 
@@ -119,45 +117,35 @@ def test_log_cost_attribution(db_path) -> None:
     assert rows[1]["user_id"] is None and rows[1]["deck_id"] is None
 
 
-# --- Quota enforcement ---
+@pytest.mark.parametrize("retired_quota", [None, 0, 1, 20])
+def test_legacy_builds_ignore_retired_limits(app, db_path, monkeypatch, retired_quota):
+    from types import SimpleNamespace
 
+    from sabermetrics.pipeline.deck_builder import DeckBuilder
 
-def test_quota_blocks_at_limit(app, db_path) -> None:
-    uid = _user(db_path, quota=1)
-    _seed_deck_this_month(db_path, "d1", uid)
+    uid = _user(db_path)
+    with db.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE users SET monthly_deck_quota = ? WHERE id = ?", (retired_quota, uid)
+        )
+        conn.commit()
+    for index in range(21):
+        _seed_deck_this_month(db_path, f"old-{index}", uid)
+
+    def build(self, request):
+        _seed_deck_this_month(db_path, request.deck_id, uid)
+        return SimpleNamespace(deck=SimpleNamespace(id=request.deck_id))
+
+    monkeypatch.setattr(DeckBuilder, "build", build)
     client = app.test_client()
     _login(client, uid)
-
-    resp = _post_generate(client)
-    assert resp.status_code == 429
-    assert b"Monthly limit reached" in resp.data
-
-
-def test_quota_allows_under_limit(app, db_path) -> None:
-    uid = _user(db_path, quota=5)
-    _seed_deck_this_month(db_path, "d1", uid)
-    client = app.test_client()
-    _login(client, uid)
-
-    # Under quota: the gate opens; the build then fails on the bogus commander
-    # (500), which still proves we got past the 429 quota check.
-    resp = _post_generate(client)
-    assert resp.status_code != 429
-
-
-def test_admin_quota_override_raises_limit(app, db_path) -> None:
-    uid = _user(db_path, quota=1)
-    _seed_deck_this_month(db_path, "d1", uid)
-    client = app.test_client()
-    _login(client, uid)
-    assert _post_generate(client).status_code == 429  # blocked at 1
-
-    db.UsersRepo(db_path).set_quota(uid, 3)  # admin bumps the cap
-    assert _post_generate(client).status_code != 429  # now allowed through
+    response = _post_generate(client)
+    assert response.status_code == 200
+    assert db.DecksRepo(db_path).count_this_month(uid) == 22
 
 
 def test_global_ceiling_blocks(app, db_path) -> None:
-    uid = _user(db_path, quota=20)
+    uid = _user(db_path)
     _seed_cost(db_path, settings.llm.monthly_cost_ceiling_usd + 1)
     client = app.test_client()
     _login(client, uid)

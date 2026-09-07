@@ -66,7 +66,10 @@ def test_home_redirects_when_anonymous(client) -> None:
 def test_login_page_is_public(client) -> None:
     resp = client.get("/login")
     assert resp.status_code == 200
-    assert b"Sign In" in resp.data
+    assert b"Sign In to Deck Lab" in resp.data
+    assert b'class="dl-auth-layout"' in resp.data
+    assert "Research · Build · Refine".encode() in resp.data
+    assert b">Sabermetrics<" not in resp.data
 
 
 def test_xhr_unauthorized_returns_401_json(client) -> None:

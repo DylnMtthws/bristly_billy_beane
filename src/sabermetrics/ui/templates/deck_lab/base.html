@@ -7,16 +7,17 @@
     <meta name="theme-color" content="#0a0d16">
     <title>{% block title %}Deck Lab{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='deck-lab.css') }}">
-    {% if config.LINEAR_FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
+    {% if config.FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
     <link rel="stylesheet" href="{{ url_for('static', filename='issue-feedback.css') }}">
     {% endif %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='avatar.css') }}">
     {% block head %}{% endblock %}
 </head>
 <body class="dl-body {% block body_class %}{% endblock %}">
 {% block shell %}
 <header class="dl-nav" data-app-shell>
     <a class="dl-wordmark" href="{{ url_for('main.index') }}" aria-label="Deck Lab home">
-        <span class="dl-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        {% include 'partials/brand_mark.html' %}
         <span>Deck Lab</span>
     </a>
     <nav class="dl-nav-links" aria-label="Primary">
@@ -24,36 +25,24 @@
         {% if config.DECK_LAB_BUILDER_ENABLED %}<a href="{{ url_for('builder.library') }}" {% if request.endpoint and request.endpoint.startswith('builder.') %}aria-current="page"{% endif %}>Build</a>{% endif %}
     </nav>
     <div class="dl-nav-account">
-        <span class="dl-quota" title="Generated builds this month"><b>{{ shell_quota_used }}</b> / {{ shell_quota }} builds</span>
-        <details class="dl-account-menu">
-            <summary><span aria-hidden="true">{{ current_user.avatar_emoji or '🎣' }}</span><span>{{ current_user.display_name }}</span><span aria-hidden="true">▾</span></summary>
-            <div class="dl-account-popover">
-                <strong>{{ current_user.display_name }}</strong>
-                <span>{{ current_user.email }}</span>
-                {% if config.DECK_LAB_BUILDER_ENABLED %}<a href="{{ url_for('builder.library') }}">Build</a>{% endif %}
-                {% if config.DECK_LAB_RESEARCH_ENABLED %}<a href="{{ url_for('research.index') }}">Research</a>{% endif %}
-                <a href="{{ url_for('main.profile') }}">Profile</a>
-                {% if current_user.is_admin %}<a href="{{ url_for('admin.overview') }}">Admin</a>{% endif %}
-                <a href="{{ url_for('auth.logout') }}">Sign out</a>
-            </div>
-        </details>
-        <button class="dl-menu-button" type="button" aria-label="Open navigation" aria-controls="dl-mobile-drawer" aria-expanded="false">☰</button>
+        {% include 'partials/account_menu.html' %}
+        <button class="dl-menu-button" type="button" aria-label="Open navigation" aria-controls="dl-mobile-drawer" aria-expanded="false">{% from 'partials/avatar.html' import avatar %}{{ avatar(account_avatar, avatar_icons) }}<span aria-hidden="true">▾</span></button>
     </div>
 </header>
 <div class="dl-drawer-backdrop" data-drawer-close hidden></div>
 <aside class="dl-drawer" id="dl-mobile-drawer" aria-label="Navigation" aria-hidden="true">
     <div class="dl-drawer-head">
-        <span class="dl-wordmark"><span class="dl-mark" aria-hidden="true"><i></i><i></i><i></i></span>Deck Lab</span>
+        <span class="dl-wordmark">{% include 'partials/brand_mark.html' %}Deck Lab</span>
         <button type="button" data-drawer-close aria-label="Close navigation">×</button>
     </div>
-    <div class="dl-drawer-user"><span>{{ current_user.avatar_emoji or '🎣' }}</span><div><strong>{{ current_user.display_name }}</strong><small>{{ current_user.email }}</small></div></div>
+    <div class="dl-drawer-user">{% from 'partials/avatar.html' import avatar %}{{ avatar(account_avatar, avatar_icons) }}<div><strong>{{ current_user.display_name }}</strong><small>{{ current_user.email }}</small></div></div>
     <nav>
         {% if config.DECK_LAB_RESEARCH_ENABLED %}<a href="{{ url_for('research.index') }}">Research</a>{% endif %}
         {% if config.DECK_LAB_BUILDER_ENABLED %}<a href="{{ url_for('builder.library') }}">Build</a>{% endif %}
         {% if current_user.is_admin %}<a href="{{ url_for('admin.overview') }}">Admin</a>{% endif %}
     </nav>
     <div class="dl-drawer-bottom">
-        <div class="dl-drawer-quota"><span>This month</span><b>{{ shell_quota_used }} / {{ shell_quota }} generated builds</b><progress max="{{ shell_quota or 1 }}" value="{{ shell_quota_used }}"></progress></div>
+        <a href="{{ url_for('main.profile') }}">Profile</a>
         <a href="{{ url_for('auth.logout') }}">Sign out</a>
     </div>
 </aside>
@@ -66,9 +55,9 @@
     {% block content %}{% endblock %}
 </main>
 
-{% block footer %}<footer class="dl-footer">Deck Lab · invite-only beta</footer>{% endblock %}
+{% block footer %}<footer class="dl-footer">© 2026 Deck Lab</footer>{% endblock %}
 
-{% if config.LINEAR_FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
+{% if config.FEEDBACK_ENABLED and current_user.is_authenticated and current_user.is_active %}
 {% include "partials/issue_feedback.html" %}
 <script src="{{ url_for('static', filename='issue-feedback.js') }}" defer></script>
 {% endif %}

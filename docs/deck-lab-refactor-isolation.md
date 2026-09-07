@@ -34,3 +34,28 @@ PYTHONPATH=. sabermetrics serve --host 127.0.0.1 --port 5179
 
 Production release, migration, configuration, or deployment is outside this
 implementation and requires separate explicit approval.
+
+Quota removal (2026-09-06): deck creation has no monthly count limit. The
+navigation meters, library/profile quota text, admin controls, CLI override,
+and server-side per-user quota gates have been removed, including fallback
+routes. The nullable `users.monthly_deck_quota` column is retained as inert
+compatibility data; no destructive schema migration is required. Existing
+model-call spend protection is separate from deck creation and remains in
+place for the legacy model-backed routes.
+
+Profile pictures (2026-09-06): accounts can select an emoji, built-in icon, or
+upload a still PNG/JPEG/WebP (10 MB, 25 megapixels). Uploads are stripped of
+metadata, center-cropped to 256 × 256 pixels, and stored in the additive
+`user_avatars` table beside account data. App startup creates this table
+idempotently after the dev database guard. Existing `users.avatar_emoji` values
+remain the fallback. Image replacement and removal are transactional; images
+are served only to their account owner with private, no-store caching. This
+requires no asset volume or external image service. The desktop account menu
+uses the avatar and a chevron; profile controls also appear in mobile navigation.
+
+Feedback in the isolated preview (2026-09-06): the authenticated feedback
+launcher is enabled automatically when `SABER_DECK_LAB_DEV=1`. Reports and
+sanitized screenshots are saved only in the disposable preview database's
+`deck_lab_dev_feedback` table. Nothing is delivered externally. Outside dev
+mode, the launcher remains unavailable unless the existing Linear integration
+is explicitly configured.

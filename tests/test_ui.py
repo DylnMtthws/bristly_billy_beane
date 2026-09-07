@@ -105,7 +105,7 @@ def test_index_loads(client) -> None:
     """Home dashboard loads with 200 status."""
     response = client.get("/")
     assert response.status_code == 200
-    assert b"Monthly quota" in response.data
+    assert b"Monthly quota" not in response.data
 
 
 @pytest.mark.skipif(not HAS_DB, reason="No database available")

@@ -136,11 +136,6 @@ class AuthUser(UserMixin):
     def is_admin(self) -> bool:
         return self.role == "admin"
 
-    @property
-    def monthly_deck_quota(self) -> int:
-        q = self._row.get("monthly_deck_quota")
-        return int(q) if q is not None else db.DEFAULT_MONTHLY_DECK_QUOTA
-
 
 def _users() -> db.UsersRepo:
     return db.UsersRepo(current_app.config["DB_PATH"])

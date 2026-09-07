@@ -15,8 +15,8 @@
     </form>
 </div>
 
-<!-- Stat + quota tiles -->
-<div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+<!-- Stats -->
+<div class="mt-6 grid grid-cols-2 gap-4">
     <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
         <div class="text-2xl font-bold text-brand">{{ stats.decks }}</div>
         <div class="mt-1 text-xs uppercase tracking-wider text-muted">Your decks</div>
@@ -24,16 +24,6 @@
     <div class="rounded-2xl border border-line bg-panel p-4 shadow-panel">
         <div class="text-2xl font-bold text-brand">{{ stats.favorites }}</div>
         <div class="mt-1 text-xs uppercase tracking-wider text-muted">Favorites</div>
-    </div>
-    <div class="col-span-2 rounded-2xl border border-line bg-panel p-4 shadow-panel">
-        <div class="flex items-baseline justify-between">
-            <div class="text-sm font-medium text-body">Monthly quota</div>
-            <div class="text-sm text-muted">{{ stats.quota_used }} / {{ stats.quota }} decks</div>
-        </div>
-        <div class="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-field">
-            <div class="h-full rounded-full bg-brand" style="width: {{ stats.quota_pct }}%"></div>
-        </div>
-        <div class="mt-1.5 text-xs text-muted">{{ stats.quota_remaining }} remaining this month</div>
     </div>
 </div>
 

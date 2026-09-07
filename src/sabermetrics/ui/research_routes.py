@@ -23,6 +23,13 @@ from sabermetrics.research import ResearchRepo
 bp = Blueprint("research", __name__, url_prefix="/research")
 
 
+@bp.context_processor
+def _source_context():
+    from sabermetrics.research_sync import source_state
+
+    return {"research_source": source_state(Path(current_app.config["DB_PATH"]))}
+
+
 def _research() -> ResearchRepo:
     return ResearchRepo(Path(current_app.config["DB_PATH"]))
 
@@ -57,6 +64,16 @@ def _optional_float_arg(name: str) -> float | None:
         return None
 
 
+def _window_arg(default: int = 90) -> int:
+    value = request.args.get("window")
+    if value in {"0", "all"}:
+        return 0
+    try:
+        return max(7, min(int(value if value is not None else default), 365))
+    except (TypeError, ValueError):
+        return default
+
+
 @bp.get("")
 @bp.get("/")
 def index():
@@ -65,7 +82,7 @@ def index():
         tab = "commanders"
     query = (request.args.get("q") or "").strip()[:120]
     page = max(1, _int_arg("page", 1))
-    window_days = max(7, min(_int_arg("window", 90), 365))
+    window_days = _window_arg()
     fav_ids = db.FavoritesRepo(current_app.config["DB_PATH"]).commander_ids(
         current_user.id
     )
@@ -122,7 +139,7 @@ def index():
 
 @bp.get("/commander/<card_id>")
 def commander(card_id: str):
-    window_days = max(7, min(_int_arg("window", 90), 365))
+    window_days = _window_arg()
     commander_data = _research().commander_detail(card_id, window_days=window_days)
     if commander_data is None:
         abort(404)
@@ -144,7 +161,7 @@ def card(card_id: str):
 
 @bp.get("/compare")
 def compare():
-    window_days = max(7, min(_int_arg("window", 90), 365))
+    window_days = _window_arg()
     choices = _research().commander_choices()
     left_id = (request.args.get("left") or "").strip()
     right_id = (request.args.get("right") or "").strip()

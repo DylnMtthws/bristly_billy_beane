@@ -241,7 +241,7 @@ def test_change_password_flow(app, db_path) -> None:
     )
 
 
-def test_quota_meter_counts_month(app, db_path) -> None:
+def test_home_has_no_quota_meter(app, db_path) -> None:
     _seed_commander(db_path)
     uid = _user(db_path, "a@local")
     _seed_deck(db_path, "d1", uid)
@@ -249,4 +249,5 @@ def test_quota_meter_counts_month(app, db_path) -> None:
     assert db.DecksRepo(db_path).count_this_month(uid) == 2
     client = app.test_client()
     _login(client, uid)
-    assert b"2 / 20 decks" in client.get("/").data
+    assert b"2 / 20 decks" not in client.get("/").data
+    assert b"Monthly quota" not in client.get("/").data

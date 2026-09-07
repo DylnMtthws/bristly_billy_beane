@@ -2,7 +2,7 @@
 
 Blueprint mounted at ``/admin`` and gated so only an authenticated user with the
 ``admin`` role can reach any route (ADR-015 — the admin provisions all accounts).
-P2 covers user management (invite, enable/disable, quota override). P6 adds the
+P2 covers user management (invite, enable/disable). P6 adds the
 feedback explorer (+ CSV/JSON export), per-user cost/usage, and popular
 commanders — turning collected feedback into something the owner can analyze.
 """
@@ -167,15 +167,6 @@ def create_user():
     display_name = (request.form.get("display_name") or "").strip() or None
     role = "admin" if request.form.get("role") == "admin" else "user"
 
-    quota_raw = (request.form.get("monthly_deck_quota") or "").strip()
-    quota: int | None = None
-    if quota_raw:
-        try:
-            quota = max(0, int(quota_raw))
-        except ValueError:
-            flash("Quota must be a whole number.", "error")
-            return redirect(url_for("admin.users"))
-
     if not email:
         flash("Email is required.", "error")
         return redirect(url_for("admin.users"))
@@ -188,7 +179,6 @@ def create_user():
         display_name=display_name,
         role=role,
         status="invited",
-        monthly_deck_quota=quota,
         invited_by=current_user.id,
     )
     invite_result = _deliver_invite(user_id, email)
@@ -212,32 +202,6 @@ def set_status(user_id: str):
         return redirect(url_for("admin.users"))
     _users().set_status(user_id, status)
     flash(f"{target.get('email')} set to {status}.", "success")
-    return redirect(url_for("admin.users"))
-
-
-@bp.route("/users/<user_id>/quota", methods=["POST"])
-def set_quota(user_id: str):
-    """Set or clear a user's monthly deck-quota override (blank = default)."""
-    if _users().get(user_id) is None:
-        abort(404)
-    raw = (request.form.get("monthly_deck_quota") or "").strip()
-    quota: int | None = None
-    if raw:
-        try:
-            quota = max(0, int(raw))
-        except ValueError:
-            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return {"error": "Quota must be a whole number."}, 400
-            flash("Quota must be a whole number.", "error")
-            return redirect(url_for("admin.users"))
-    _users().set_quota(user_id, quota)
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        return {
-            "ok": True,
-            "quota": quota,
-            "label": quota if quota is not None else "default",
-        }
-    flash("Quota updated.", "success")
     return redirect(url_for("admin.users"))
 
 

@@ -1,86 +1,83 @@
-{% extends "base.html" %}
-{% block title %}Sign In{% endblock %}
+{% extends "deck_lab/base.html" %}
+{% block title %}Sign in · Deck Lab{% endblock %}
+{% block body_class %}dl-auth-body{% endblock %}
 
-{% block content %}
-<div class="mx-auto max-w-sm">
-{% if tailscale and not password %}
-    {# Tailnet auth: there is nothing to submit. Say which of the two things
-       went wrong, because "invalid login" would be false in both cases. #}
-    <h1 class="text-2xl font-bold tracking-tight">No access</h1>
-    {% if identity is none %}
-    <p class="mt-2 text-sm text-muted">
-        This app takes your identity from Tailscale, so there is no password to
-        enter. The request did not arrive through the tailnet.
-    </p>
-    <div class="mt-4 rounded-xl border border-line bg-panel p-4 text-sm text-body/90">
-        <p class="font-medium text-body">Reach it at the tailnet address</p>
-        <p class="mt-1 text-muted">
-            Connect to the tailnet, then open the
-            <code class="text-brand">.ts.net</code> address the admin gave you.
-            Opening <code>localhost</code> directly will always land here.
-        </p>
-    </div>
-    {% else %}
-    <p class="mt-2 text-sm text-muted">
-        Tailscale identified you as
-        <code class="text-brand">{{ identity.login }}</code>{% if identity.display_name %}
-        ({{ identity.display_name }}){% endif %}.
-    </p>
-    <div class="mt-4 rounded-xl border border-line bg-panel p-4 text-sm text-body/90">
-        {% if disabled %}
-        <p class="font-medium text-body">This account has been disabled.</p>
-        <p class="mt-1 text-muted">Ask the admin to re-enable it.</p>
-        {% else %}
-        <p class="font-medium text-body">That identity has no account here.</p>
-        <p class="mt-1 text-muted">
-            Being on the tailnet lets you reach the app; it does not grant an
-            account. Ask the admin to run:
-        </p>
-        <pre class="mt-2 overflow-x-auto rounded-lg bg-ink px-3 py-2 text-xs text-body/80">sabermetrics grant-access {{ identity.login }}</pre>
-        {% endif %}
-    </div>
-    {% endif %}
-{% else %}
-    <h1 class="text-2xl font-bold tracking-tight">Sign In</h1>
-    <p class="mt-1 text-sm text-muted">Accounts are invite-only. Ask the admin for a link.</p>
-
-    {% if identity %}
-    {# Hybrid: they are on the tailnet but that identity has no account, so the
-       password form is the one thing that can still help them. #}
-    <div class="mt-4 rounded-xl border border-line bg-panel p-4 text-sm">
-        <p class="text-body">
-            Tailscale knows you as <code class="text-brand">{{ identity.login }}</code>,
-            but that identity has no account here.
-        </p>
-        <p class="mt-1 text-muted">
-            Sign in below, or ask the admin to run
-            <code>sabermetrics grant-access {{ identity.login }}</code> so you
-            do not need a password on the tailnet.
-        </p>
-    </div>
-    {% endif %}
-
-    <form method="post" action="{{ url_for('auth.login', next=request.args.get('next')) }}"
-          class="mt-6 space-y-4 rounded-2xl border border-line bg-panel p-6 shadow-panel">
-        {{ form.hidden_tag() }}
-        <label class="block">
-            <span class="mb-1 block text-xs font-medium text-muted">Email</span>
-            {{ form.email(type="email", placeholder="you@example.com", autofocus=true,
-               class="w-full rounded-lg border border-line bg-field px-3 py-2 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30") }}
-        </label>
-        <label class="block">
-            <span class="mb-1 block text-xs font-medium text-muted">Password</span>
-            {{ form.password(placeholder="••••••••",
-               class="w-full rounded-lg border border-line bg-field px-3 py-2 text-sm placeholder:text-muted/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30") }}
-        </label>
-        <button type="submit"
-                class="w-full rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">
-            Sign In
-        </button>
-    </form>
-    {% if config.PASSWORD_RECOVERY_ENABLED %}
-    <p class="mt-4 text-center text-sm"><a class="text-brand hover:underline" href="{{ url_for('recovery.forgot_password') }}">Forgot password?</a></p>
-    {% endif %}
-{% endif %}
-</div>
+{% block shell %}
+<header class="dl-auth-nav">
+    <a class="dl-wordmark" href="{{ url_for('main.index') }}" aria-label="Deck Lab home">
+        {% include 'partials/brand_mark.html' %}
+        <span>Deck Lab</span>
+    </a>
+    <span class="dl-auth-nav-note">Research · Build · Refine</span>
+</header>
 {% endblock %}
+
+{% block main_class %}dl-auth-main{% endblock %}
+{% block content %}
+<section class="dl-auth-layout">
+    <div class="dl-auth-intro" aria-hidden="true">
+        <div class="dl-eyebrow">Your deckbuilding workspace</div>
+        <h1>Turn the spark<br>into a deck.</h1>
+        <p>Study the format, collect the right cards, and shape every list around the way you play.</p>
+        <div class="dl-auth-playmat">
+            <div class="dl-auth-zone dl-auth-zone-one"><span>COMMANDER</span><i></i></div>
+            <div class="dl-auth-zone dl-auth-zone-two"><span>FAST MANA</span><i></i><i></i><i></i></div>
+            <div class="dl-auth-zone dl-auth-zone-three"><span>INTERACTION</span><i></i><i></i></div>
+        </div>
+    </div>
+
+    <div class="dl-auth-panel dl-card">
+    {% if tailscale and not password %}
+        <div class="dl-eyebrow">Deck Lab access</div>
+        <h1>No access</h1>
+        {% if identity is none %}
+        <p class="dl-auth-lead">This app gets your identity from Tailscale. This request did not arrive through the tailnet.</p>
+        <div class="dl-auth-notice">
+            <strong>Open the tailnet address</strong>
+            <p>Connect to the tailnet, then use the <code>.ts.net</code> address your administrator provided.</p>
+        </div>
+        {% else %}
+        <p class="dl-auth-lead">Tailscale identified you as <code>{{ identity.login }}</code>{% if identity.display_name %} ({{ identity.display_name }}){% endif %}.</p>
+        <div class="dl-auth-notice">
+            {% if disabled %}
+            <strong>This account has been disabled.</strong>
+            <p>Ask your administrator to re-enable it.</p>
+            {% else %}
+            <strong>That identity does not have an account.</strong>
+            <p>Ask your administrator to grant access for this Tailscale identity.</p>
+            <pre>sabermetrics grant-access {{ identity.login }}</pre>
+            {% endif %}
+        </div>
+        {% endif %}
+    {% else %}
+        <div class="dl-eyebrow">Welcome back</div>
+        <h1>Sign In to Deck Lab</h1>
+        <p class="dl-auth-lead">Use the email and password associated with your account.</p>
+
+        {% if error is defined and error %}<div class="dl-auth-error" role="alert">{{ error }}</div>{% endif %}
+        {% if identity %}
+        <div class="dl-auth-notice">
+            <strong>Tailscale found {{ identity.login }}</strong>
+            <p>That identity does not have an account here. You can still sign in with your Deck Lab credentials, or ask your administrator to run <code>sabermetrics grant-access {{ identity.login }}</code>.</p>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('auth.login', next=request.args.get('next')) }}" class="dl-auth-form">
+            {{ form.hidden_tag() }}
+            <label for="email">
+                <span>Email</span>
+                {{ form.email(type="email", placeholder="you@example.com", autocomplete="username", autofocus=true, class="dl-field") }}
+            </label>
+            <label for="password">
+                <span>Password</span>
+                {{ form.password(placeholder="Enter your password", autocomplete="current-password", class="dl-field") }}
+            </label>
+            <button type="submit" class="dl-button dl-button-primary">Sign In</button>
+        </form>
+        {% if config.PASSWORD_RECOVERY_ENABLED %}<a class="dl-auth-recovery" href="{{ url_for('recovery.forgot_password') }}">Forgot password?</a>{% endif %}
+    {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block footer %}<footer class="dl-footer">© 2026 Deck Lab</footer>{% endblock %}

@@ -183,7 +183,7 @@ class DeckLabAdminRepo:
             }
             rows = conn.execute(
                 f"""SELECT u.id,u.email,u.display_name,u.role,u.status,
-                           u.monthly_deck_quota,u.last_login_at,u.created_at,
+                           u.last_login_at,u.created_at,
                        (SELECT COUNT(*) FROM deck_documents d WHERE d.owner_id=u.id) decks,
                        (SELECT COUNT(*) FROM deck_zones z JOIN deck_documents d ON d.id=z.deck_id WHERE d.owner_id=u.id) zones,
                        (SELECT COUNT(*) FROM card_feedback c WHERE c.user_id=u.id) card_fb,

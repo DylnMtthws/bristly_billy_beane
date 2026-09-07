@@ -585,7 +585,16 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
     ``cedh_candidates``. Generated artifacts remain immutable evidence; users
     edit a document created from an artifact instead.
     """
+    tournament_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(tournament_results)")
+    }
+    if "source_entry_id" not in tournament_columns:
+        conn.execute("ALTER TABLE tournament_results ADD COLUMN source_entry_id TEXT")
     conn.executescript("""
+        CREATE TABLE IF NOT EXISTS research_source_state (
+            id INTEGER PRIMARY KEY CHECK(id=1),
+            state_json TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS deck_documents (
             id TEXT PRIMARY KEY,
             owner_id TEXT NOT NULL REFERENCES users(id),
@@ -648,7 +657,7 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
             display_mode TEXT NOT NULL DEFAULT 'text',
             group_mode TEXT NOT NULL DEFAULT 'zone',
             sort_mode TEXT NOT NULL DEFAULT 'manual',
-            density TEXT NOT NULL DEFAULT 'comfortable',
+            density TEXT NOT NULL DEFAULT 'compact',
             collapsed_json TEXT NOT NULL DEFAULT '[]',
             PRIMARY KEY(owner_id, deck_id)
         );
@@ -662,7 +671,9 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
             dim_inactive INTEGER NOT NULL DEFAULT 0,
             pan_x REAL NOT NULL DEFAULT 0,
             pan_y REAL NOT NULL DEFAULT 0,
-            zoom REAL NOT NULL DEFAULT 1
+            zoom REAL NOT NULL DEFAULT 1,
+            canvas_width INTEGER NOT NULL DEFAULT 1600,
+            canvas_height INTEGER NOT NULL DEFAULT 900
         );
 
         CREATE TABLE IF NOT EXISTS deck_mutations (
@@ -681,6 +692,26 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             revoked_at TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS deck_tags (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            normalized_name TEXT NOT NULL UNIQUE,
+            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_deck_tags_name
+            ON deck_tags(name COLLATE NOCASE);
+
+        CREATE TABLE IF NOT EXISTS deck_tag_assignments (
+            deck_id TEXT NOT NULL REFERENCES deck_documents(id) ON DELETE CASCADE,
+            tag_id TEXT NOT NULL REFERENCES deck_tags(id) ON DELETE CASCADE,
+            created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(deck_id, tag_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_deck_tag_assignments_tag
+            ON deck_tag_assignments(tag_id, created_at DESC);
 
         CREATE TABLE IF NOT EXISTS activity_events (
             id TEXT PRIMARY KEY,
@@ -701,9 +732,39 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
             last_overview_at TIMESTAMP NOT NULL
         );
         """)
+    presentation_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(deck_presentations)")
+    }
+    if "canvas_width" not in presentation_columns:
+        conn.execute(
+            "ALTER TABLE deck_presentations ADD COLUMN canvas_width "
+            "INTEGER NOT NULL DEFAULT 1600"
+        )
+    if "canvas_height" not in presentation_columns:
+        conn.execute(
+            "ALTER TABLE deck_presentations ADD COLUMN canvas_height "
+            "INTEGER NOT NULL DEFAULT 900"
+        )
+    conn.executemany(
+        "INSERT OR IGNORE INTO deck_tags(id,name,normalized_name) VALUES(?,?,?)",
+        [
+            ("tag-turbo", "Turbo", "turbo"),
+            ("tag-midrange", "Midrange", "midrange"),
+            ("tag-control", "Control", "control"),
+            ("tag-stax", "Stax", "stax"),
+            ("tag-combo", "Combo", "combo"),
+            ("tag-tempo", "Tempo", "tempo"),
+            ("tag-toolbox", "Toolbox", "toolbox"),
+            ("tag-reanimator", "Reanimator", "reanimator"),
+        ],
+    )
     conn.execute(
         "INSERT OR IGNORE INTO _schema_version(version, description) "
         "VALUES ('deck-documents-v1', 'Editable Deck Lab documents and activity')"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO _schema_version(version, description) "
+        "VALUES ('deck-tags-v1', 'Global deck tags and per-deck assignments')"
     )
     conn.commit()
 

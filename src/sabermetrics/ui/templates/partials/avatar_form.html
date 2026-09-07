@@ -1,0 +1,27 @@
+{% from 'partials/avatar.html' import avatar %}
+<section class="avatar-settings">
+    <h2>Profile picture</h2>
+    <p class="avatar-help">Make it yours with a photo, an emoji, or an icon.</p>
+    <form method="post" action="{{ url_for('main.profile_avatar') }}" enctype="multipart/form-data" data-avatar-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="avatar-preview" data-avatar-preview>{{ avatar(account_avatar, avatar_icons, large=true) }}<span>Shown in your account menu</span></div>
+        <fieldset class="avatar-kind"><legend>Choose a picture type</legend>
+            {% for key, label in [('image','Photo'),('emoji','Emoji'),('icon','Icon')] %}<label><input type="radio" name="avatar_kind" value="{{ key }}" {% if account_avatar.kind==key %}checked{% endif %}> {{ label }}</label>{% endfor %}
+        </fieldset>
+        <div data-avatar-panel="image">
+            <label for="avatar-image">Upload a photo</label>
+            <input id="avatar-image" type="file" name="avatar_image" accept="image/png,image/jpeg,image/webp">
+            <p class="avatar-help">PNG, JPEG, or WebP · up to 10 MB and 25 megapixels. Photos are cropped to a square, centered, and shown in a circle.</p>
+        </div>
+        <div data-avatar-panel="emoji">
+            <div class="avatar-choices" aria-label="Suggested emojis">{% for emoji in avatar_emojis %}<button type="button" data-avatar-emoji="{{ emoji }}" aria-label="Use {{ emoji }}">{{ emoji }}</button>{% endfor %}</div>
+            <label for="avatar-emoji">Or enter your own emoji</label>
+            <input id="avatar-emoji" name="avatar_emoji" value="{{ account_avatar.value if account_avatar.kind=='emoji' else current_user.avatar_emoji or '🎣' }}" maxlength="16" autocomplete="off">
+        </div>
+        <fieldset data-avatar-panel="icon" class="avatar-icon-options"><legend>Choose an icon</legend>
+            {% for key, item in avatar_icons.items() %}<label><input type="radio" name="avatar_icon" value="{{ key }}" {% if account_avatar.kind=='icon' and account_avatar.value==key or account_avatar.kind!='icon' and loop.first %}checked{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ item[1] }}"></path></svg><span>{{ item[0] }}</span></label>{% endfor %}
+        </fieldset>
+        <p class="avatar-help" data-avatar-status role="status" aria-live="polite">Changes are saved when you choose Save picture.</p>
+        <div class="avatar-actions"><button type="submit" class="avatar-save">Save picture</button><button type="submit" formaction="{{ url_for('main.remove_profile_avatar') }}" formnovalidate>Reset to default</button></div>
+    </form>
+</section>

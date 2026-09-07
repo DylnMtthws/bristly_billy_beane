@@ -58,13 +58,19 @@ def library():
     query = (request.args.get("q") or "").strip()
     active_filter = request.args.get("filter", "all")
     sort = request.args.get("sort", "edited")
-    documents = _repo().list_for_owner(
+    if active_filter not in {"all", "favorites", "recent"}:
+        active_filter = "all"
+    if sort not in {"edited", "name"}:
+        sort = "edited"
+    repo = _repo()
+    documents = repo.list_for_owner(
         current_user.id,
         query=query,
         favorite=active_filter == "favorites",
         recent_days=30 if active_filter == "recent" else None,
         sort=sort,
     )
+    library_stats = repo.library_stats(current_user.id)
     generated = db.DecksRepo(current_app.config["DB_PATH"]).list_for_owner(
         current_user.id, limit=50
     )
@@ -90,11 +96,6 @@ def library():
     candidates = [
         c for c in candidates if ("candidate", str(c["candidate_id"])) not in converted
     ]
-    quota_used = db.DecksRepo(current_app.config["DB_PATH"]).count_this_month(
-        current_user.id
-    ) + db.CedhCandidatesRepo(current_app.config["DB_PATH"]).count_this_month(
-        current_user.id
-    )
     return render_template(
         "deck_lab/library.html",
         documents=documents,
@@ -104,8 +105,7 @@ def library():
         query=query,
         active_filter=active_filter,
         sort=sort,
-        quota_used=quota_used,
-        quota=current_user.monthly_deck_quota,
+        library_stats=library_stats,
     )
 
 
@@ -163,6 +163,12 @@ def deck_json(deck_id: str):
         return jsonify(error="not_found"), 404
 
 
+@bp.get("/api/deck-tags")
+def deck_tags():
+    query = (request.args.get("q") or "").strip()
+    return jsonify(results=_repo().search_tags(query=query, limit=20))
+
+
 @bp.post("/build/deck/<deck_id>/favorite")
 def favorite_deck(deck_id: str):
     try:
@@ -177,6 +183,23 @@ def favorite_deck(deck_id: str):
     except DeckNotFound:
         abort(404)
     return redirect(request.referrer or url_for("builder.library"))
+
+
+@bp.post("/build/deck/<deck_id>/delete")
+def delete_deck(deck_id: str):
+    try:
+        custom_surface = _repo().delete(current_user.id, deck_id)
+    except DeckNotFound:
+        abort(404)
+    if custom_surface:
+        asset_dir = Path(current_app.config["DECK_LAB_ASSET_DIR"]).resolve()
+        surface_path = Path(custom_surface).resolve()
+        if surface_path.parent == asset_dir:
+            try:
+                surface_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return redirect(url_for("builder.library"))
 
 
 @bp.post("/api/decks/<deck_id>/commands")

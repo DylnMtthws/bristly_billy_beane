@@ -4,6 +4,9 @@ data/
 tests/
 build/
 *.db
-.git/
+.git
+.deck-lab-dev/
+*.db-wal
+*.db-shm
 __pycache__/
 *.pyc

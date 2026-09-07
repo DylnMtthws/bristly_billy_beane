@@ -41,6 +41,9 @@ class ResearchRepo:
     @staticmethod
     def _scope(window_days: int) -> tuple[str, str, str]:
         end = date.today() + timedelta(days=1)
+        if window_days == 0:
+            beginning = date.min.isoformat()
+            return beginning, end.isoformat(), beginning
         start = end - timedelta(days=window_days)
         prior = start - timedelta(days=window_days)
         return start.isoformat(), end.isoformat(), prior.isoformat()
@@ -63,7 +66,7 @@ class ResearchRepo:
         page: int = 1,
         per_page: int = 24,
     ) -> dict[str, Any]:
-        window_days = max(7, min(window_days, 365))
+        window_days = 0 if window_days == 0 else max(7, min(window_days, 365))
         page = max(1, page)
         per_page = max(1, min(per_page, 100))
         start, end, prior = self._scope(window_days)
@@ -118,13 +121,13 @@ class ResearchRepo:
         with self._connect() as conn:
             total_entries = int(
                 conn.execute(
-                    "SELECT COUNT(*) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
+                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
                     (start, end),
                 ).fetchone()[0]
             )
             prior_entries = int(
                 conn.execute(
-                    "SELECT COUNT(*) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
+                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
                     (prior, start),
                 ).fetchone()[0]
             )
@@ -271,7 +274,8 @@ class ResearchRepo:
     def commander_detail(
         self, card_id: str, *, window_days: int = 90
     ) -> dict[str, Any] | None:
-        start, end, prior = self._scope(max(7, min(window_days, 365)))
+        window_days = 0 if window_days == 0 else max(7, min(window_days, 365))
+        start, end, prior = self._scope(window_days)
         with self._connect() as conn:
             card = conn.execute(
                 "SELECT id,oracle_id,name,type_line,mana_cost,cmc,oracle_text,color_identity,image_uri "
@@ -282,13 +286,13 @@ class ResearchRepo:
                 return None
             current_total = int(
                 conn.execute(
-                    "SELECT COUNT(*) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
+                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
                     (start, end),
                 ).fetchone()[0]
             )
             prior_total = int(
                 conn.execute(
-                    "SELECT COUNT(*) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
+                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM tournament_results WHERE tournament_date>=? AND tournament_date<?",
                     (prior, start),
                 ).fetchone()[0]
             )

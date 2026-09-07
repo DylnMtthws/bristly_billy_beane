@@ -12,19 +12,4 @@
     if (navigator.clipboard) navigator.clipboard.writeText(value);
     copy.textContent = "Copied";
   });
-  document.querySelectorAll("[data-quota-form]").forEach(function (form) {
-    form.addEventListener("submit", function (event) {
-      event.preventDefault();
-      var label = form.querySelector("[data-save-label]");
-      label.textContent = "Saving…";
-      fetch(form.action, {
-        method: "POST",
-        body: new FormData(form),
-        headers: { "X-Requested-With": "XMLHttpRequest" }
-      }).then(function (response) {
-        return response.json().then(function (body) { if (!response.ok) throw new Error(body.error); return body; });
-      }).then(function () { label.textContent = "Saved"; })
-        .catch(function (error) { label.textContent = error.message || "Error"; });
-    });
-  });
 })();

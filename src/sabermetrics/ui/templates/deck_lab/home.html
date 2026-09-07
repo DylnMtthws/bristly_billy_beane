@@ -3,7 +3,6 @@
 {% block content %}
 <section class="dl-home-hero">
     <div>
-        <div class="dl-kicker">Invite-only beta · {{ player_count }} players</div>
         <h1>Research the format.<br>Build the deck.</h1>
         <p>Deck Lab reads competitive Commander tournament results to show what is actually being played, then gives you a workspace to organize the ninety-nine the way you play it.</p>
         <div class="dl-home-actions">
@@ -19,16 +18,14 @@
 
 <section class="dl-door-grid" aria-label="Deck Lab areas">
     {% if config.DECK_LAB_RESEARCH_ENABLED %}<article class="dl-card dl-door">
-        <div class="dl-eyebrow">Research · {{ commander_count }} commanders tracked</div>
         <h2>Find out what is actually winning</h2>
         <p>Compare meta share and top-16 finishes against a stated window. Open any commander to see the cards its recorded lists run.</p>
-        <a class="dl-button" href="{{ url_for('research.index') }}">Open Research</a>
+        <div class="dl-door-actions"><a class="dl-button dl-button-primary" href="{{ url_for('research.index') }}">Open Research</a></div>
     </article>{% endif %}
     {% if config.DECK_LAB_BUILDER_ENABLED %}<article class="dl-card dl-door">
-        <div class="dl-eyebrow">Build · {{ document_count }} of your decks</div>
         <h2>Lay it out like it is on the table</h2>
         <p class="desktop-copy">Name your own zones and switch between a list, grid, spoiler, and desktop playmat without converting the deck.</p><p class="mobile-copy">Name your own zones and switch between list, grid, and spoiler views without changing the deck.</p>
-        <div><a class="dl-button dl-button-primary" href="{{ url_for('builder.library') }}">New deck</a> <a class="dl-button" href="{{ url_for('builder.library') }}">Open decks</a></div>
+        <div class="dl-door-actions"><a class="dl-button dl-button-primary" href="{{ url_for('builder.library') }}">New deck</a><a class="dl-button" href="{{ url_for('builder.library') }}">Open decks</a></div>
     </article>{% endif %}
 </section>
 
@@ -46,10 +43,10 @@
     <div class="dl-page-head"><div><div class="dl-eyebrow">Pick up where you left off</div></div><a class="dl-button dl-button-quiet" href="{{ url_for('builder.library') }}">All decks →</a></div>
     <div class="dl-library-grid">
     {% for d in recent_documents[:2] %}
-        <a class="dl-card dl-deck-card" href="{{ url_for('builder.deck', deck_id=d.id) }}"><div><h2>{{ d.title }}</h2><p>{{ d.commander_names or 'Commander not chosen' }}</p></div><time class="dl-mono">Edited {{ d.updated_at }}</time></a>
+        {% set card_count = d.library_count + d.commander_count %}
+        <a class="dl-card dl-deck-card" href="{{ url_for('builder.deck', deck_id=d.id) }}"><div><h2>{{ d.title }}</h2><p>{{ d.commander_names or 'Commander not chosen' }}</p></div><div class="dl-deck-recency"><span>{{ card_count }} card{% if card_count != 1 %}s{% endif %}</span><span aria-hidden="true">·</span><time datetime="{{ d.updated_at }}">Updated {{ d.updated_at|short_date }}</time></div></a>
     {% endfor %}
     </div>
 </section>
 {% endif %}
 {% endblock %}
-{% block footer %}<footer class="dl-footer">Tournament data · stated windows · updated from the configured corpus</footer>{% endblock %}

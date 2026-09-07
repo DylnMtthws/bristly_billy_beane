@@ -3,6 +3,7 @@
 import logging
 import os
 import secrets
+from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
 
@@ -12,6 +13,18 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from sabermetrics.config import resolve_db_path
 
 logger = logging.getLogger(__name__)
+
+
+def _short_date(value: object) -> str:
+    """Turn an ISO timestamp into compact, consumer-facing calendar text."""
+    try:
+        stamp = datetime.fromisoformat(str(value))
+    except ValueError:
+        return "recently"
+    label = f"{stamp.strftime('%b')} {stamp.day}"
+    if stamp.year != datetime.now(stamp.tzinfo).year:
+        label += f", {stamp.year}"
+    return label
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -35,6 +48,7 @@ def create_app(db_path: Path | None = None) -> Flask:
         template_folder=str(Path(__file__).parent / "templates"),
         static_folder=str(Path(__file__).parent / "static"),
     )
+    app.jinja_env.filters["short_date"] = _short_date
 
     db_path = resolve_db_path(db_path)
     app.config["DB_PATH"] = db_path
@@ -144,6 +158,15 @@ def create_app(db_path: Path | None = None) -> Flask:
     from sabermetrics.ui.issue_feedback import init_feedback
 
     init_feedback(app)
+
+    @app.before_request
+    def _limit_avatar_upload():
+        from flask import request
+
+        if request.endpoint == "main.profile_avatar" and request.method == "POST":
+            # Bound the multipart body before CSRF processing parses the form.
+            request.max_content_length = 10_000_000 + 65_536
+
     csrf.init_app(app)
     limiter.init_app(app)
 
@@ -164,25 +187,35 @@ def create_app(db_path: Path | None = None) -> Flask:
 
     init_recovery(app)
 
+    from sabermetrics import db
+    from sabermetrics.avatars import (
+        DEFAULT_EMOJI,
+        EMOJIS,
+        ICONS,
+        avatar_for,
+        ensure_avatar_schema,
+    )
+
+    if db_path.exists():
+        with db.connect(db_path) as conn:
+            ensure_avatar_schema(conn)
+            conn.commit()
+
     @app.context_processor
-    def _deck_lab_shell_context() -> dict[str, object]:
-        if not app.config.get("DECK_LAB_REDESIGN_ENABLED"):
-            return {}
+    def _avatar_context():
         from flask_login import current_user
 
-        if not current_user.is_authenticated:
-            return {"shell_quota_used": 0, "shell_quota": 0}
-        generated = db.DecksRepo(db_path).count_this_month(current_user.id)
-        candidates = db.CedhCandidatesRepo(db_path).count_this_month(current_user.id)
+        avatar = {"kind": "emoji", "value": DEFAULT_EMOJI}
+        if current_user.is_authenticated:
+            avatar = avatar_for(db_path, current_user.id, current_user.avatar_emoji)
         return {
-            "shell_quota_used": generated + candidates,
-            "shell_quota": current_user.monthly_deck_quota,
+            "account_avatar": avatar,
+            "avatar_icons": ICONS,
+            "avatar_emojis": EMOJIS,
         }
 
     # A thread-pool job cannot survive a process restart. Make that state
     # explicit on boot instead of leaving a status page polling forever.
-    from sabermetrics import db
-
     interrupted = (
         db.BuildJobsRepo(db_path).fail_interrupted() if db_path.exists() else 0
     )
@@ -248,6 +281,12 @@ def run_server(
         raise ValueError("SABER_DECK_LAB_DEV previews must bind to localhost.")
 
     app = create_app(db_path)
+    if _env_bool("SABER_RESEARCH_SYNC", False):
+        if app.config["DECK_LAB_DEV_MODE"] or not os.environ.get("MTG_V1_DSN"):
+            raise ValueError("Research sync requires MTG_V1_DSN and dev mode disabled")
+        from sabermetrics.research_sync import start_refresh_worker
+
+        start_refresh_worker(Path(app.config["DB_PATH"]))
     logger.info("Effective bind: %s:%s (trusted proxy: %s)", host, port, trusted_proxy)
     print(f"Sabermetrics UI running at http://{host}:{port}")
 

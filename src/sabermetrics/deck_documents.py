@@ -6,6 +6,7 @@ import hashlib
 import json
 import secrets
 import sqlite3
+import unicodedata
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -30,6 +31,17 @@ class RevisionConflict(DeckDocumentError):
 
 class InvalidCommand(DeckDocumentError):
     pass
+
+
+def _clean_tag_name(value: object) -> tuple[str, str]:
+    name = " ".join(unicodedata.normalize("NFKC", str(value)).split())
+    if not 2 <= len(name) <= 32:
+        raise InvalidCommand("Tags must be between 2 and 32 characters.")
+    if any(not (char.isalnum() or char in " &+'-/") for char in name):
+        raise InvalidCommand(
+            "Tags may use letters, numbers, spaces, &, +, -, /, and '."
+        )
+    return name, name.casefold()
 
 
 def _now() -> str:
@@ -177,7 +189,9 @@ class DeckDocumentRepo:
                 (unsorted_id, deck_id),
             )
             conn.execute(
-                "INSERT INTO deck_presentations(deck_id) VALUES (?)", (deck_id,)
+                "INSERT INTO deck_presentations(deck_id,canvas_width,canvas_height) "
+                "VALUES (?,1600,900)",
+                (deck_id,),
             )
             if commander_card_id:
                 card = self._card_row(conn, commander_card_id)
@@ -373,15 +387,102 @@ class DeckDocumentRepo:
                 params,
             ).fetchall()
             out = [dict(row) for row in rows]
-            for item in out:
-                zones = conn.execute(
-                    """SELECT z.name, COALESCE(SUM(e.quantity),0) AS count
-                       FROM deck_zones z LEFT JOIN deck_entries e ON e.zone_id=z.id
-                       WHERE z.deck_id=? GROUP BY z.id ORDER BY z.sort_order LIMIT 4""",
-                    (item["id"],),
+            commander_colors_by_deck: dict[str, set[str]] = {}
+            commander_decks: set[str] = set()
+            commander_card_by_deck: dict[str, str] = {}
+            commander_image_by_deck: dict[str, str] = {}
+            tags_by_deck: dict[str, list[dict[str, Any]]] = {}
+            if out:
+                deck_ids = [str(item["id"]) for item in out]
+                placeholders = ",".join("?" for _ in deck_ids)
+                commander_rows = conn.execute(
+                    "SELECT e.deck_id,e.card_id,e.color_identity,"
+                    "COALESCE(e.image_uri,c.image_uri) AS image_uri "
+                    "FROM deck_entries e LEFT JOIN cards c ON c.id=e.card_id "
+                    f"WHERE e.is_commander=1 AND e.deck_id IN ({placeholders}) "
+                    "ORDER BY e.deck_id,e.sort_order",
+                    deck_ids,
                 ).fetchall()
-                item["zones"] = [dict(z) for z in zones if z["count"]]
+                for commander in commander_rows:
+                    deck_id = str(commander["deck_id"])
+                    commander_decks.add(deck_id)
+                    if commander["card_id"] and deck_id not in commander_card_by_deck:
+                        commander_card_by_deck[deck_id] = str(commander["card_id"])
+                    if (
+                        commander["image_uri"]
+                        and deck_id not in commander_image_by_deck
+                    ):
+                        commander_image_by_deck[deck_id] = str(commander["image_uri"])
+                    commander_colors_by_deck.setdefault(deck_id, set()).update(
+                        _json(commander["color_identity"], [])
+                    )
+                tag_rows = conn.execute(
+                    "SELECT a.deck_id,t.id,t.name FROM deck_tag_assignments a "
+                    "JOIN deck_tags t ON t.id=a.tag_id "
+                    f"WHERE a.deck_id IN ({placeholders}) "
+                    "ORDER BY a.deck_id,a.created_at,t.name COLLATE NOCASE",
+                    deck_ids,
+                ).fetchall()
+                for tag in tag_rows:
+                    tags_by_deck.setdefault(str(tag["deck_id"]), []).append(
+                        {"id": tag["id"], "name": tag["name"]}
+                    )
+            for item in out:
+                deck_id = str(item["id"])
+                commander_colors = commander_colors_by_deck.get(deck_id, set())
+                item["color_identity"] = [
+                    color for color in "WUBRG" if color in commander_colors
+                ]
+                item["is_colorless"] = (
+                    deck_id in commander_decks and not commander_colors
+                )
+                item["commander_card_id"] = commander_card_by_deck.get(deck_id)
+                item["commander_image_uri"] = commander_image_by_deck.get(deck_id)
+                tags = tags_by_deck.get(deck_id, [])
+                item["tags"] = tags[:4]
+                item["hidden_tag_count"] = max(0, len(tags) - 4)
             return out
+
+    def search_tags(self, query: str = "", limit: int = 20) -> list[dict[str, Any]]:
+        """Find canonical tags, ranked by use across all Deck Lab users."""
+        normalized_query = unicodedata.normalize("NFKC", query).strip().casefold()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT t.id,t.name,COUNT(a.deck_id) AS usage_count
+                   FROM deck_tags t
+                   LEFT JOIN deck_tag_assignments a ON a.tag_id=t.id
+                   WHERE t.normalized_name LIKE ?
+                   GROUP BY t.id
+                   ORDER BY usage_count DESC,t.name COLLATE NOCASE
+                   LIMIT ?""",
+                (f"%{normalized_query}%", max(1, min(limit, 50))),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def library_stats(self, owner_id: str) -> dict[str, int]:
+        """Return stable counts for the deck-library header and filters."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT
+                       COUNT(*) AS total_count,
+                       COALESCE(SUM(CASE WHEN favorite=1 THEN 1 ELSE 0 END),0)
+                           AS favorite_count,
+                       COALESCE(SUM(CASE
+                           WHEN datetime(updated_at)>=datetime('now','-30 days')
+                           THEN 1 ELSE 0 END),0) AS recent_count,
+                       COALESCE(SUM(CASE
+                           WHEN datetime(updated_at)>=datetime('now','-7 days')
+                           THEN 1 ELSE 0 END),0) AS edited_week_count
+                   FROM deck_documents WHERE owner_id=?""",
+                (owner_id,),
+            ).fetchone()
+        keys = (
+            "total_count",
+            "favorite_count",
+            "recent_count",
+            "edited_week_count",
+        )
+        return {key: int(row[key]) for key in keys}
 
     def get(self, owner_id: str, deck_id: str) -> dict[str, Any]:
         return self._get(deck_id, owner_id=owner_id)
@@ -425,8 +526,13 @@ class DeckDocumentRepo:
             entries = [
                 dict(e)
                 for e in conn.execute(
-                    "SELECT * FROM deck_entries WHERE deck_id=? "
-                    "ORDER BY is_commander DESC, sort_order, name",
+                    """SELECT e.id,e.deck_id,e.zone_id,e.card_id,e.oracle_id,
+                              e.name,e.quantity,e.is_commander,e.sort_order,e.role,
+                              e.type_line,e.mana_cost,e.mana_value,e.oracle_text,
+                              e.color_identity,COALESCE(e.image_uri,c.image_uri) AS image_uri
+                       FROM deck_entries e LEFT JOIN cards c ON c.id=e.card_id
+                       WHERE e.deck_id=? """
+                    "ORDER BY e.is_commander DESC, e.sort_order, e.name",
                     (deck_id,),
                 ).fetchall()
             ]
@@ -441,6 +547,15 @@ class DeckDocumentRepo:
                 if owner_id
                 else None
             )
+            tags = [
+                dict(tag)
+                for tag in conn.execute(
+                    """SELECT t.id,t.name FROM deck_tag_assignments a
+                       JOIN deck_tags t ON t.id=a.tag_id WHERE a.deck_id=?
+                       ORDER BY a.created_at,t.name COLLATE NOCASE""",
+                    (deck_id,),
+                ).fetchall()
+            ]
         for entry in entries:
             entry["color_identity"] = _json(entry.get("color_identity"), [])
         document["zones"] = zones
@@ -458,11 +573,13 @@ class DeckDocumentRepo:
                 "display_mode": "text",
                 "group_mode": "zone",
                 "sort_mode": "manual",
-                "density": "comfortable",
+                "density": "compact",
                 "collapsed_json": "[]",
             }
         )
         document["validation"] = self.validate(entries)
+        document["tags"] = tags
+        document["tag_suggestions"] = self.search_tags(limit=40)
         return document
 
     @staticmethod
@@ -700,6 +817,45 @@ class DeckDocumentRepo:
                 "UPDATE deck_documents SET favorite=CASE favorite WHEN 1 THEN 0 ELSE 1 END WHERE id=?",
                 (deck_id,),
             )
+        elif kind == "add_tag":
+            name, normalized_name = _clean_tag_name(command.get("name") or "")
+            tag = conn.execute(
+                "SELECT id FROM deck_tags WHERE normalized_name=?",
+                (normalized_name,),
+            ).fetchone()
+            if tag is None:
+                tag_id = db.new_id()
+                conn.execute(
+                    "INSERT INTO deck_tags(id,name,normalized_name,created_by) "
+                    "VALUES(?,?,?,?)",
+                    (tag_id, name, normalized_name, owner_id),
+                )
+            else:
+                tag_id = str(tag["id"])
+            assigned = conn.execute(
+                "SELECT 1 FROM deck_tag_assignments WHERE deck_id=? AND tag_id=?",
+                (deck_id, tag_id),
+            ).fetchone()
+            if assigned is None:
+                tag_count = conn.execute(
+                    "SELECT COUNT(*) FROM deck_tag_assignments WHERE deck_id=?",
+                    (deck_id,),
+                ).fetchone()[0]
+                if int(tag_count) >= 6:
+                    raise InvalidCommand("A deck can have up to six tags.")
+                conn.execute(
+                    "INSERT INTO deck_tag_assignments(deck_id,tag_id,created_by) "
+                    "VALUES(?,?,?)",
+                    (deck_id, tag_id, owner_id),
+                )
+        elif kind == "remove_tag":
+            tag_id = str(command.get("tag_id") or "")
+            if not tag_id:
+                raise InvalidCommand("Choose a tag to remove.")
+            conn.execute(
+                "DELETE FROM deck_tag_assignments WHERE deck_id=? AND tag_id=?",
+                (deck_id, tag_id),
+            )
         elif kind == "create_zone":
             name = str(command.get("name") or "New zone").strip()[:60]
             if not name:
@@ -881,6 +1037,36 @@ class DeckDocumentRepo:
                 "UPDATE deck_entries SET zone_id=?,sort_order=? WHERE id=?",
                 (zone_id, order, entry_id),
             )
+        elif kind == "set_role":
+            entry_id = str(command.get("entry_id") or "")
+            entry = self._entry_exists(conn, deck_id, entry_id)
+            if entry["is_commander"]:
+                raise InvalidCommand("Commanders do not use card roles.")
+            role = str(command.get("role") or "").strip().lower()
+            valid_roles = {
+                "",
+                "ramp",
+                "draw",
+                "removal",
+                "protection",
+                "counter",
+                "free",
+                "tutor",
+                "combo",
+                "engine",
+                "board_wipe",
+                "recursion",
+                "wincon",
+                "land",
+                "utility",
+                "other",
+            }
+            if role not in valid_roles:
+                raise InvalidCommand("Choose a valid card role.")
+            conn.execute(
+                "UPDATE deck_entries SET role=? WHERE id=?",
+                (role or None, entry_id),
+            )
         elif kind == "update_view":
             option_sets = {
                 "view_mode": {"table", "playmat"},
@@ -899,7 +1085,8 @@ class DeckDocumentRepo:
             if "collapsed" in command:
                 values["collapsed_json"] = json.dumps(command["collapsed"])
             conn.execute(
-                "INSERT OR IGNORE INTO deck_view_preferences(owner_id,deck_id) VALUES(?,?)",
+                "INSERT OR IGNORE INTO deck_view_preferences(owner_id,deck_id,density) "
+                "VALUES(?,?,'compact')",
                 (owner_id, deck_id),
             )
             for key, value in values.items():
@@ -913,6 +1100,7 @@ class DeckDocumentRepo:
                 "felt-weave",
                 "deep-field",
                 "graph-paper",
+                "night-ritual",
                 "void",
             }
             updates: dict[str, Any] = {}
@@ -929,6 +1117,14 @@ class DeckDocumentRepo:
                     updates[key] = max(-10000.0, min(10000.0, float(command[key])))
             if "zoom" in command:
                 updates["zoom"] = max(0.25, min(2.5, float(command["zoom"])))
+            if "canvas_width" in command:
+                updates["canvas_width"] = max(
+                    1200, min(2400, int(command["canvas_width"]))
+                )
+            if "canvas_height" in command:
+                updates["canvas_height"] = max(
+                    900, min(1800, int(command["canvas_height"]))
+                )
             for key, value in updates.items():
                 conn.execute(
                     f"UPDATE deck_presentations SET {key}=? WHERE deck_id=?",
@@ -938,11 +1134,21 @@ class DeckDocumentRepo:
             zone_id = str(command.get("zone_id") or "")
             if not self._zone_exists(conn, deck_id, zone_id):
                 raise InvalidCommand("Zone not found.")
+            presentation = conn.execute(
+                "SELECT canvas_width,canvas_height FROM deck_presentations WHERE deck_id=?",
+                (deck_id,),
+            ).fetchone()
+            max_x = max(
+                0.0, float(presentation["canvas_width"] if presentation else 1600) - 180
+            )
+            max_y = max(
+                0.0, float(presentation["canvas_height"] if presentation else 900) - 100
+            )
             conn.execute(
                 "UPDATE deck_zones SET x=?,y=? WHERE id=?",
                 (
-                    max(-5000.0, min(5000.0, float(command.get("x") or 0))),
-                    max(-5000.0, min(5000.0, float(command.get("y") or 0))),
+                    max(0.0, min(max_x, float(command.get("x") or 0))),
+                    max(0.0, min(max_y, float(command.get("y") or 0))),
                     zone_id,
                 ),
             )
@@ -970,6 +1176,22 @@ class DeckDocumentRepo:
                 "UPDATE deck_share_grants SET revoked_at=? WHERE deck_id=? AND revoked_at IS NULL",
                 (_now(), deck_id),
             )
+
+    def delete(self, owner_id: str, deck_id: str) -> str | None:
+        """Delete an owned editable deck and return its custom playmat path."""
+        with self._connect() as conn:
+            self._owned_revision(conn, owner_id, deck_id)
+            presentation = conn.execute(
+                "SELECT custom_surface_path FROM deck_presentations WHERE deck_id=?",
+                (deck_id,),
+            ).fetchone()
+            self._event(conn, owner_id, "deck.deleted", deck_id)
+            conn.execute("DELETE FROM deck_documents WHERE id=?", (deck_id,))
+        return (
+            str(presentation["custom_surface_path"])
+            if presentation and presentation["custom_surface_path"]
+            else None
+        )
 
     def set_custom_surface(self, owner_id: str, deck_id: str, path: str) -> str | None:
         """Select a validated uploaded surface and return the replaced path."""

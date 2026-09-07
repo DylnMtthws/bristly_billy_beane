@@ -58,6 +58,12 @@ def test_commander_metrics_and_inclusion_denominators(tmp_path):
     assert row["finish_coverage"] == 1
     assert row["top16_rate"] == 1.0
 
+    all_time = repo.commanders(query="Kinnan", window_days=0)
+    assert all_time["recorded_entries"] == 4
+    assert all_time["window_days"] == 0
+    assert all_time["results"][0]["entries"] == 3
+    assert all_time["results"][0]["trend"] is None
+
     detail = repo.commander_detail("kinnan", window_days=90)
     assert detail is not None
     assert detail["inclusion_denominator"] == 1

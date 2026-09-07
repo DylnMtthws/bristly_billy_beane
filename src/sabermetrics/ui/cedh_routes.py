@@ -2,9 +2,7 @@
 
 Separate blueprint from the casual portal because the two are different
 products sharing an account system. Everything here is login-gated, owner-
-scoped and counted against the same per-user monthly quota and the same global
-cost ceiling as the legacy generator — a lab run spends tokens, and a quota
-that counted only one of the two paths would not be a quota.
+scoped. Model calls share the global cost ceiling with the legacy generator.
 
 Provenance is not optional decoration on these pages. Every candidate view
 states which corpus the card facts came from, whether tournament evidence
@@ -169,7 +167,6 @@ def index():
     lab, modes = build_default_lab(db_path=str(db_path))
     settings = load_cedh_settings()
     repo = db.CedhCandidatesRepo(db_path)
-    used = repo.count_this_month(current_user.id)
 
     return render_template(
         "cedh/lab.html",
@@ -177,8 +174,6 @@ def index():
         modes=modes,
         settings=settings,
         candidates=repo.list_for_owner(current_user.id, limit=25),
-        quota_used=used,
-        quota=current_user.monthly_deck_quota,
     )
 
 
@@ -195,18 +190,6 @@ def build():
             return jsonify(error="cost_ceiling_reached"), 503
         flash(
             "The lab is paused: the monthly cost ceiling has been reached.",
-            "error",
-        )
-        return redirect(url_for("cedh.index"))
-
-    repo = db.CedhCandidatesRepo(db_path)
-    used = repo.count_this_month(current_user.id)
-    quota = current_user.monthly_deck_quota
-    if used >= quota:
-        if _wants_json():
-            return jsonify(error="quota_exhausted", used=used, quota=quota), 429
-        flash(
-            f"Monthly limit reached ({used}/{quota} builds).",
             "error",
         )
         return redirect(url_for("cedh.index"))

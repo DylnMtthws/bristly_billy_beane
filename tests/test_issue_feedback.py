@@ -357,16 +357,59 @@ def test_auth_csrf_disabled_accounts_and_disabled_feature(app, client, user, pro
     db.UsersRepo(app.config["DB_PATH"]).set_status(user, "disabled")
     assert client.post("/feedback/submit", data=data).status_code == 401
     db.UsersRepo(app.config["DB_PATH"]).set_status(user, "active")
-    app.config["LINEAR_FEEDBACK_ENABLED"] = False
+    app.config["FEEDBACK_ENABLED"] = False
     assert client.post("/feedback/submit", data=data).status_code == 503
     assert provider["calls"] == []
 
 
 def test_ui_only_for_signed_in_users(client, app):
-    assert b'id="feedback-launcher"' in client.get("/profile").data
+    page = client.get("/profile").data
+    assert b'id="feedback-launcher"' in page
+    assert b'class="feedback-launcher-icon"' in page
+    assert b"<span>Feedback</span>" not in page
     assert b'id="feedback-launcher"' not in app.test_client().get("/login").data
-    app.config["LINEAR_FEEDBACK_ENABLED"] = False
+    app.config["FEEDBACK_ENABLED"] = False
     assert b'id="feedback-launcher"' not in client.get("/profile").data
+
+
+def test_dev_preview_feedback_is_visible_and_saved_locally(tmp_path, monkeypatch):
+    for name, value in {
+        "LINEAR_FEEDBACK_ENABLED": "false",
+        "SABER_DECK_LAB_DEV": "1",
+        "SABER_DECK_LAB_REDESIGN": "1",
+        "SABER_AUTH_MODE": "password",
+        "SABER_SECRET_KEY": "test-only-local-feedback-session",
+    }.items():
+        monkeypatch.setenv(name, value)
+    path = tmp_path / "local-feedback.db"
+    setup_database(path)
+    local_app = create_app(path)
+    local_app.config.update(TESTING=True, SESSION_COOKIE_SECURE=False)
+    user_id = db.UsersRepo(path).create(
+        email="local-reporter@example.com",
+        display_name="Local Reporter",
+        status="active",
+    )
+    local_client = local_app.test_client()
+    with local_client.session_transaction() as session:
+        session["_user_id"] = user_id
+
+    page = local_client.get("/")
+    assert b'id="feedback-launcher"' in page.data
+    assert b"Share a private note with the Deck Lab team." in page.data
+    assert b"Saved only in this isolated preview" in page.data
+    assert "linear_feedback" not in local_app.extensions
+    response = local_client.post(
+        "/feedback/submit",
+        data=form_data(local_client, description="The local preview button works."),
+    )
+    assert response.status_code == 200
+    with db.connect(path) as conn:
+        report = dict(conn.execute("SELECT * FROM deck_lab_dev_feedback").fetchone())
+    assert report["user_id"] == user_id
+    assert report["category"] == "bug"
+    assert report["report_text"] == "The local preview button works."
+    assert json.loads(report["context_json"])["page"] == "Index"
 
 
 @pytest.mark.parametrize(
