@@ -1,7 +1,10 @@
 # Deck Lab refactor isolation
 
-The refactor is developed on branch `deck-lab-refactor` in the dedicated
-worktree `/Users/dylan/Projects/bristly_billy_beane-deck-lab-refactor`.
+The refactor was merged to `main` in PR #29. Its historical branch
+`deck-lab-refactor` is retained in `~/Projects/deck_lab/worktrees/deck-lab-refactor`.
+Use `~/Projects/deck_lab` for current development; see the
+[workspace guide](workspace.md). The isolation rules below describe the
+original refactor environment and remain useful for local previews.
 
 - Master feature gate: `SABER_DECK_LAB_REDESIGN=1` (off by default).
   `SABER_DECK_LAB_BUILDER`, `SABER_DECK_LAB_RESEARCH`, and

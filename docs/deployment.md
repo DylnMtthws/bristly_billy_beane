@@ -1,5 +1,10 @@
 # Deployment
 
+Run deployment commands from the canonical checkout, `~/Projects/deck_lab`.
+The [workspace guide](workspace.md) maps the retained historical checkouts.
+Moving local folders does not change the GitHub repository, Fly app, deployed
+image, or persistent data. Historical rollout records retain their original paths.
+
 ## Refactor production release
 
 Use the root `fly.production.toml` for `dylnmtthws-decklab`; the older

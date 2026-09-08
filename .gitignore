@@ -14,3 +14,7 @@ build/
 docs/project_plan/reference_img/
 .DS_Store
 *.log
+
+# Local historical checkouts; the main repository is the workspace root.
+/worktrees/
+/releases/

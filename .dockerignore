@@ -10,3 +10,5 @@ build/
 *.db-shm
 __pycache__/
 *.pyc
+worktrees/
+releases/

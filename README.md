@@ -1,4 +1,16 @@
-# commander-deck-engine
+# Deck Lab
+
+The canonical local checkout is `~/Projects/deck_lab`, on branch `main`.
+GitHub remains [DylnMtthws/commander-deck-engine](https://github.com/DylnMtthws/commander-deck-engine).
+Earlier development worktrees and release snapshots are grouped inside this
+checkout and excluded from Git and container builds. See the
+[workspace guide](docs/workspace.md) for the folder map, branch history, and
+development workflow.
+
+The deployed app is [Deck Lab on Fly.io](https://dylnmtthws-decklab.fly.dev).
+Use [the deployment guide](docs/deployment.md) and root `fly.production.toml`
+for current production operations; the original generator overview below also
+describes older local and Tailscale hosting modes.
 
 **Sabermetrics for Magic**
 
