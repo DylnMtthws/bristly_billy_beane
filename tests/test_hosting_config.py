@@ -59,8 +59,17 @@ def test_simulator_environment_overrides_yaml(monkeypatch, tmp_path):
     assert settings.simulator.timeout_seconds == 197
 
 
-def test_healthz_is_public_and_reports_version(tmp_path):
+@pytest.mark.parametrize("build_sha", [None, "a" * 40])
+def test_healthz_is_public_and_reports_version(tmp_path, monkeypatch, build_sha):
+    if build_sha is None:
+        monkeypatch.delenv("SABER_BUILD_SHA", raising=False)
+    else:
+        monkeypatch.setenv("SABER_BUILD_SHA", build_sha)
     app = create_app(tmp_path / "missing.db")
     response = app.test_client().get("/healthz")
     assert response.status_code == 200
-    assert response.json == {"status": "ok", "version": "0.1.0"}
+    assert response.json == {
+        "status": "ok",
+        "version": "0.1.0",
+        "build_sha": build_sha or "unknown",
+    }
