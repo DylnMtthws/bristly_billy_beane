@@ -9,13 +9,31 @@ permissions:
   contents: read
 
 jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: read
+    steps:
+      - name: Require Astra approval on the current automation commit
+        if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'sdlc/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW_SHA: ${{ github.event.pull_request.head.sha }}
+          REVIEW_PUBLISHER: ${{ vars.DISPATCHER_PUBLISHER }}
+        run: |
+          test -n "$REVIEW_PUBLISHER"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$REVIEW_SHA/statuses" \
+            | jq --arg publisher "$REVIEW_PUBLISHER" -e \
+              '[.[] | select(.context == "dispatcher/astra")][0] | .state == "success" and .creator.login == $publisher'
+
   test:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
           cache: pip
@@ -25,10 +43,10 @@ jobs:
         run: pip install -e ".[dev,postgres,legacy]"
 
       - name: Lint (ruff)
-        run: ruff check src tests
+        run: ruff check src tests scripts/release_control.py
 
       - name: Format (black)
-        run: black --check src tests
+        run: black --check src tests scripts/release_control.py
 
       - name: Types (mypy)
         run: mypy src
@@ -45,13 +63,15 @@ jobs:
 
   container:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, review]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Build linux/amd64 image
-        run: docker build --platform linux/amd64 --tag decklab-ci .
+        env:
+          BUILD_SHA: ${{ github.sha }}
+        run: docker build --platform linux/amd64 --build-arg "SABER_BUILD_SHA=$BUILD_SHA" --tag decklab-ci .
 
       - name: Enforce image size ceiling
         run: |
@@ -124,3 +144,17 @@ jobs:
       - name: Remove container
         if: always()
         run: docker rm --force decklab-ci
+
+      - name: Package the tested main image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: python scripts/release_control.py bundle --output release
+
+      - name: Retain the exact release candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ github.sha }}-${{ github.run_attempt }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

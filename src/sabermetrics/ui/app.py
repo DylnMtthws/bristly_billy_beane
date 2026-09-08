@@ -225,7 +225,11 @@ def create_app(db_path: Path | None = None) -> Flask:
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         """Return process health without touching external services."""
-        return {"status": "ok", "version": version("sabermetrics")}
+        return {
+            "status": "ok",
+            "version": version("sabermetrics"),
+            "build_sha": os.environ.get("SABER_BUILD_SHA", "unknown"),
+        }
 
     @app.after_request
     def _security_headers(response):
