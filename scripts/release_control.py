@@ -296,7 +296,11 @@ def completed_snapshot(snapshots, previous_ids, requested_after):
             created = datetime.fromisoformat(item["created_at"]).timestamp()
         except (KeyError, ValueError, TypeError):
             continue
-        if created >= requested_after and str(item.get("id", "")).startswith("vs_"):
+        # Fly reports creation timestamps at second precision. The new-ID check
+        # rejects existing snapshots without losing a new one in this same second.
+        if created >= int(requested_after) and str(item.get("id", "")).startswith(
+            "vs_"
+        ):
             return item["id"]
     return None
 
@@ -337,6 +341,10 @@ def bootstrap_safe(files, live_sha, configured_base):
     }
     for item in files:
         path = item["filename"]
+        if item.get("previous_filename") and not release_paths_safe(
+            [path, item["previous_filename"]]
+        ):
+            return False
         if path in workspace_blobs:
             if item.get("sha") != workspace_blobs[path]:
                 return False
@@ -407,6 +415,11 @@ def deploy(folder):
         "Release is not a bounded forward update from the live commit",
     )
     paths = [item["filename"] for item in comparison["files"]]
+    paths.extend(
+        item["previous_filename"]
+        for item in comparison["files"]
+        if item.get("previous_filename")
+    )
     require(
         release_paths_safe(paths)
         or bootstrap_safe(

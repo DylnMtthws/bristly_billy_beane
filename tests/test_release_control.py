@@ -144,6 +144,7 @@ def test_only_new_completed_snapshot_can_release_backup_gate():
         {"id": "vs_new", "status": "created", "created_at": "2026-09-09T00:01:00Z"}
     )
     assert release.completed_snapshot(snapshots, {"vs_old"}, after) == "vs_new"
+    assert release.completed_snapshot(snapshots, {"vs_old"}, after + 60.8) == "vs_new"
 
 
 def test_bootstrap_requires_exact_base_and_narrow_health_change():
@@ -174,6 +175,13 @@ def test_bootstrap_workspace_exclusions_are_bound_to_reviewed_blobs():
     assert release.bootstrap_safe(files, "a" * 40, "a" * 40)
     files[0]["sha"] = "b" * 40
     assert not release.bootstrap_safe(files, "a" * 40, "a" * 40)
+    renamed = [
+        {
+            "filename": "src/sabermetrics/ui/static/app.js",
+            "previous_filename": "src/sabermetrics/ui/auth.py",
+        }
+    ]
+    assert not release.bootstrap_safe(renamed, "a" * 40, "a" * 40)
 
 
 def test_failed_backup_prevents_registry_push_and_deployment(tmp_path, monkeypatch):
