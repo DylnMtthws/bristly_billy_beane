@@ -165,3 +165,62 @@ def test_bootstrap_requires_exact_base_and_narrow_health_change():
         }
     )
     assert not release.bootstrap_safe(files, "a" * 40, "a" * 40)
+
+
+def test_bootstrap_workspace_exclusions_are_bound_to_reviewed_blobs():
+    files = [
+        {"filename": ".dockerignore", "sha": "afe28af94eccc35188c06fd805064c1ea1a68c15"}
+    ]
+    assert release.bootstrap_safe(files, "a" * 40, "a" * 40)
+    files[0]["sha"] = "b" * 40
+    assert not release.bootstrap_safe(files, "a" * 40, "a" * 40)
+
+
+def test_failed_backup_prevents_registry_push_and_deployment(tmp_path, monkeypatch):
+    for name, value in {
+        "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_REF": "refs/heads/main",
+        "GITHUB_REPOSITORY": release.REPOSITORY,
+        "FLY_API_TOKEN": "test-only",
+        "EXPECTED_MACHINE_ID": "abc123",
+        "EXPECTED_VOLUME_ID": "vol_abc123",
+    }.items():
+        monkeypatch.setenv(name, value)
+    (tmp_path / "manifest.json").write_text(json.dumps({"run_id": 123}))
+    manifest = {"sha": "a" * 40, "image_id": "sha256:" + "c" * 64}
+    monkeypatch.setattr(release, "get_run", lambda _: valid_run())
+    monkeypatch.setattr(release, "validate_bundle", lambda *a, **k: manifest)
+    monkeypatch.setattr(
+        release,
+        "gh",
+        lambda _: {
+            "status": "ahead",
+            "files": [{"filename": "src/sabermetrics/ui/static/app.js"}],
+        },
+    )
+    machine = {
+        "id": "abc123",
+        "state": "started",
+        "config": {"mounts": [{"volume": "vol_abc123", "path": "/data"}]},
+        "image_ref": {"digest": "sha256:" + "d" * 64},
+    }
+    commands = []
+
+    def execute(args, **kwargs):
+        commands.append(args)
+        return json.dumps({"stdout": json.dumps({"sha": "b" * 40})}).encode()
+
+    def fly_json(*args):
+        if args[:2] == ("machine", "list"):
+            return [machine]
+        assert args[:2] == ("machine", "exec")
+        return {"stdout": json.dumps({"backup": "failed"})}
+
+    monkeypatch.setattr(release, "execute", execute)
+    monkeypatch.setattr(release, "fly_json", fly_json)
+    with pytest.raises(release.ReleaseError, match="Online backup failed"):
+        release.deploy(tmp_path)
+    assert len(commands) == 1  # Only read the live SHA; no push or deploy.
+    assert json.loads((tmp_path / "deployment.json").read_text())["status"].startswith(
+        "failed"
+    )

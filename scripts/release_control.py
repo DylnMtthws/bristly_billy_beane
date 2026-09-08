@@ -310,6 +310,14 @@ def bootstrap_safe(files, live_sha, configured_base):
         ".github/workflows/deploy-production.yml",
         ".github/pull_request_template.md",
         "scripts/release_control.py",
+        "README.md",
+        "RESEARCH_ASSISTANT_PLAN.md",
+    }
+    # Already-reviewed workspace exclusions on main, absent from the live image.
+    # Exact blob identities prevent this exception from accepting broader edits.
+    workspace_blobs = {
+        ".dockerignore": "afe28af94eccc35188c06fd805064c1ea1a68c15",
+        ".gitignore": "d0383ccc704945c6142e8e7a339266818053002d",
     }
     expected = {
         "Dockerfile": (
@@ -329,6 +337,10 @@ def bootstrap_safe(files, live_sha, configured_base):
     }
     for item in files:
         path = item["filename"]
+        if path in workspace_blobs:
+            if item.get("sha") != workspace_blobs[path]:
+                return False
+            continue
         if path in infrastructure or release_paths_safe([path]):
             continue
         if (
@@ -429,8 +441,10 @@ def deploy(folder):
     try:
         backup = f"/data/release-backups/{manifest['sha']}-{int(time.time())}.db"
         program = (
-            "import sqlite3,json,pathlib; "
+            "import sqlite3,json,pathlib,shutil; "
             f"p=pathlib.Path({backup!r});p.parent.mkdir(parents=True,exist_ok=True); "
+            "assert shutil.disk_usage('/data').free > "
+            "pathlib.Path('/data/sabermetrics.db').stat().st_size * 1.2 + 50_000_000; "
             "s=sqlite3.connect('file:/data/sabermetrics.db?mode=ro',uri=True); "
             "d=sqlite3.connect(p);s.backup(d); "
             "assert d.execute('pragma integrity_check').fetchone()[0]=='ok'; "

@@ -58,7 +58,8 @@ Backend, authentication, schema, dependency or configuration changes require a
 separate reviewed migration/recovery procedure. The first release has a narrow
 bootstrap exception tied to the configured live base SHA: it permits this release
 infrastructure, the OCI revision label and the exact health response addition.
-It does not permit arbitrary backend changes. Once live advances from that base,
+It also accepts the exact previously reviewed workspace exclusion blobs and root
+planning documentation already on main. It does not permit arbitrary backend changes. Once live advances from that base,
 the exception cannot apply again.
 
 This app has one SQLite writer; a rolling replacement can briefly interrupt service.
