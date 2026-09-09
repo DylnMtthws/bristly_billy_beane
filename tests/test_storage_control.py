@@ -209,3 +209,114 @@ def test_background_backup_reports_failed_job(monkeypatch):
     with pytest.raises(host.StorageError, match="stopped without a receipt"):
         storage.long_remote("safe code", "b" * 32)
     assert len(calls) == 2
+
+
+def test_repeated_terminated_jobs_remove_staging(tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    code = "import os,pathlib,time;pathlib.Path(os.environ['DECKLAB_STORAGE_SCRATCH'],'partial').write_bytes(b'x'*5000000);time.sleep(10)"
+    for n in range(3):
+        result = tmp_path / f"{n}.json"
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                host.supervisor_code(code, str(result), timeout=0.2),
+            ],
+            check=True,
+        )
+        assert not list(tmp_path.glob("staging-*"))
+        assert json.loads(result.read_text())["ok"] is False
+
+
+def test_large_exec_payload_is_compressed_and_preserved():
+    import json
+    import shlex
+    import subprocess
+    import sys
+
+    command_sizes = []
+
+    def runner(args, **kwargs):
+        command_sizes.append(len(args[4]))
+        process = subprocess.run(
+            [sys.executable, "-c", shlex.split(args[4])[2]],
+            capture_output=True,
+            check=False,
+        )
+        return subprocess.CompletedProcess(
+            args,
+            process.returncode,
+            json.dumps({"stdout": process.stdout.decode()}).encode(),
+        )
+
+    storage = host.Storage({"BUCKET_NAME": "private"}, client=object(), runner=runner)
+    code = (
+        "import json\n"
+        + ("# repeated receipt metadata\n" * 2000)
+        + "print(json.dumps({'ok':True,'result':{'verified':True}}))"
+    )
+    assert storage.command(code) == {"verified": True}
+    assert command_sizes[0] < 1000
+
+
+def test_large_legacy_backup_requires_its_own_staging_capacity(
+    environment, monkeypatch
+):
+    import collections
+
+    data, scratch, _ = environment
+    legacy = data / "backups/large.db"
+    legacy.parent.mkdir()
+    legacy.write_bytes(b"x" * 40_000_000)
+    usage = collections.namedtuple("usage", "total used free")
+    monkeypatch.setattr(
+        remote.shutil,
+        "disk_usage",
+        lambda _: usage(200_000_000, 50_000_000, 150_000_000),
+    )
+    with pytest.raises(remote.StorageError, match="staging"):
+        backup("1" * 32, str(legacy))
+    assert legacy.exists()
+    assert not list(scratch.iterdir())
+
+
+def test_backup_drops_unneeded_staging_copies_before_download(environment, monkeypatch):
+    import os
+
+    data, _, _ = environment
+    conn = sqlite3.connect(data / "sabermetrics.db")
+    conn.execute("create table entropy(value blob)")
+    conn.execute("insert into entropy values(?)", (os.urandom(2_000_000),))
+    conn.commit()
+    conn.close()
+    transfer = remote.transfer
+
+    def checked(key, path, method):
+        if method == "GET":
+            assert not (path.parent / "snapshot.db").exists()
+            assert not (path.parent / "verified.db").exists()
+        transfer(key, path, method)
+
+    monkeypatch.setattr(remote, "transfer", checked)
+    assert backup("2" * 32)["verified"]
+
+
+def test_changed_archive_object_prevents_all_local_deletion(environment, monkeypatch):
+    r = backup("3" * 32)
+    r["object_etag"] = "original"
+
+    class Changed:
+        def head_object(self, **kwargs):
+            return {"ContentLength": r["compressed_bytes"], "ETag": "changed"}
+
+    storage = host.Storage({"BUCKET_NAME": "private"}, client=Changed())
+    monkeypatch.setattr(storage, "receipts", lambda: [r])
+    calls = []
+    monkeypatch.setattr(storage, "remote", lambda *args, **kwargs: calls.append(args))
+    with pytest.raises(host.StorageError, match="retaining local"):
+        storage.retention()
+    assert calls == []
+    assert Path(r["local_path"]).exists()

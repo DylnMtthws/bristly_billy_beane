@@ -17,7 +17,7 @@ import time
 import urllib.request
 
 DATA = pathlib.Path("/data")
-SCRATCH = pathlib.Path("/tmp")
+SCRATCH = pathlib.Path(os.environ.get("DECKLAB_STORAGE_SCRATCH", "/tmp"))
 RESERVE = 1_000_000_000
 
 
@@ -61,13 +61,17 @@ def status():
     }
 
 
-def preflight():
+def preflight(backup_bytes=None):
     report = status()
     if report["free"] < RESERVE:
         raise StorageError(
             f"Data volume has {report['free']} bytes free; {RESERVE} bytes required"
         )
-    required = report["database_bytes"] * 3 + 100_000_000
+    required = (
+        backup_bytes
+        if backup_bytes is not None
+        else report["database_bytes"] + report["wal_bytes"]
+    ) * 3 + 100_000_000
     if report["scratch_free"] < required:
         raise StorageError(
             f"Backup staging has {report['scratch_free']} bytes free; {required} bytes required"
@@ -156,6 +160,15 @@ def backup(payload):
         or not original.name.endswith((".db", ".db.gz"))
     ):
         raise StorageError("Legacy source is outside the backup allowlist")
+    if legacy:
+        original_bytes = original.stat().st_size
+        if original.name.endswith(".gz"):
+            original_bytes = 0
+            with gzip.open(original, "rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    original_bytes += len(chunk)
+                    preflight(original_bytes)
+        preflight(original_bytes)
     before_hash = digest(original) if legacy else None
     with tempfile.TemporaryDirectory(
         prefix="storage-backup-", dir=SCRATCH
@@ -191,7 +204,10 @@ def backup(payload):
                 ) as zipped,
             ):
                 shutil.copyfileobj(source, zipped, 1024 * 1024)
+        # Do not overlap the snapshot, restored database and remote download.
+        staged.unlink(missing_ok=True)
         restored = verify_gzip(packed, root / "verified.db")
+        (root / "verified.db").unlink()
         packed_hash = digest(packed)
         transfer(payload["put_url"], packed, "PUT")
         transfer(payload["get_url"], root / "download.db.gz", "GET")
@@ -284,7 +300,7 @@ def restore(payload):
 def main(payload):
     os.umask(0o077)
     try:
-        with (SCRATCH / "decklab-storage.lock").open("a") as lock:
+        with pathlib.Path("/tmp/decklab-storage.lock").open("a") as lock:
             deadline = time.monotonic() + (120 if payload["action"] == "backup" else 0)
             while True:
                 try:

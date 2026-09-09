@@ -141,7 +141,15 @@ def validate_bundle(folder, *, expected_sha=None, run=None):
     require(
         config.get("app") == APP
         and config.get("mounts")
-        == [{"source": "decklab_data", "destination": "/data"}],
+        == [
+            {
+                "source": "decklab_data",
+                "destination": "/data",
+                "auto_extend_size_threshold": 70,
+                "auto_extend_size_increment": "1GB",
+                "auto_extend_size_limit": "10GB",
+            }
+        ],
         "Unexpected production app or mount",
     )
     return manifest

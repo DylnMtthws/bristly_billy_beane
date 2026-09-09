@@ -1,6 +1,7 @@
 """Private object backups, retention and bounded production storage maintenance."""
 
 import argparse
+import base64
 import gzip
 import hashlib
 import json
@@ -13,6 +14,7 @@ import subprocess
 import tempfile
 import time
 import uuid
+import zlib
 
 APP = "dylnmtthws-decklab"
 MACHINE = "2872537a9e3348"
@@ -56,6 +58,25 @@ def valid_receipt(r):
     )
 
 
+def supervisor_code(code, destination, timeout=600):
+    """The supervisor survives child timeouts and always removes staging files."""
+    return f"""
+import json,os,pathlib,shutil,subprocess,tempfile,sys
+os.umask(0o077)
+p=pathlib.Path({destination!r})
+scratch=tempfile.mkdtemp(prefix='staging-',dir=p.parent)
+try:
+ with p.open('wb') as output:
+  try:
+   subprocess.run([sys.executable,'-'],input={code!r}.encode(),stdout=output,stderr=subprocess.DEVNULL,env={{**os.environ,'DECKLAB_STORAGE_SCRATCH':scratch}},timeout={timeout!r},check=True)
+  except (subprocess.TimeoutExpired,subprocess.CalledProcessError):
+   output.seek(0);output.truncate()
+   output.write(json.dumps({{'ok':False,'error':'Background storage operation failed or timed out; staging cleaned'}}).encode())
+finally:
+ shutil.rmtree(scratch)
+"""
+
+
 class Storage:
     def __init__(self, credentials=None, client=None, runner=subprocess.run):
         values = credentials or os.environ
@@ -85,18 +106,25 @@ class Storage:
     def remote(self, action, **payload):
         code = pathlib.Path(__file__).with_name("storage_remote.py").read_text()
         code += "\nmain(" + repr({"action": action, **payload}) + ")\n"
-        if action in {"backup", "restore"}:
+        if action in {"backup", "restore", "prune_local"}:
             return self.long_remote(code, payload.get("id") or uuid.uuid4().hex)
         return self.command(code)
 
     def command(self, code):
+        # Fly Machines rejects large exec payloads; compress source and receipt data.
+        encoded = base64.b64encode(zlib.compress(code.encode())).decode()
+        launcher = (
+            "import base64,zlib;exec(zlib.decompress(base64.b64decode("
+            + repr(encoded)
+            + ")))"
+        )
         result = self.runner(
             [
                 os.environ.get("FLYCTL", "flyctl"),
                 "machine",
                 "exec",
                 MACHINE,
-                "python -c " + shlex.quote(code),
+                "python -c " + shlex.quote(launcher),
                 "-a",
                 APP,
                 "--json",
@@ -124,6 +152,7 @@ class Storage:
         if not re.fullmatch(r"[0-9a-f]{32}", identifier):
             raise StorageError("Invalid storage operation identity")
         destination = "/tmp/decklab-storage-jobs/" + identifier + ".json"
+        supervisor = supervisor_code(code, destination)
         start = f"""
 import json,os,pathlib,subprocess
 os.umask(0o077)
@@ -131,9 +160,9 @@ p=pathlib.Path({destination!r});p.parent.mkdir(exist_ok=True,mode=0o700)
 pidfile=p.with_suffix('.pid')
 if not p.exists():
  with p.open('xb') as output:
-  process=subprocess.Popen(['timeout','600','python','-'],stdin=subprocess.PIPE,stdout=output,stderr=subprocess.DEVNULL,start_new_session=True)
+  process=subprocess.Popen(['python','-'],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
   pidfile.write_text(str(process.pid))
-  process.stdin.write({code!r}.encode());process.stdin.close()
+  process.stdin.write({supervisor!r}.encode());process.stdin.close()
 print(json.dumps({{'ok':True,'result':{{'started':True}}}}))
 """
         try:

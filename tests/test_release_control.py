@@ -66,8 +66,8 @@ def test_maintenance_rollout_requires_both_exact_commits(monkeypatch):
 
 def test_bundle_checksum_and_attempt_are_bound(tmp_path, monkeypatch):
     config = tmp_path / "fly.production.toml"
-    config.write_text(
-        "app='dylnmtthws-decklab'\n[[mounts]]\nsource='decklab_data'\ndestination='/data'\n"
+    config.write_bytes(
+        (Path(__file__).resolve().parents[1] / "fly.production.toml").read_bytes()
     )
     monkeypatch.setattr(release, "CONFIG", config)
     image = tmp_path / "image.tar.gz"
