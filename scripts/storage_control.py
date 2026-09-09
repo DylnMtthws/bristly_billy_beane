@@ -58,7 +58,7 @@ def valid_receipt(r):
     )
 
 
-def supervisor_code(code, destination, timeout=600):
+def supervisor_code(code, destination, timeout=600, local_partial=None):
     """The supervisor survives child timeouts and always removes staging files."""
     return f"""
 import json,os,pathlib,shutil,subprocess,tempfile,sys
@@ -74,6 +74,8 @@ try:
    output.write(json.dumps({{'ok':False,'error':'Background storage operation failed or timed out; staging cleaned'}}).encode())
 finally:
  shutil.rmtree(scratch)
+ if {local_partial!r} is not None:
+  pathlib.Path({local_partial!r}).unlink(missing_ok=True)
 """
 
 
@@ -107,7 +109,11 @@ class Storage:
         code = pathlib.Path(__file__).with_name("storage_remote.py").read_text()
         code += "\nmain(" + repr({"action": action, **payload}) + ")\n"
         if action in {"backup", "restore", "prune_local"}:
-            return self.long_remote(code, payload.get("id") or uuid.uuid4().hex)
+            return self.long_remote(
+                code,
+                payload.get("id") or uuid.uuid4().hex,
+                local_copy=action == "backup" and not payload.get("legacy"),
+            )
         return self.command(code)
 
     def command(self, code):
@@ -147,12 +153,18 @@ class Storage:
             raise StorageError(response.get("error", "Storage operation failed"))
         return response["result"]
 
-    def long_remote(self, code, identifier):
+    def long_remote(self, code, identifier, local_copy=False):
         """Avoid the Machines exec HTTP timeout; poll one bounded, durable job."""
         if not re.fullmatch(r"[0-9a-f]{32}", identifier):
             raise StorageError("Invalid storage operation identity")
         destination = "/tmp/decklab-storage-jobs/" + identifier + ".json"
-        supervisor = supervisor_code(code, destination)
+        supervisor = supervisor_code(
+            code,
+            destination,
+            local_partial=(
+                "/data/release-backups/.partial-" + identifier if local_copy else None
+            ),
+        )
         start = f"""
 import json,os,pathlib,subprocess
 os.umask(0o077)

@@ -148,6 +148,20 @@ def transfer(url, path, method):
             shutil.copyfileobj(response, target, 1024 * 1024)
 
 
+def publish_local(packed, local, identifier):
+    """Publish only complete local archives; the supervisor also cleans on kill."""
+    partial = local.parent / (".partial-" + identifier)
+    try:
+        with packed.open("rb") as source, partial.open("xb") as target:
+            shutil.copyfileobj(source, target, 1024 * 1024)
+            target.flush()
+            os.fsync(target.fileno())
+        partial.chmod(0o600)
+        partial.replace(local)
+    finally:
+        partial.unlink(missing_ok=True)
+
+
 def backup(payload):
     if not re.fullmatch(r"[0-9a-f]{32}", payload.get("id", "")):
         raise StorageError("Invalid backup identity")
@@ -226,10 +240,7 @@ def backup(payload):
                 raise StorageError("Refusing to replace an existing local backup")
             if shutil.disk_usage(DATA).free < RESERVE + packed.stat().st_size:
                 raise StorageError("Insufficient local reserve after remote archival")
-            shutil.copyfile(packed, local)
-            local.chmod(0o600)
-            with local.open("rb") as stream:
-                os.fsync(stream.fileno())
+            publish_local(packed, local, payload["id"])
         receipt = {
             "id": payload["id"],
             "created": original.stat().st_mtime if legacy else time.time(),

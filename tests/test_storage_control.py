@@ -320,3 +320,39 @@ def test_changed_archive_object_prevents_all_local_deletion(environment, monkeyp
         storage.retention()
     assert calls == []
     assert Path(r["local_path"]).exists()
+
+
+def test_repeated_local_copy_termination_preserves_prior_backups(tmp_path):
+    import subprocess
+    import sys
+
+    data = tmp_path / "backups"
+    data.mkdir()
+    prior = data / "prior.db.gz"
+    prior.write_bytes(b"prior verified backup")
+    packed = tmp_path / "packed.gz"
+    packed.write_bytes(b"x" * 10000)
+    source = Path(remote.__file__).read_text()
+    for n in range(3):
+        identifier = f"{n:032x}"
+        destination = data / (identifier + ".db.gz")
+        entered = tmp_path / f"entered-{n}"
+        code = source + f"""
+def interrupted(source,target,length):
+ target.write(b'partial');target.flush()
+ pathlib.Path({str(entered)!r}).touch()
+ time.sleep(10)
+shutil.copyfileobj=interrupted
+publish_local(pathlib.Path({str(packed)!r}),pathlib.Path({str(destination)!r}),{identifier!r})
+"""
+        supervisor = host.supervisor_code(
+            code,
+            str(tmp_path / f"{n}.json"),
+            timeout=0.4,
+            local_partial=str(data / (".partial-" + identifier)),
+        )
+        subprocess.run([sys.executable, "-c", supervisor], check=True)
+        assert entered.exists()
+        assert prior.read_bytes() == b"prior verified backup"
+        assert list(data.iterdir()) == [prior]
+        assert not list(tmp_path.glob("staging-*"))
