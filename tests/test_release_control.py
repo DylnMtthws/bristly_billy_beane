@@ -54,10 +54,20 @@ def test_provenance_accepts_exact_successful_main_run():
     release.validate_provenance(valid_run(), "a" * 40, 1)
 
 
+def test_maintenance_rollout_requires_both_exact_commits(monkeypatch):
+    monkeypatch.setenv("RELEASE_MAINTENANCE_BASE_SHA", "a" * 40)
+    monkeypatch.setenv("RELEASE_MAINTENANCE_HEAD_SHA", "b" * 40)
+    assert release.maintenance_authorized("a" * 40, "b" * 40)
+    assert not release.maintenance_authorized("a" * 40, "c" * 40)
+    assert not release.maintenance_authorized("c" * 40, "b" * 40)
+    monkeypatch.delenv("RELEASE_MAINTENANCE_HEAD_SHA")
+    assert not release.maintenance_authorized("a" * 40, "b" * 40)
+
+
 def test_bundle_checksum_and_attempt_are_bound(tmp_path, monkeypatch):
     config = tmp_path / "fly.production.toml"
-    config.write_text(
-        "app='dylnmtthws-decklab'\n[[mounts]]\nsource='decklab_data'\ndestination='/data'\n"
+    config.write_bytes(
+        (Path(__file__).resolve().parents[1] / "fly.production.toml").read_bytes()
     )
     monkeypatch.setattr(release, "CONFIG", config)
     image = tmp_path / "image.tar.gz"
@@ -226,7 +236,12 @@ def test_failed_backup_prevents_registry_push_and_deployment(tmp_path, monkeypat
 
     monkeypatch.setattr(release, "execute", execute)
     monkeypatch.setattr(release, "fly_json", fly_json)
-    with pytest.raises(release.ReleaseError, match="Online backup failed"):
+
+    def failed_archive(_):
+        raise release.ReleaseError("Production storage: Data volume has 0 bytes free")
+
+    monkeypatch.setattr(release, "archived_backup", failed_archive)
+    with pytest.raises(release.ReleaseError, match="0 bytes free"):
         release.deploy(tmp_path)
     assert len(commands) == 1  # Only read the live SHA; no push or deploy.
     assert json.loads((tmp_path / "deployment.json").read_text())["status"].startswith(

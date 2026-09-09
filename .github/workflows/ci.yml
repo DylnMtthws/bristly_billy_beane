@@ -43,10 +43,10 @@ jobs:
         run: pip install -e ".[dev,postgres,legacy]"
 
       - name: Lint (ruff)
-        run: ruff check src tests scripts/release_control.py
+        run: ruff check src tests scripts/release_control.py scripts/storage_control.py scripts/storage_remote.py
 
       - name: Format (black)
-        run: black --check src tests scripts/release_control.py
+        run: black --check src tests scripts/release_control.py scripts/storage_control.py scripts/storage_remote.py
 
       - name: Types (mypy)
         run: mypy src

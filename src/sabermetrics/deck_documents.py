@@ -8,6 +8,8 @@ import secrets
 import sqlite3
 import unicodedata
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -66,12 +68,19 @@ class DeckDocumentRepo:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout=5000")
         conn.execute("PRAGMA foreign_keys=ON")
-        return conn
+        conn.execute("PRAGMA wal_autocheckpoint=1000")
+        conn.execute("PRAGMA journal_size_limit=67108864")
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     @staticmethod
     def _event(

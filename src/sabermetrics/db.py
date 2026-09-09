@@ -96,6 +96,10 @@ def connect(
     conn = sqlite3.connect(str(path))
     conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA wal_autocheckpoint=1000")
+    # Limit the retained file after a successful reset; this is not a hard cap
+    # while readers or an active transaction prevent checkpoint completion.
+    conn.execute("PRAGMA journal_size_limit=67108864")
     if row_factory:
         conn.row_factory = sqlite3.Row
     if foreign_keys:
