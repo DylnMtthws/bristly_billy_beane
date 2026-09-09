@@ -30,6 +30,9 @@ primary_region = 'ord'
 [[mounts]]
   source = 'decklab_data'
   destination = '/data'
+  auto_extend_size_threshold = 70
+  auto_extend_size_increment = '1GB'
+  auto_extend_size_limit = '10GB'
 
 [http_service]
   internal_port = 8080

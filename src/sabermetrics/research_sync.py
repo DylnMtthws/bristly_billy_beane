@@ -13,6 +13,7 @@ import os
 import sqlite3
 import threading
 from collections.abc import Iterable
+from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryFile
@@ -66,7 +67,7 @@ def apply_snapshot(
     if not cards:
         raise ValueError("Published card corpus is empty; previous snapshot retained")
     now = datetime.now(UTC).isoformat()
-    with sqlite3.connect(db_path, timeout=30) as conn:
+    with closing(sqlite3.connect(db_path, timeout=30)) as conn, conn:
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("BEGIN IMMEDIATE")
         card_ids = {
@@ -227,7 +228,7 @@ def apply_snapshot(
 
 
 def source_state(db_path: Path) -> dict[str, Any]:
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn, conn:
         row = conn.execute(
             "SELECT state_json FROM research_source_state WHERE id=1"
         ).fetchone()

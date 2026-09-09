@@ -35,6 +35,34 @@ def require(condition, message):
         raise ReleaseError(message)
 
 
+def maintenance_authorized(live_sha, target_sha):
+    """A one-release operator exception, bound to both exact immutable commits."""
+    return (
+        valid_sha(live_sha)
+        and valid_sha(target_sha)
+        and live_sha != target_sha
+        and os.environ.get("RELEASE_MAINTENANCE_BASE_SHA") == live_sha
+        and os.environ.get("RELEASE_MAINTENANCE_HEAD_SHA") == target_sha
+    )
+
+
+def archived_backup(sha):
+    from storage_control import Storage, StorageError
+
+    try:
+        storage = Storage()
+        storage.remote("preflight")
+        receipt = storage.backup("release", release_sha=sha)
+        storage.retention()
+        return receipt
+    except StorageError as exc:
+        raise ReleaseError("Production storage: " + str(exc)) from None
+    except Exception:
+        raise ReleaseError(
+            "Private backup could not be verified; production was not replaced"
+        ) from None
+
+
 def execute(args, *, timeout=120, stdin=None):
     try:
         return subprocess.run(
@@ -477,6 +505,7 @@ def deploy(folder):
     )
     require(
         release_paths_safe(paths)
+        or maintenance_authorized(live_sha, manifest["sha"])
         or bootstrap_safe(
             comparison["files"],
             live_sha,
@@ -507,26 +536,10 @@ def deploy(folder):
 
     save()
     try:
-        backup = f"/data/release-backups/{manifest['sha']}-{int(time.time())}.db.gz"
-        program = online_backup_program(backup)
-        result = fly_json(
-            "machine",
-            "exec",
-            expected_machine,
-            "python -c " + shlex.quote(program),
-            "-a",
-            APP,
-            "--json",
-            "--timeout",
-            "120",
-        )
-        require(
-            result.get("exit_code", 0) == 0
-            and json.loads(result["stdout"]).get("backup") == "ok",
-            "Online backup failed; production was not replaced",
-        )
-        receipt["backup_path"] = backup
-        receipt["backup_verification"] = json.loads(result["stdout"])
+        backup = archived_backup(manifest["sha"])
+        receipt["backup_path"] = backup["local_path"]
+        receipt["backup_verification"] = backup
+        save()
         previous_ids = {
             item.get("id")
             for item in fly_json(
