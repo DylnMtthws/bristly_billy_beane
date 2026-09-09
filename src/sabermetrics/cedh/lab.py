@@ -311,7 +311,14 @@ class CedhDeckLab:
         usages: list[UsageRecord],
         warnings: list[str],
     ) -> EvidenceSummary | None:
-        if self.gateway is None or not evidence.chunks:
+        if not evidence.chunks:
+            return None
+        if self.gateway is None:
+            warnings.append(
+                "No model provider is configured, so the retrieved evidence "
+                "was not summarised. It is shown below exactly as retrieved, "
+                "with its denominators."
+            )
             return None
         result = self._call(
             StructuredRequest(
@@ -340,6 +347,11 @@ class CedhDeckLab:
         warnings: list[str],
     ) -> DeckExplanation | None:
         if self.gateway is None:
+            warnings.append(
+                "No model provider is configured, so this deck has no written "
+                "explanation. The deck below is unaffected — it is built "
+                "deterministically."
+            )
             return None
         card_lines = [
             f"- {c.oracle_id} — {c.name} — {c.role}"

@@ -213,6 +213,41 @@ DDL_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_combos_color ON combos(color_identity)",
+    # --- Research Assistant substrate (R1) --------------------------------
+    # Written by `sabermetrics tags build`; see
+    # src/sabermetrics/substrate/tag_store.py for why the build table exists
+    # beside the tag table.
+    """
+    CREATE TABLE IF NOT EXISTS card_mechanic_tag (
+        oracle_id     TEXT NOT NULL,
+        tag_id        TEXT NOT NULL,
+        tag_version   TEXT NOT NULL,
+        confidence    REAL NOT NULL,
+        matched_span  TEXT NOT NULL,
+        snapshot_hash TEXT NOT NULL,
+        PRIMARY KEY (oracle_id, tag_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_mechanic_tag_tag ON card_mechanic_tag(tag_id)",
+    """
+    CREATE INDEX IF NOT EXISTS idx_mechanic_tag_snapshot
+        ON card_mechanic_tag(snapshot_hash)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS mechanic_tag_build (
+        content_sha256   TEXT PRIMARY KEY,
+        library_sha256   TEXT NOT NULL,
+        snapshot_hash    TEXT NOT NULL,
+        source_view      TEXT NOT NULL,
+        corpus_row_count INTEGER,
+        tag_count        INTEGER NOT NULL,
+        row_count        INTEGER NOT NULL,
+        cards_tagged     INTEGER NOT NULL,
+        cards_untagged   INTEGER NOT NULL,
+        coverage_json    TEXT NOT NULL,
+        built_at         TEXT NOT NULL
+    )
+    """,
     # 1.9 Operational Tables
     """
     CREATE TABLE IF NOT EXISTS _schema_version (

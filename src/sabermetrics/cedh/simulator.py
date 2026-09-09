@@ -116,7 +116,7 @@ class AssemblyPoint(BaseModel):
 
 
 class SimulationResult(BaseModel):
-    """A validated ``cedh-simulation-result.v1`` document.
+    """A validated ``cedh-simulation-result.v3`` document.
 
     ``metric``, ``measures`` and ``does_not_measure`` are required. The
     simulator prints its honesty header before any figure for a reason, and a
@@ -220,7 +220,7 @@ def _http_result_validator() -> Draft202012Validator:
 def _parse_http_result(
     payload: dict[str, Any], candidate: DeckCandidate, headers: httpx.Headers
 ) -> SimulationResult:
-    """Validate and adapt a v2 service document to the UI domain model."""
+    """Validate and adapt a v3 service document to the UI domain model."""
     try:
         _http_result_validator().validate(payload)
     except ValidationError as exc:

@@ -64,7 +64,7 @@ constraints:
   per_deck_cost_target_usd: 0.15
   per_deck_cost_ceiling_usd: 0.50
   format_scope: "Commander (EDH) only; the NEW path is competitive (cEDH) only"
-  ui_scope: "Desktop web UI; three portals — user-facing, admin (/admin), cEDH lab (/lab). No mobile."
+  ui_scope: "Desktop-first web UI; three portals — user-facing, admin (/admin), cEDH lab (/lab). Mobile IS in scope: the Deck Lab refactor ships a @media (max-width:767px) breakpoint, a drawer and safe-area insets in deck-lab.css. This line previously excluded mobile and was corrected in R0 to match the shipped CSS."
 
   # --- cEDH path (ADR-019..024). Non-negotiable. ---
   cedh_data_boundary: "production repositories query mtg_v1 ONLY, as mtg_consumer. No query may name mtg_internal (assert_v1_only enforces it). The card view is card_any_medium, NEVER card — the default view silently drops 254 Reserved List cards including Tropical Island, Mox Diamond and Lotus Petal."
@@ -408,6 +408,8 @@ These decisions are settled. Do not relitigate in code; refer here for the "why.
 | ADR-026 | Tailnet-only hosting via `tailscale serve`; identity from its proxy headers; accounts still admin-provisioned | The Cloudflare Tunnel (ADR-016) was specified and never deployed. A tunnel puts a login page on the public internet where anyone can knock; a tailnet has no public surface at all, and Tailscale has already authenticated every device on it. Removes passwords, invite tokens, the login form and the reset flow nobody had built yet — one `grant-access` command per tester. Accounts stay because owner-scoping, quota and per-card feedback all need identity |
 | ADR-025 | No budget, no card price, and no collection anywhere in the cEDH engine | cEDH is proxy-normal: expensive cards get proxied, so price is not a performance signal, and a budget would not trade money for power — it would just remove the best cards. Owned-cards preference is the same constraint wearing a different hat: building a new deck means acquiring or proxying cards, which is the normal case. Absence is enforced (no field to read, `extra="forbid"` on the constraints) because an available price or collection field always becomes a tie-break eventually. It also buys reproducibility: selection sees only the pack and the role, so the same pack yields the same 99 for everyone. NB: this is about *card* prices — the LLM **token** cost ceiling (ADR-024) is untouched |
 | ADR-028 | One managed production container; SQLite on one volume; `hybrid` auth; simulator over private HTTP; `mtg_v1` over TLS | Supersedes ADR-008's cloud-cost rejection and ADR-026's tailnet-only production posture. One machine preserves SQLite correctness and the single-process design while invited testers gain a public URL. Hosting is budgeted separately from the LLM-only annual target; see `docs/deployment.md`. |
+| ADR-029 | Ask may render typed, cited Interpretation assertions | A mechanically grounded assessment is useful, but it must remain visibly distinct from facts and measurements and state what its evidence does not establish; see `docs/research-assistant-adrs.md` |
+| ADR-030 | Ask lives beside `cedh/`; the model plans and narrates bounded deterministic results | The dependency must not leak backward into deterministic generation or inherit the legacy casual/budget objective; see `docs/research-assistant-adrs.md` |
 
 > **Charter pivot (2026-07):** ADR-015..018 supersede the original single-user / localhost-only / no-public-hosting posture. Where older ADRs or docs assume one user, the multi-user charter above wins.
 >
@@ -415,8 +417,13 @@ These decisions are settled. Do not relitigate in code; refer here for the "why.
 >
 > **Hosting pivot (2026-09):** ADR-028 supersedes ADR-008 and ADR-026 for production. The Tailscale mode remains supported for local/private use; production is one managed container with `hybrid` auth.
 
-Full text for ADR-001..027 is in `design.md` Section 11. ADR-028's full
-rationale and operating consequences are in `docs/deployment.md`.
+Full text for ADR-001..014 is in `design.md` Section 11. **ADR-015..027 have
+no prose anywhere in the repository** — they exist only as the one-line rows
+above, and `docs/project_plan/sabermetrics_v2_spec.md` §3 separately defines a
+*different* ADR-015..020, so those numbers collide. Write new ADRs to a named
+doc and link them from the table, as ADR-028..030 do. ADR-028's full rationale
+and operating consequences are in `docs/deployment.md`; ADR-029 and ADR-030 are
+in `docs/research-assistant-adrs.md`.
 
 </context>
 
@@ -444,6 +451,10 @@ documents:
       publish, what the simulator must accept and emit, and the deprecation plan
       for duplicate ingestion. Read before touching anything under cedh/."
     read_when: "Before any cEDH boundary, repository or simulator work"
+
+  - file: docs/research-assistant-adrs.md
+    purpose: "ADR-029 and ADR-030: the interpretation contract and package boundary"
+    read_when: "Before changing Ask assertions, planning, or package ownership"
 
   - file: docs/project_plan/design.md
     purpose: "High-level vision, goals, constraints, ADRs (LEGACY casual path)"
@@ -488,7 +499,7 @@ status:
   portal_completed: ["P0", "P1", "P2", "P3", "P4", "P5", "P6"]
   in_progress: []
   blocked: []
-  cloud_alignment: "One linux/amd64 Python 3.11 container, one machine, SQLite volume, hybrid auth, mtg_v1 over TLS, simulator over private HTTP with cedh-simulation-result.v2 validation. No image was published and no deployment was performed."
+  cloud_alignment: "One linux/amd64 Python 3.11 container, one machine, SQLite volume, hybrid auth, mtg_v1 over TLS, simulator over private HTTP with cedh-simulation-result.v3 validation. No image was published and no deployment was performed."
   cedh_notes: "src/sabermetrics/cedh/ holds the whole path. repositories.py defines CardRepository/MetaRepository and the assert_v1_only guard. adapters_postgres.py reads card_any_medium/card_face/card_legality and derives tournament evidence from the canonical tournament, tournament_entry, deck, deck_commander, deck_card, and card_any_medium views. PostgresMetaRepository probes required columns and grants separately for summaries and inclusion, then loads one cohort in a read-only repeatable-read snapshot. adapters_fixture.py mirrors those atomic facts offline. evidence.py emits attributed, bounded Deck Lab cohort aggregates with the exact window, denominator, and incomplete-deck count. model_gateway.py is provider-neutral; builder.py is deterministic and legality-repaired; simulator.py uses SimulationResult | NotSimulated and its wire format is versioned separately. The UI is at /lab and the CLI at `sabermetrics cedh`. The Kinnan pack's 99 ARE the list commander_simulator models."
   legacy_notes: "P0 schema; P1 auth (Flask-Login, invites, hardening, create-admin/invite-user CLI); P2 admin user mgmt (/admin, role-gated). Tailwind (PR#11) merged to main; portal branch rebased on it. P3: user portal — db.py FavoritesRepo (commanders+decks toggle/list/ids) + DecksRepo (list_for_owner, owner_of, set_owner, count_this_month) + UsersRepo.update_profile; ui/explore_filters.py (pure WHERE builder over commander_candidates: colors atmost/exactly, abilities=keywords LIKE, price/cmc ranges, sort, pagination); routes: home dashboard (quota meter, recent decks, fav shortcuts), /explore (filter sidebar + hearts + pagination), /favorites/commanders, /favorites/decks, /decks (owner-scoped, delete), /profile (edit + change password), favorite toggle endpoints (JSON, CSRF via X-CSRFToken). Owner-scoping: generate sets owner_id; view/delete/deck-fav authorized (owner or admin → else 403). Templates all Tailwind (home/explore/decks/favorites_*/profile + _macros.html + build form moved to profile_view). index.html DELETED. P4: quota ENFORCED in generate route — global $ ceiling pre-check (503) + per-user calendar-month count vs quota (429 with reset label); mid-build LLMCostCeilingExceeded handled. Cost attribution: contextvars + cost_attribution() CM in reasoning/client.py, _log_cost writes cost_log.user_id/deck_id; route wraps builder.build in cost_attribution(owner, deck_id) with a PRE-MINTED deck_id passed via new DeckBuildRequest.owner_id/deck_id fields (_build_deck_model uses request.deck_id). CLI builds unattributed. PR #12 (P0-P4) MERGED to main; P5+ on new branches. P5: feedback system (the Phase-1 payload). db.py FeedbackRepo (upsert_card ON CONFLICT user/deck/card, upsert_deck ON CONFLICT user/deck, card_map, deck read helpers). Routes: POST /deck/<id>/card/<card_id>/feedback and POST /deck/<id>/feedback — OWNER-ONLY (owner_of == current_user, else 403; admins viewing others' decks get read-only, can_feedback=False). deck_view.html: per-card thumbs+comment cell in the by-type table (prefilled from card_feedback map) + deck-level verdict(good/mixed/bad)+comment panel + feedback JS (autosave, CSRF X-CSRFToken); styles in style.css (.fb-thumb/.verdict-btn). Per-card feedback is ONLY in the by-type table view (default), not by-role/visual — deferred. P5 PR#13 MERGED to main. P6: admin analytics (db.py AdminAnalyticsRepo). Routes on /admin: enhanced overview (KPIs), users (per_user_stats: decks/spend/feedback + detail link), users/<id> drill-down, feedback explorer (card_feedback aggregated by card_name — up/down/net/total/comments, sortable) + feedback/card/<name> drill (all comments) + feedback/export?format=csv|json (CSV=card rows, JSON=card+deck), costs (totals + by call_type + by user, uses cost_log.user_id from P4), commanders (most-generated + most-favorited). Templates admin/feedback|feedback_card|costs|commanders|user_detail + enriched overview/users; admin nav gained Feedback/Costs/Commanders. NB: feedback rows are intentionally KEPT on deck delete (research data; aggregates group by card_name, LEFT JOIN decks). Tests: test_admin_analytics.py. NEXT: P7 deploy — waitress + Cloudflare Tunnel setup doc; set real SABER_SECRET_KEY; run /security-review BEFORE sharing the tunnel URL (release gate)."
 ```

@@ -1,0 +1,83 @@
+schema_version: research-golden-questions.v1
+questions:
+  - &defaults
+    id: out-of-scope-001
+    ask: What is the cheapest printing of Tropical Island today?
+    clarified_ask: State that price is outside the cEDH engine and do not retrieve or estimate a market price.
+    required_oracle_ids: []
+    forbidden_oracle_ids: []
+    expected_absences:
+      - price data and budget advice are deliberately absent from the cEDH engine
+    category: out_of_scope
+    difficulty: basic
+    context_id: null
+    clarification_expected: false
+    no_finding_expected: false
+    labeller: Codex agent draft
+    labelled_on: 2026-09-08
+    contested: true
+
+  - <<: *defaults
+    id: out-of-scope-002
+    ask: Which of these cards do I already own?
+    clarified_ask: State that the engine has no collection or requester-specific ownership data.
+    expected_absences:
+      - owned-card and collection data are deliberately absent from the cEDH engine
+
+  - <<: *defaults
+    id: out-of-scope-003
+    ask: Generate a complete new deck for an unsupported commander.
+    clarified_ask: State that Ask has no deck-generation tool and that unsupported commanders cannot use the deterministic pack builder.
+    expected_absences:
+      - Ask has no deck-generation tool
+      - no supported strategy pack exists for the requested commander
+
+  - <<: *defaults
+    id: out-of-scope-004
+    ask: What will my next tournament pod play?
+    clarified_ask: State that recorded field evidence cannot predict the identities or choices of a future tournament pod.
+    expected_absences:
+      - the corpus contains recorded events, not future pod composition
+
+  - <<: *defaults
+    id: out-of-scope-005
+    ask: Did my opponent keep a hand with interaction last game?
+    clarified_ask: State that the system has no personal pod log or hidden-information record for the past game.
+    expected_absences:
+      - personal pod logging is excluded and hidden hand contents were not recorded
+
+  - <<: *defaults
+    id: out-of-scope-006
+    ask: Simulate this unfinished sixty-three-card list.
+    clarified_ask: State that the simulator requires exactly ninety-nine library cards plus one or two commanders and do not extrapolate a probability.
+    expected_absences:
+      - simulator input requires a complete Commander list with exactly 99 library cards
+
+  - <<: *defaults
+    id: out-of-scope-007
+    ask: What is my win rate against blue farm decks?
+    clarified_ask: State that the installed goldfish simulator has no opponents and cannot measure matchup win rate.
+    expected_absences:
+      - the goldfish simulator does not model opponents or matchup win rate
+
+  - <<: *defaults
+    id: out-of-scope-008
+    ask: Invent simulator behavior for this new card so we can test it now.
+    clarified_ask: Refuse to create simulator mechanics and state that unauthored card behavior cannot be measured.
+    expected_absences:
+      - the model may not create simulator mechanics
+      - unauthored card behavior cannot be measured by the installed simulator
+
+  - <<: *defaults
+    id: out-of-scope-009
+    ask: Tell me the missing card names from this result-v3 coverage count.
+    clarified_ask: State that result v3 exposes inert and unauthored counts but not their per-card identities, and do not parse warnings to guess.
+    expected_absences:
+      - simulator result v3 has counts but no structured per-card inert or unauthored list
+
+  - <<: *defaults
+    id: out-of-scope-010
+    ask: Is this popular card definitely correct for my list?
+    clarified_ask: State that inclusion evidence supports investigation but cannot establish that a card improves this list.
+    expected_absences:
+      - popularity alone does not establish card quality or deck-specific improvement

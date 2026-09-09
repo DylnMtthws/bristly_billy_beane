@@ -1,0 +1,4385 @@
+{
+  "schema_version": "mechanic-corpus-snapshot.v1",
+  "snapshot": {
+    "source_view": "scryfall:oracle_cards",
+    "row_count": 175,
+    "max_content_updated_at": "2026-09-09T12:12:47.667330+00:00",
+    "captured_at": "2026-09-09T13:25:37.897590+00:00",
+    "origin": ".research-dev/scryfall/oracle-cards.jsonl",
+    "note": "Materialised for offline tag authoring and fixture measurement. Production tag builds read mtg_v1.card_any_medium; this snapshot is labelled scryfall:oracle_cards so a row built from it is never mistaken for one built from the production view."
+  },
+  "cards": [
+    {
+      "oracle_id": "d6d7faa8-ecc9-408b-9c46-a0f62c74f567",
+      "name": "Abolish",
+      "layout": "normal",
+      "mana_cost": "{1}{W}{W}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "You may discard a Plains card rather than pay this spell's mana cost.\nDestroy target artifact or enchantment.",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "9d7624ea-ffff-470b-928b-bbac66ddbd1c",
+      "name": "Act of Aggression",
+      "layout": "normal",
+      "mana_cost": "{3}{R/P}{R/P}",
+      "mana_value": 5.0,
+      "type_line": "Instant",
+      "oracle_text": "({R/P} can be paid with either {R} or 2 life.)\nGain control of target creature an opponent controls until end of turn. Untap that creature. It gains haste until end of turn.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ae4fe5e0-408d-4398-84d7-a901b836df2a",
+      "name": "Admiral's Order",
+      "layout": "normal",
+      "mana_cost": "{1}{U}{U}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "Raid — If you attacked this turn, you may pay {U} rather than pay this spell's mana cost.\nCounter target spell.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Raid"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "2b80faaf-92fd-4fa0-a3f6-8bb263e7ff1d",
+      "name": "Akroma, Angel of Fury",
+      "layout": "normal",
+      "mana_cost": "{5}{R}{R}{R}",
+      "mana_value": 8.0,
+      "type_line": "Legendary Creature — Angel",
+      "oracle_text": "This spell can't be countered.\nFlying, trample, protection from white and from blue\n{R}: Akroma gets +1/+0 until end of turn.\nMorph {3}{R}{R}{R} (You may cast this card face down as a 2/2 creature for {3}. Turn it face up any time for its morph cost.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Flying",
+        "Morph",
+        "Protection",
+        "Trample"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        8.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "176508ba-c107-4694-8dd7-ea34fca3b299",
+      "name": "Allosaurus Rider",
+      "layout": "normal",
+      "mana_cost": "{5}{G}{G}",
+      "mana_value": 7.0,
+      "type_line": "Creature — Elf Warrior",
+      "oracle_text": "You may exile two green cards from your hand rather than pay this spell's mana cost.\nAllosaurus Rider's power and toughness are each equal to 1 plus the number of lands you control.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "2013a774-e6ab-4f2d-a84f-fd277a637d7e",
+      "name": "Alms of the Vein",
+      "layout": "normal",
+      "mana_cost": "{2}{B}",
+      "mana_value": 3.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Target opponent loses 3 life and you gain 3 life.\nMadness {B} (If you discard this card, discard it into exile. When you do, cast it for its madness cost or put it into your graveyard.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Madness"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "bc842838-1993-4480-b8fe-f9d9f2dee7a4",
+      "name": "Alrund's Epiphany",
+      "layout": "normal",
+      "mana_cost": "{5}{U}{U}",
+      "mana_value": 7.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Create two 1/1 blue Bird creature tokens with flying. Take an extra turn after this one. Exile Alrund's Epiphany.\nForetell {4}{U}{U} (During your turn, you may pay {2} and exile this card from your hand face down. Cast it on a later turn for its foretell cost.)",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Foretell"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "6a125750-2b8c-4f9d-8173-ac8d14c91ddb",
+      "name": "Altar's Reap",
+      "layout": "normal",
+      "mana_cost": "{1}{B}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nDraw two cards.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "8f1016c7-0551-4813-987d-36abf3b2ffeb",
+      "name": "Anje's Ravager",
+      "layout": "normal",
+      "mana_cost": "{2}{R}",
+      "mana_value": 3.0,
+      "type_line": "Creature — Vampire Berserker",
+      "oracle_text": "This creature attacks each combat if able.\nWhenever this creature attacks, discard your hand, then draw three cards.\nMadness {1}{R} (If you discard this card, discard it into exile. When you do, cast it for its madness cost or put it into your graveyard.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Madness"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ea393815-0202-4edc-aa1e-6885fe9b20ab",
+      "name": "Apostle's Blessing",
+      "layout": "normal",
+      "mana_cost": "{1}{W/P}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "({W/P} can be paid with either {W} or 2 life.)\nTarget artifact or creature you control gains protection from artifacts or from the color of your choice until end of turn.",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "4567a528-75f0-4ea6-b927-3a500caf76ac",
+      "name": "Arbor Elf",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "mana_value": 1.0,
+      "type_line": "Creature — Elf Druid",
+      "oracle_text": "{T}: Untap target Forest.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "0bc7f093-bef0-4f1a-852c-4b75ebf54838",
+      "name": "Arcane Signet",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "d412b175-2365-4b2c-a8f5-3e4e9d06280d",
+      "name": "Archive Trap",
+      "layout": "normal",
+      "mana_cost": "{3}{U}{U}",
+      "mana_value": 5.0,
+      "type_line": "Instant — Trap",
+      "oracle_text": "If an opponent searched their library this turn, you may pay {0} rather than pay this spell's mana cost.\nTarget opponent mills thirteen cards.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Mill"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "b337c241-f2c4-48e3-a303-371b172fcd18",
+      "name": "Attune with Aether",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "mana_value": 1.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Search your library for a basic land card, reveal it, put it into your hand, then shuffle. You get {E}{E} (two energy counters).",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "4854f836-2247-43c3-adbc-1d1ee5eaf120",
+      "name": "Avatar of Fury",
+      "layout": "normal",
+      "mana_cost": "{6}{R}{R}",
+      "mana_value": 8.0,
+      "type_line": "Creature — Avatar",
+      "oracle_text": "If an opponent controls seven or more lands, this spell costs {6} less to cast.\nFlying\n{R}: This creature gets +1/+0 until end of turn.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Flying"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        8.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "e018773f-95b3-49a3-9674-6f04ddef2092",
+      "name": "Azorius Signet",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "{1}, {T}: Add {W}{U}.",
+      "colors": [],
+      "color_identity": [
+        "U",
+        "W"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "adfcdadd-ddda-477b-8e72-0cae2430fb63",
+      "name": "Baleful Mastery",
+      "layout": "normal",
+      "mana_cost": "{3}{B}",
+      "mana_value": 4.0,
+      "type_line": "Instant",
+      "oracle_text": "You may pay {1}{B} rather than pay this spell's mana cost.\nIf the {1}{B} cost was paid, an opponent draws a card.\nExile target creature or planeswalker.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "c99e4768-192c-49bf-8f51-c204a2248326",
+      "name": "Bane of the Living",
+      "layout": "normal",
+      "mana_cost": "{2}{B}{B}",
+      "mana_value": 4.0,
+      "type_line": "Creature — Insect",
+      "oracle_text": "Morph {X}{B}{B} (You may cast this card face down as a 2/2 creature for {3}. Turn it face up any time for its morph cost.)\nWhen this creature is turned face up, all creatures get -X/-X until end of turn.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Morph"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "b2ec080f-ad5d-4274-91e3-bc6ac89fc3e4",
+      "name": "Basking Rootwalla",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "mana_value": 1.0,
+      "type_line": "Creature — Lizard",
+      "oracle_text": "{1}{G}: This creature gets +2/+2 until end of turn. Activate only once each turn.\nMadness {0} (If you discard this card, discard it into exile. When you do, cast it for its madness cost or put it into your graveyard.)",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Madness"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "3d63ad3a-4e9f-4968-a576-4be063f4ecbf",
+      "name": "Battle at the Bridge",
+      "layout": "normal",
+      "mana_cost": "{X}{B}",
+      "mana_value": 1.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Improvise (Your artifacts can help cast this spell. Each artifact you tap after you're done activating mana abilities pays for {1}.)\nTarget creature gets -X/-X until end of turn. You gain X life.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Improvise"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "d7d2f701-77df-4169-bf98-0d51d6886e9b",
+      "name": "Behold the Multiverse",
+      "layout": "normal",
+      "mana_cost": "{3}{U}",
+      "mana_value": 4.0,
+      "type_line": "Instant",
+      "oracle_text": "Scry 2, then draw two cards.\nForetell {1}{U} (During your turn, you may pay {2} and exile this card from your hand face down. Cast it on a later turn for its foretell cost.)",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Foretell",
+        "Scry"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ab55834f-c935-4773-89c6-bec9712284eb",
+      "name": "Big Game Hunter",
+      "layout": "normal",
+      "mana_cost": "{1}{B}{B}",
+      "mana_value": 3.0,
+      "type_line": "Creature — Human Rebel Assassin",
+      "oracle_text": "When this creature enters, destroy target creature with power 4 or greater. It can't be regenerated.\nMadness {B} (If you discard this card, discard it into exile. When you do, cast it for its madness cost or put it into your graveyard.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Madness"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "d3a0b660-358c-41bd-9cd2-41fbf3491b1a",
+      "name": "Birds of Paradise",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "mana_value": 1.0,
+      "type_line": "Creature — Bird",
+      "oracle_text": "Flying\n{T}: Add one mana of any color.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Flying"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "f8b9dd54-0837-47f4-ad14-7a0322d46d5f",
+      "name": "Birthing Pod",
+      "layout": "normal",
+      "mana_cost": "{3}{G/P}",
+      "mana_value": 4.0,
+      "type_line": "Artifact",
+      "oracle_text": "({G/P} can be paid with either {G} or 2 life.)\n{1}{G/P}, {T}, Sacrifice a creature: Search your library for a creature card with mana value equal to 1 plus the sacrificed creature's mana value, put that card onto the battlefield, then shuffle. Activate only as a sorcery.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ccba143d-ed9b-4044-bdad-f010a0e38e47",
+      "name": "Blazing Shoal",
+      "layout": "normal",
+      "mana_cost": "{X}{R}{R}",
+      "mana_value": 2.0,
+      "type_line": "Instant — Arcane",
+      "oracle_text": "You may exile a red card with mana value X from your hand rather than pay this spell's mana cost.\nTarget creature gets +X/+0 until end of turn.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "f5f330a5-14a0-4bfe-ba46-4616692b7bd3",
+      "name": "Blinding Souleater",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "mana_value": 3.0,
+      "type_line": "Artifact Creature — Phyrexian Cleric",
+      "oracle_text": "{W/P}, {T}: Tap target creature. ({W/P} can be paid with either {W} or 2 life.)",
+      "colors": [],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "2bd111bb-ce02-414c-b5b7-e0e037d8d96b",
+      "name": "Bolas's Citadel",
+      "layout": "normal",
+      "mana_cost": "{3}{B}{B}{B}",
+      "mana_value": 6.0,
+      "type_line": "Legendary Artifact",
+      "oracle_text": "You may look at the top card of your library any time.\nYou may play lands and cast spells from the top of your library. If you cast a spell this way, pay life equal to its mana value rather than pay its mana cost.\n{T}, Sacrifice ten nonland permanents: Each opponent loses 10 life.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        6.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "2679d0dd-ba30-4a1c-b6a0-b3ac6c790496",
+      "name": "Boros Charm",
+      "layout": "normal",
+      "mana_cost": "{R}{W}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "Choose one —\n• Boros Charm deals 4 damage to target player or planeswalker.\n• Permanents you control gain indestructible until end of turn.\n• Target creature gains double strike until end of turn.",
+      "colors": [
+        "R",
+        "W"
+      ],
+      "color_identity": [
+        "R",
+        "W"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "41c84665-1f99-40ab-aaca-1188649eb263",
+      "name": "Boros Signet",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "{1}, {T}: Add {R}{W}.",
+      "colors": [],
+      "color_identity": [
+        "R",
+        "W"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "36cd2364-d113-47d1-b2c4-b088d9eb88dd",
+      "name": "Brainstorm",
+      "layout": "normal",
+      "mana_cost": "{U}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "Draw three cards, then put two cards from your hand on top of your library in any order.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "a9f98ad5-e8d4-4142-a19f-3368b85d1c95",
+      "name": "Bringer of the Black Dawn",
+      "layout": "normal",
+      "mana_cost": "{7}{B}{B}",
+      "mana_value": 9.0,
+      "type_line": "Creature — Bringer",
+      "oracle_text": "You may pay {W}{U}{B}{R}{G} rather than pay this spell's mana cost.\nTrample\nAt the beginning of your upkeep, you may pay 2 life. If you do, search your library for a card, then shuffle and put that card on top.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "keywords": [
+        "Trample"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        9.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "5b5bf1fa-6502-4790-b66b-f0f8504ebc7c",
+      "name": "Cabal Ritual",
+      "layout": "normal",
+      "mana_cost": "{1}{B}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "Add {B}{B}{B}.\nThreshold — Add {B}{B}{B}{B}{B} instead if there are seven or more cards in your graveyard.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Threshold"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "6789a170-f2c5-4fc0-8a45-2b2361e67410",
+      "name": "Chord of Calling",
+      "layout": "normal",
+      "mana_cost": "{X}{G}{G}{G}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nSearch your library for a creature card with mana value X or less, put it onto the battlefield, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Convoke"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "f25351e3-539b-4bbc-b92d-6480acf4d722",
+      "name": "City of Brass",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "Whenever this land becomes tapped, it deals 1 damage to you.\n{T}: Add one mana of any color.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "9c44e556-4c7a-48bf-a108-c584f69c2cfa",
+      "name": "Cling to Dust",
+      "layout": "normal",
+      "mana_cost": "{B}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "Exile target card from a graveyard. If it was a creature card, you gain 3 life. Otherwise, you draw a card.\nEscape—{3}{B}, Exile five other cards from your graveyard. (You may cast this card from your graveyard for its escape cost.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Escape"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ad7d854b-d303-40eb-acd6-03a8023e05e7",
+      "name": "Commandeer",
+      "layout": "normal",
+      "mana_cost": "{5}{U}{U}",
+      "mana_value": 7.0,
+      "type_line": "Instant",
+      "oracle_text": "You may exile two blue cards from your hand rather than pay this spell's mana cost.\nGain control of target noncreature spell. You may choose new targets for it. (If that spell is an artifact, enchantment, or planeswalker, the permanent enters under your control.)",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "6385fd0d-256d-4400-9319-afa8170024db",
+      "name": "Culling the Weak",
+      "layout": "normal",
+      "mana_cost": "{B}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nAdd {B}{B}{B}{B}.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "53f7c868-b03e-4fc2-8dcf-a75bbfa3272b",
+      "name": "Dark Ritual",
+      "layout": "normal",
+      "mana_cost": "{B}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "Add {B}{B}{B}.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "70486bee-6ee7-41ea-b834-8caf4699302b",
+      "name": "Daze",
+      "layout": "normal",
+      "mana_cost": "{1}{U}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "You may return an Island you control to its owner's hand rather than pay this spell's mana cost.\nCounter target spell unless its controller pays {1}.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "457af74a-02b3-4659-846d-63e482667f34",
+      "name": "Deadly Dispute",
+      "layout": "normal",
+      "mana_cost": "{1}{B}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "As an additional cost to cast this spell, sacrifice an artifact or creature.\nDraw two cards and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Treasure"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "7f522ded-09fd-457e-9efe-0a6324925e4c",
+      "name": "Decimator of the Provinces",
+      "layout": "normal",
+      "mana_cost": "{10}",
+      "mana_value": 10.0,
+      "type_line": "Creature — Eldrazi Boar",
+      "oracle_text": "Emerge {6}{G}{G}{G} (You may cast this spell by sacrificing a creature and paying the emerge cost reduced by that creature's mana value.)\nWhen you cast this spell, creatures you control get +2/+2 and gain trample until end of turn.\nTrample, haste",
+      "colors": [],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Emerge",
+        "Haste",
+        "Trample"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        10.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "579cbd92-797f-4cdf-91ed-fca7a523eae5",
+      "name": "Deep Analysis",
+      "layout": "normal",
+      "mana_cost": "{3}{U}",
+      "mana_value": 4.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Target player draws two cards.\nFlashback—{1}{U}, Pay 3 life. (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Flashback"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "9f12bf9a-6e1a-4377-b4af-e8cabd3ee58a",
+      "name": "Deserted Temple",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "{T}: Add {C}.\n{1}, {T}: Untap target land.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "cb814e16-acf7-41d5-a357-1323dcc369f3",
+      "name": "Devoted Druid",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Creature — Elf Druid",
+      "oracle_text": "{T}: Add {G}.\nPut a -1/-1 counter on this creature: Untap this creature.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "f8b17b89-26ce-4208-874a-9e1d66514640",
+      "name": "Dig Through Time",
+      "layout": "normal",
+      "mana_cost": "{6}{U}{U}",
+      "mana_value": 8.0,
+      "type_line": "Instant",
+      "oracle_text": "Delve (Each card you exile from your graveyard while casting this spell pays for {1}.)\nLook at the top seven cards of your library. Put two of them into your hand and the rest on the bottom of your library in any order.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Delve"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        8.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "7d881c57-0bd9-4c57-aa4a-b10808b86143",
+      "name": "Dimir Signet",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "{1}, {T}: Add {U}{B}.",
+      "colors": [],
+      "color_identity": [
+        "B",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "fd74f8eb-0253-42dd-8277-186d4934da38",
+      "name": "Dismember",
+      "layout": "normal",
+      "mana_cost": "{1}{B/P}{B/P}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "({B/P} can be paid with either {B} or 2 life.)\nTarget creature gets -5/-5 until end of turn.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "36d32194-d547-4e2d-894f-f4bf13cf7da6",
+      "name": "Distended Mindbender",
+      "layout": "normal",
+      "mana_cost": "{8}",
+      "mana_value": 8.0,
+      "type_line": "Creature — Eldrazi Insect",
+      "oracle_text": "Emerge {5}{B}{B} (You may cast this spell by sacrificing a creature and paying the emerge cost reduced by that creature's mana value.)\nWhen you cast this spell, target opponent reveals their hand. You choose from it a nonland card with mana value 3 or less and a card with mana value 4 or greater. That player discards those cards.",
+      "colors": [],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Emerge"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        8.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "697bcfe1-ecbf-42a1-bfc7-0766d48ca56b",
+      "name": "Dockside Extortionist",
+      "layout": "normal",
+      "mana_cost": "{1}{R}",
+      "mana_value": 2.0,
+      "type_line": "Creature — Goblin Pirate",
+      "oracle_text": "When this creature enters, create X Treasure tokens, where X is the number of artifacts and enchantments your opponents control. (Treasure tokens are artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Treasure"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "banned"
+    },
+    {
+      "oracle_id": "38ece0fa-2c94-4eae-b6ab-74b783862f3e",
+      "name": "Doomskar",
+      "layout": "normal",
+      "mana_cost": "{3}{W}{W}",
+      "mana_value": 5.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Destroy all creatures.\nForetell {1}{W}{W} (During your turn, you may pay {2} and exile this card from your hand face down. Cast it on a later turn for its foretell cost.)",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "Foretell"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "6157ade6-9037-4339-869b-493fdee71dcf",
+      "name": "Draco",
+      "layout": "normal",
+      "mana_cost": "{16}",
+      "mana_value": 16.0,
+      "type_line": "Artifact Creature — Dragon",
+      "oracle_text": "Domain — This spell costs {2} less to cast for each basic land type among lands you control.\nFlying\nDomain — At the beginning of your upkeep, sacrifice this creature unless you pay {10}. This cost is reduced by {2} for each basic land type among lands you control.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [
+        "Flying",
+        "Domain"
+      ],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        16.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "352b64d2-2ae5-44ee-a64f-94932ef545d3",
+      "name": "Dread Return",
+      "layout": "normal",
+      "mana_cost": "{2}{B}{B}",
+      "mana_value": 4.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Return target creature card from your graveyard to the battlefield.\nFlashback—Sacrifice three creatures. (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Flashback"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "4eafe717-4ba4-4901-8c67-11757230eb54",
+      "name": "Elder Deep-Fiend",
+      "layout": "normal",
+      "mana_cost": "{8}",
+      "mana_value": 8.0,
+      "type_line": "Creature — Eldrazi Octopus",
+      "oracle_text": "Flash\nEmerge {5}{U}{U} (You may cast this spell by sacrificing a creature and paying the emerge cost reduced by that creature's mana value.)\nWhen you cast this spell, tap up to four target permanents.",
+      "colors": [],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Emerge",
+        "Flash"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        8.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "3f3b2c10-21f8-4e13-be83-4ef3fa36e123",
+      "name": "Elvish Mystic",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "mana_value": 1.0,
+      "type_line": "Creature — Elf Druid",
+      "oracle_text": "{T}: Add {G}.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "c85d824b-c190-4d04-ab99-918ad0e6516c",
+      "name": "Endurance",
+      "layout": "normal",
+      "mana_cost": "{1}{G}{G}",
+      "mana_value": 3.0,
+      "type_line": "Creature — Elemental Incarnation",
+      "oracle_text": "Flash\nReach\nWhen this creature enters, up to one target player puts all the cards from their graveyard on the bottom of their library in a random order.\nEvoke—Exile a green card from your hand.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Reach",
+        "Evoke",
+        "Flash"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "96b87445-6362-4a17-91b2-cbf203fd03fd",
+      "name": "Etherium Sculptor",
+      "layout": "normal",
+      "mana_cost": "{1}{U}",
+      "mana_value": 2.0,
+      "type_line": "Artifact Creature — Vedalken Artificer",
+      "oracle_text": "Artifact spells you cast cost {1} less to cast.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "2f6e9ab8-6951-4c5f-bcde-0e96e0fe87f2",
+      "name": "Exalted Angel",
+      "layout": "normal",
+      "mana_cost": "{4}{W}{W}",
+      "mana_value": 6.0,
+      "type_line": "Creature — Angel",
+      "oracle_text": "Flying\nWhenever this creature deals damage, you gain that much life.\nMorph {2}{W}{W} (You may cast this card face down as a 2/2 creature for {3}. Turn it face up any time for its morph cost.)",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "Flying",
+        "Morph"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        6.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "8fcf50cd-e6d0-4516-850f-d42ee75dcc3a",
+      "name": "Expedition Map",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Artifact",
+      "oracle_text": "{2}, {T}, Sacrifice this artifact: Search your library for a land card, reveal it, put it into your hand, then shuffle.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "3d6fa57a-aa53-4b5c-b8af-a7612c823117",
+      "name": "Faithless Looting",
+      "layout": "normal",
+      "mana_cost": "{R}",
+      "mana_value": 1.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Draw two cards, then discard two cards.\nFlashback {2}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Flashback"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "495e52e6-4c2b-4574-9474-eadbdcc8b4ac",
+      "name": "Farseek",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Search your library for a Plains, Island, Swamp, or Mountain card, put it onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "95560508-7ac9-4be9-8a3f-3c7d5b52807b",
+      "name": "Fellwar Stone",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "{T}: Add one mana of any color that a land an opponent controls could produce.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "a292ca5b-2472-4b02-a26b-d1b5b717a34b",
+      "name": "Fieldmist Borderpost",
+      "layout": "normal",
+      "mana_cost": "{1}{W}{U}",
+      "mana_value": 3.0,
+      "type_line": "Artifact",
+      "oracle_text": "You may pay {1} and return a basic land you control to its owner's hand rather than pay this spell's mana cost.\nThis artifact enters tapped.\n{T}: Add {W} or {U}.",
+      "colors": [
+        "U",
+        "W"
+      ],
+      "color_identity": [
+        "U",
+        "W"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "f07bd49d-8e71-4d56-be2a-638514011318",
+      "name": "Fiery Temper",
+      "layout": "normal",
+      "mana_cost": "{1}{R}{R}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "Fiery Temper deals 3 damage to any target.\nMadness {R} (If you discard this card, discard it into exile. When you do, cast it for its madness cost or put it into your graveyard.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Madness"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "9dd7f27a-e862-47d7-9158-034cf4d353b8",
+      "name": "Fireblast",
+      "layout": "normal",
+      "mana_cost": "{4}{R}{R}",
+      "mana_value": 6.0,
+      "type_line": "Instant",
+      "oracle_text": "You may sacrifice two Mountains rather than pay this spell's mana cost.\nFireblast deals 4 damage to any target.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        6.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "7aa31280-12c3-479d-a6dd-f1c669043083",
+      "name": "Firebolt",
+      "layout": "normal",
+      "mana_cost": "{R}",
+      "mana_value": 1.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Firebolt deals 2 damage to any target.\nFlashback {4}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Flashback"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "157813c8-af83-41b5-9ffb-4abd167c1bfc",
+      "name": "Firestorm",
+      "layout": "normal",
+      "mana_cost": "{R}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "As an additional cost to cast this spell, discard X cards.\nFirestorm deals X damage to each of X targets.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "1766f1f4-0924-4436-8379-94030adcccc5",
+      "name": "Flare of Cultivation",
+      "layout": "normal",
+      "mana_cost": "{1}{G}{G}",
+      "mana_value": 3.0,
+      "type_line": "Sorcery",
+      "oracle_text": "You may sacrifice a nontoken green creature rather than pay this spell's mana cost.\nSearch your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "437cfd16-94bc-43ba-afd8-e9e9d028a4ca",
+      "name": "Flare of Denial",
+      "layout": "normal",
+      "mana_cost": "{1}{U}{U}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "You may sacrifice a nontoken blue creature rather than pay this spell's mana cost.\nCounter target spell.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "7dde4eb6-e9d7-4259-abc2-3af738e0f00f",
+      "name": "Foil",
+      "layout": "normal",
+      "mana_cost": "{2}{U}{U}",
+      "mana_value": 4.0,
+      "type_line": "Instant",
+      "oracle_text": "You may discard an Island card and another card rather than pay this spell's mana cost.\nCounter target spell.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ac2173f9-f223-440a-9231-fd98762bdc6f",
+      "name": "Force of Negation",
+      "layout": "normal",
+      "mana_cost": "{1}{U}{U}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "If it's not your turn, you may exile a blue card from your hand rather than pay this spell's mana cost.\nCounter target noncreature spell. If that spell is countered this way, exile it instead of putting it into its owner's graveyard.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "5f627e45-deee-4a4f-8128-57b0d8ebc553",
+      "name": "Force of Vigor",
+      "layout": "normal",
+      "mana_cost": "{2}{G}{G}",
+      "mana_value": 4.0,
+      "type_line": "Instant",
+      "oracle_text": "If it's not your turn, you may exile a green card from your hand rather than pay this spell's mana cost.\nDestroy up to two target artifacts and/or enchantments.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "956381ba-6d37-4a8a-846c-bad79222dbee",
+      "name": "Force of Will",
+      "layout": "normal",
+      "mana_cost": "{3}{U}{U}",
+      "mana_value": 5.0,
+      "type_line": "Instant",
+      "oracle_text": "You may pay 1 life and exile a blue card from your hand rather than pay this spell's mana cost.\nCounter target spell.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "a927fd33-f183-48d9-b582-55d379d70e13",
+      "name": "Frogmite",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Artifact Creature — Frog",
+      "oracle_text": "Affinity for artifacts (This spell costs {1} less to cast for each artifact you control.)",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [
+        "Affinity"
+      ],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "df317532-7d36-40fd-938f-e972749c8792",
+      "name": "Fyndhorn Elves",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "mana_value": 1.0,
+      "type_line": "Creature — Elf Druid",
+      "oracle_text": "{T}: Add {G}.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "1d67f5ff-1fce-45e5-b6a1-416c569351e2",
+      "name": "Gitaxian Probe",
+      "layout": "normal",
+      "mana_cost": "{U/P}",
+      "mana_value": 1.0,
+      "type_line": "Sorcery",
+      "oracle_text": "({U/P} can be paid with either {U} or 2 life.)\nLook at target player's hand.\nDraw a card.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "27065d34-b22a-47af-aea2-980f47bafcea",
+      "name": "Glimpse the Cosmos",
+      "layout": "normal",
+      "mana_cost": "{1}{U}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Look at the top three cards of your library. Put one of them into your hand and the rest on the bottom of your library in any order.\nAs long as you control a Giant, you may cast this card from your graveyard by paying {U} rather than paying its mana cost. If you cast this card this way and it would be put into your graveyard, exile it instead.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "81f06f84-1580-43c0-89d5-08d34541a519",
+      "name": "Goblin Electromancer",
+      "layout": "normal",
+      "mana_cost": "{U}{R}",
+      "mana_value": 2.0,
+      "type_line": "Creature — Goblin Wizard",
+      "oracle_text": "Instant and sorcery spells you cast cost {1} less to cast.",
+      "colors": [
+        "R",
+        "U"
+      ],
+      "color_identity": [
+        "R",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "0d6b89dc-23fb-48e9-a54b-cea2838ae7c8",
+      "name": "Grief",
+      "layout": "normal",
+      "mana_cost": "{2}{B}{B}",
+      "mana_value": 4.0,
+      "type_line": "Creature — Elemental Incarnation",
+      "oracle_text": "Menace\nWhen this creature enters, target opponent reveals their hand. You choose a nonland card from it. That player discards that card.\nEvoke—Exile a black card from your hand.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Evoke",
+        "Menace"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "229d6627-1292-4ae1-8849-b0f956fa6540",
+      "name": "Grim Monolith",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "This artifact doesn't untap during your untap step.\n{T}: Add {C}{C}{C}.\n{4}: Untap this artifact.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "315772f2-abd2-4681-b8c8-1db4b0ccbbcd",
+      "name": "Gurmag Angler",
+      "layout": "normal",
+      "mana_cost": "{6}{B}",
+      "mana_value": 7.0,
+      "type_line": "Creature — Zombie Fish",
+      "oracle_text": "Delve (Each card you exile from your graveyard while casting this spell pays for {1}.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Delve"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "16d8ee99-8ec8-429f-9ba7-818a74b6f910",
+      "name": "Gush",
+      "layout": "normal",
+      "mana_cost": "{4}{U}",
+      "mana_value": 5.0,
+      "type_line": "Instant",
+      "oracle_text": "You may return two Islands you control to their owner's hand rather than pay this spell's mana cost.\nDraw two cards.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "9afb3b6e-4909-4efa-aa79-81c0229411c9",
+      "name": "Gut Shot",
+      "layout": "normal",
+      "mana_cost": "{R/P}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "({R/P} can be paid with either {R} or 2 life.)\nGut Shot deals 1 damage to any target.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "40601061-1b25-4db8-8b99-33324ce945cf",
+      "name": "Hatred",
+      "layout": "normal",
+      "mana_cost": "{3}{B}{B}",
+      "mana_value": 5.0,
+      "type_line": "Instant",
+      "oracle_text": "As an additional cost to cast this spell, pay X life.\nTarget creature gets +X/+0 until end of turn.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "97b559fe-b09d-4883-9509-c45ace2d8487",
+      "name": "Herald of Anguish",
+      "layout": "normal",
+      "mana_cost": "{5}{B}{B}",
+      "mana_value": 7.0,
+      "type_line": "Creature — Demon",
+      "oracle_text": "Improvise (Your artifacts can help cast this spell. Each artifact you tap after you're done activating mana abilities pays for {1}.)\nFlying\nAt the beginning of your end step, each opponent discards a card.\n{1}{B}, Sacrifice an artifact: Target creature gets -2/-2 until end of turn.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Flying",
+        "Improvise"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "c180f21b-f553-4839-80c7-a3ce2fae9b5a",
+      "name": "Hex Parasite",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Artifact Creature — Phyrexian Insect",
+      "oracle_text": "{X}{B/P}: Remove up to X counters from target permanent. For each counter removed this way, this creature gets +1/+0 until end of turn. ({B/P} can be paid with either {B} or 2 life.)",
+      "colors": [],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "dad43a2d-5b30-45f2-a34d-9e68d1fbb716",
+      "name": "Ingenious Mastery",
+      "layout": "normal",
+      "mana_cost": "{X}{2}{U}",
+      "mana_value": 3.0,
+      "type_line": "Sorcery",
+      "oracle_text": "You may pay {2}{U} rather than pay this spell's mana cost.\nIf the {2}{U} cost was paid, you draw three cards, then an opponent creates two Treasure tokens and they scry 2. If that cost wasn't paid, you draw X cards.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Treasure",
+        "Scry"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "9264c198-76c7-4ac0-9334-37c691de1b54",
+      "name": "Invigorate",
+      "layout": "normal",
+      "mana_cost": "{2}{G}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "If you control a Forest, rather than pay this spell's mana cost, you may have an opponent gain 3 life.\nTarget creature gets +4/+4 until end of turn.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "8be4745e-36d8-430f-945e-c8a7fde9b4f6",
+      "name": "Jodah, Archmage Eternal",
+      "layout": "normal",
+      "mana_cost": "{1}{U}{R}{W}",
+      "mana_value": 4.0,
+      "type_line": "Legendary Creature — Human Wizard",
+      "oracle_text": "Flying\nYou may pay {W}{U}{B}{R}{G} rather than pay the mana cost for spells you cast.",
+      "colors": [
+        "R",
+        "U",
+        "W"
+      ],
+      "color_identity": [
+        "B",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "keywords": [
+        "Flying"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "cbe3a4e7-5dbe-4f58-8ee6-a1762b65acfd",
+      "name": "K'rrik, Son of Yawgmoth",
+      "layout": "normal",
+      "mana_cost": "{4}{B/P}{B/P}{B/P}",
+      "mana_value": 7.0,
+      "type_line": "Legendary Creature — Phyrexian Horror Minion",
+      "oracle_text": "({B/P} can be paid with either {B} or 2 life.)\nLifelink\nFor each {B} in a cost, you may pay 2 life rather than pay that mana.\nWhenever you cast a black spell, put a +1/+1 counter on K'rrik.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Lifelink"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "5470dcfa-4eff-43da-abf7-19922841f719",
+      "name": "Kitchen Finks",
+      "layout": "normal",
+      "mana_cost": "{1}{G/W}{G/W}",
+      "mana_value": 3.0,
+      "type_line": "Creature — Ouphe",
+      "oracle_text": "When this creature enters, you gain 2 life.\nPersist (When this creature dies, if it had no -1/-1 counters on it, return it to the battlefield under its owner's control with a -1/-1 counter on it.)",
+      "colors": [
+        "G",
+        "W"
+      ],
+      "color_identity": [
+        "G",
+        "W"
+      ],
+      "keywords": [
+        "Persist"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "f6e160c1-b29f-4f3d-ab55-43ffe3ab4acf",
+      "name": "Kolaghan, the Storm's Fury",
+      "layout": "normal",
+      "mana_cost": "{3}{B}{R}",
+      "mana_value": 5.0,
+      "type_line": "Legendary Creature — Dragon",
+      "oracle_text": "Flying\nWhenever a Dragon you control attacks, creatures you control get +1/+0 until end of turn.\nDash {3}{B}{R} (You may cast this spell for its dash cost. If you do, it gains haste, and it's returned from the battlefield to its owner's hand at the beginning of the next end step.)",
+      "colors": [
+        "B",
+        "R"
+      ],
+      "color_identity": [
+        "B",
+        "R"
+      ],
+      "keywords": [
+        "Flying",
+        "Dash"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ea845951-0158-4646-acd9-3b0b28da40b1",
+      "name": "Krosan Restorer",
+      "layout": "normal",
+      "mana_cost": "{2}{G}",
+      "mana_value": 3.0,
+      "type_line": "Creature — Human Druid",
+      "oracle_text": "{T}: Untap target land.\nThreshold — {T}: Untap up to three target lands. Activate only if there are seven or more cards in your graveyard.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Threshold"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "2cb1c213-b3f2-4433-8f89-6a3b4c3d2795",
+      "name": "Kroxa, Titan of Death's Hunger",
+      "layout": "normal",
+      "mana_cost": "{B}{R}",
+      "mana_value": 2.0,
+      "type_line": "Legendary Creature — Elder Giant",
+      "oracle_text": "When Kroxa enters, sacrifice it unless it escaped.\nWhenever Kroxa enters or attacks, each opponent discards a card, then each opponent who didn't discard a nonland card this way loses 3 life.\nEscape—{B}{B}{R}{R}, Exile five other cards from your graveyard. (You may cast this card from your graveyard for its escape cost.)",
+      "colors": [
+        "B",
+        "R"
+      ],
+      "color_identity": [
+        "B",
+        "R"
+      ],
+      "keywords": [
+        "Escape"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "e36f4649-934d-4e8a-bd5f-39f164ea6937",
+      "name": "Land Grant",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "If you have no land cards in hand, you may reveal your hand rather than pay this spell's mana cost.\nSearch your library for a Forest card, reveal that card, put it into your hand, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "a7dd75bf-ecda-406c-baa2-8c051f138809",
+      "name": "Lashweed Lurker",
+      "layout": "normal",
+      "mana_cost": "{8}",
+      "mana_value": 8.0,
+      "type_line": "Creature — Eldrazi Horror",
+      "oracle_text": "Emerge {5}{G}{U} (You may cast this spell by sacrificing a creature and paying the emerge cost reduced by that creature's mana value.)\nWhen you cast this spell, you may put target nonland permanent on top of its owner's library.",
+      "colors": [],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [
+        "Emerge"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        8.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "066ba81e-b32d-4808-97ab-0b5f52d557e4",
+      "name": "Lashwrithe",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "mana_value": 4.0,
+      "type_line": "Artifact — Equipment",
+      "oracle_text": "Living weapon (When this Equipment enters, create a 0/0 black Phyrexian Germ creature token, then attach this to it.)\nEquipped creature gets +1/+1 for each Swamp you control.\nEquip {B/P}{B/P} ({B/P} can be paid with either {B} or 2 life.)",
+      "colors": [],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Equip",
+        "Living weapon"
+      ],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "cedc52eb-66a6-4b43-87f1-9bb9f4d4871e",
+      "name": "Lay of the Land",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "mana_value": 1.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Search your library for a basic land card, reveal it, put it into your hand, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "a4ae41c7-9631-407d-8fd3-04f403d940a8",
+      "name": "Ley Druid",
+      "layout": "normal",
+      "mana_cost": "{2}{G}",
+      "mana_value": 3.0,
+      "type_line": "Creature — Human Druid",
+      "oracle_text": "{T}: Untap target land.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "1e474772-3fe4-46be-8c5f-6e477b9fd74e",
+      "name": "Lightning Berserker",
+      "layout": "normal",
+      "mana_cost": "{R}",
+      "mana_value": 1.0,
+      "type_line": "Creature — Human Berserker",
+      "oracle_text": "{R}: This creature gets +1/+0 until end of turn.\nDash {R} (You may cast this spell for its dash cost. If you do, it gains haste, and it's returned from the battlefield to its owner's hand at the beginning of the next end step.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Dash"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "4457ed35-7c10-48c8-9776-456485fdf070",
+      "name": "Lightning Bolt",
+      "layout": "normal",
+      "mana_cost": "{R}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "68954295-54e3-4303-a6bc-fc4547a4e3a3",
+      "name": "Llanowar Elves",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "mana_value": 1.0,
+      "type_line": "Creature — Elf Druid",
+      "oracle_text": "{T}: Add {G}.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "d0ee5bdc-2b69-4b73-9a20-ffcc18783b29",
+      "name": "Mana Confluence",
+      "layout": "normal",
+      "mana_cost": "",
+      "mana_value": 0.0,
+      "type_line": "Land",
+      "oracle_text": "{T}, Pay 1 life: Add one mana of any color.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Land"
+      ],
+      "castable_cmcs": [],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "2c63e4e1-89d2-4bc6-a232-94e75c4b1c8a",
+      "name": "Mana Crypt",
+      "layout": "normal",
+      "mana_cost": "{0}",
+      "mana_value": 0.0,
+      "type_line": "Artifact",
+      "oracle_text": "At the beginning of your upkeep, flip a coin. If you lose the flip, this artifact deals 3 damage to you.\n{T}: Add {C}{C}.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        0.0
+      ],
+      "faces": [],
+      "commander_legal": "banned"
+    },
+    {
+      "oracle_id": "736892cb-a34b-4bb9-b56c-e26e3db207a2",
+      "name": "Mana Vault",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Artifact",
+      "oracle_text": "This artifact doesn't untap during your untap step.\nAt the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.\nAt the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you.\n{T}: Add {C}{C}{C}.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "3c9535a2-7995-42de-a56f-0a445f2dd697",
+      "name": "Manaforge Cinder",
+      "layout": "normal",
+      "mana_cost": "{B/R}",
+      "mana_value": 1.0,
+      "type_line": "Creature — Elemental Shaman",
+      "oracle_text": "{1}: Add {B} or {R}. Activate no more than three times each turn.",
+      "colors": [
+        "B",
+        "R"
+      ],
+      "color_identity": [
+        "B",
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "0c26ab0d-80f6-4e5b-9d0e-af17c1519583",
+      "name": "March of the Multitudes",
+      "layout": "normal",
+      "mana_cost": "{X}{G}{W}{W}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nCreate X 1/1 white Soldier creature tokens with lifelink.",
+      "colors": [
+        "G",
+        "W"
+      ],
+      "color_identity": [
+        "G",
+        "W"
+      ],
+      "keywords": [
+        "Convoke"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "c18ab011-c5e0-4174-b623-d89e4d745ce6",
+      "name": "Mardu Scout",
+      "layout": "normal",
+      "mana_cost": "{R}{R}",
+      "mana_value": 2.0,
+      "type_line": "Creature — Goblin Scout",
+      "oracle_text": "Dash {1}{R} (You may cast this spell for its dash cost. If you do, it gains haste, and it's returned from the battlefield to its owner's hand at the beginning of the next end step.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Dash"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "1a0770e6-b093-4439-baff-6889a50ba12e",
+      "name": "Mental Misstep",
+      "layout": "normal",
+      "mana_cost": "{U/P}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "({U/P} can be paid with either {U} or 2 life.)\nCounter target spell with mana value 1.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "c4920e95-a6fc-4373-a0d6-244f51851364",
+      "name": "Metallic Rebuke",
+      "layout": "normal",
+      "mana_cost": "{2}{U}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "Improvise (Your artifacts can help cast this spell. Each artifact you tap after you're done activating mana abilities pays for {1}.)\nCounter target spell unless its controller pays {3}.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Improvise"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "48712d36-5c13-4ded-87a4-68106da4a5cd",
+      "name": "Mindbreak Trap",
+      "layout": "normal",
+      "mana_cost": "{2}{U}{U}",
+      "mana_value": 4.0,
+      "type_line": "Instant — Trap",
+      "oracle_text": "If an opponent cast three or more spells this turn, you may pay {0} rather than pay this spell's mana cost.\nExile any number of target spells.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "24d0f5e7-0d9e-4b76-900e-a7274e80312d",
+      "name": "Mulldrifter",
+      "layout": "normal",
+      "mana_cost": "{4}{U}",
+      "mana_value": 5.0,
+      "type_line": "Creature — Elemental",
+      "oracle_text": "Flying\nWhen this creature enters, draw two cards.\nEvoke {2}{U} (You may cast this spell for its evoke cost. If you do, it's sacrificed when it enters.)",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Flying",
+        "Evoke"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "c0ce7d5a-68fd-41f3-b5ba-a1a178cee9ec",
+      "name": "Murderous Cut",
+      "layout": "normal",
+      "mana_cost": "{4}{B}",
+      "mana_value": 5.0,
+      "type_line": "Instant",
+      "oracle_text": "Delve (Each card you exile from your graveyard while casting this spell pays for {1}.)\nDestroy target creature.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Delve"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "c17b9e5b-58b6-4ccf-8283-945ba77429e7",
+      "name": "Mutagenic Growth",
+      "layout": "normal",
+      "mana_cost": "{G/P}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "({G/P} can be paid with either {G} or 2 life.)\nTarget creature gets +2/+2 until end of turn.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "2d8e1054-654f-42e8-8c29-12c3cf13a3eb",
+      "name": "Myr Enforcer",
+      "layout": "normal",
+      "mana_cost": "{7}",
+      "mana_value": 7.0,
+      "type_line": "Artifact Creature — Myr",
+      "oracle_text": "Affinity for artifacts (This spell costs {1} less to cast for each artifact you control.)",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [
+        "Affinity"
+      ],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "491dc110-b459-412e-8a0b-45e5744ee8d1",
+      "name": "Mystic Reflection",
+      "layout": "normal",
+      "mana_cost": "{1}{U}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "Choose target nonlegendary creature. The next time one or more creatures or planeswalkers enter this turn, they enter as copies of the chosen creature.\nForetell {U} (During your turn, you may pay {2} and exile this card from your hand face down. Cast it on a later turn for its foretell cost.)",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Foretell"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "78826359-fe63-44ad-adc4-a17ffcd710e4",
+      "name": "Nature's Lore",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Search your library for a Forest card, put that card onto the battlefield, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "420c6dcf-966d-4a4c-a0ef-23037ab8b325",
+      "name": "Neoform",
+      "layout": "normal",
+      "mana_cost": "{G}{U}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nSearch your library for a creature card with mana value equal to 1 plus the sacrificed creature's mana value, put that card onto the battlefield with an additional +1/+1 counter on it, then shuffle.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "653010bc-45af-427e-a294-e0cc28d31821",
+      "name": "Nissa's Expedition",
+      "layout": "normal",
+      "mana_cost": "{4}{G}",
+      "mana_value": 5.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nSearch your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Convoke"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "e83236f8-1c45-4d31-8937-1c76db549955",
+      "name": "Nissa's Pilgrimage",
+      "layout": "normal",
+      "mana_cost": "{2}{G}",
+      "mana_value": 3.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Search your library for up to two basic Forest cards, reveal those cards, and put one onto the battlefield tapped and the rest into your hand. Then shuffle.\nSpell mastery — If there are two or more instant and/or sorcery cards in your graveyard, search your library for up to three basic Forest cards instead of two.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Spell mastery"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "97cabeda-9fe3-490d-99b4-4c8d87c17157",
+      "name": "Noxious Revival",
+      "layout": "normal",
+      "mana_cost": "{G/P}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "({G/P} can be paid with either {G} or 2 life.)\nPut target card from a graveyard on top of its owner's library.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "5a23c734-cbfb-419a-9bf1-126cb07fe427",
+      "name": "Of One Mind",
+      "layout": "normal",
+      "mana_cost": "{2}{U}",
+      "mana_value": 3.0,
+      "type_line": "Sorcery",
+      "oracle_text": "This spell costs {2} less to cast if you control a Human creature and a non-Human creature.\nDraw two cards.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "730e39e6-c61d-48b5-8827-bfd952bf1be7",
+      "name": "Omniscience",
+      "layout": "normal",
+      "mana_cost": "{7}{U}{U}{U}",
+      "mana_value": 10.0,
+      "type_line": "Enchantment",
+      "oracle_text": "You may cast spells from your hand without paying their mana costs.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Enchantment"
+      ],
+      "castable_cmcs": [
+        10.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "22113051-c971-4108-953b-95356d21323a",
+      "name": "Ox of Agonas",
+      "layout": "normal",
+      "mana_cost": "{3}{R}{R}",
+      "mana_value": 5.0,
+      "type_line": "Creature — Ox",
+      "oracle_text": "When this creature enters, discard your hand, then draw three cards.\nEscape—{R}{R}, Exile eight other cards from your graveyard. (You may cast this card from your graveyard for its escape cost.)\nThis creature escapes with a +1/+1 counter on it.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Escape"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "c1121b83-1ba2-473d-89c9-e3bbd4529072",
+      "name": "Paradise Mantle",
+      "layout": "normal",
+      "mana_cost": "{0}",
+      "mana_value": 0.0,
+      "type_line": "Artifact — Equipment",
+      "oracle_text": "Equipped creature has \"{T}: Add one mana of any color.\"\nEquip {1}",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [
+        "Equip"
+      ],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        0.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "0ad557fc-6b7e-4f7e-b060-e3c8ec8acf6d",
+      "name": "Phoenix of Ash",
+      "layout": "normal",
+      "mana_cost": "{1}{R}{R}",
+      "mana_value": 3.0,
+      "type_line": "Creature — Phoenix",
+      "oracle_text": "Flying, haste\n{2}{R}: This creature gets +2/+0 until end of turn.\nEscape—{2}{R}{R}, Exile three other cards from your graveyard. (You may cast this card from your graveyard for its escape cost.)\nThis creature escapes with a +1/+1 counter on it.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Flying",
+        "Haste",
+        "Escape"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "340bbe8b-e987-4c3e-ab4e-9dee63e57d4f",
+      "name": "Phyrexian Metamorph",
+      "layout": "normal",
+      "mana_cost": "{3}{U/P}",
+      "mana_value": 4.0,
+      "type_line": "Artifact Creature — Phyrexian Shapeshifter",
+      "oracle_text": "({U/P} can be paid with either {U} or 2 life.)\nYou may have this creature enter as a copy of any artifact or creature on the battlefield, except it's an artifact in addition to its other types.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "66442396-f804-47f3-8daa-0d43d8cfb482",
+      "name": "Porcelain Legionnaire",
+      "layout": "normal",
+      "mana_cost": "{2}{W/P}",
+      "mana_value": 3.0,
+      "type_line": "Artifact Creature — Phyrexian Soldier",
+      "oracle_text": "({W/P} can be paid with either {W} or 2 life.)\nFirst strike",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "First strike"
+      ],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "aacd1aae-1bf0-43e4-99f4-c6d738af812c",
+      "name": "Postmortem Lunge",
+      "layout": "normal",
+      "mana_cost": "{X}{B/P}",
+      "mana_value": 1.0,
+      "type_line": "Sorcery",
+      "oracle_text": "({B/P} can be paid with either {B} or 2 life.)\nReturn target creature card with mana value X from your graveyard to the battlefield. It gains haste. Exile it at the beginning of the next end step.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "04152e7a-969c-4858-841b-0a569a9fc1bf",
+      "name": "Professional Face-Breaker",
+      "layout": "normal",
+      "mana_cost": "{2}{R}",
+      "mana_value": 3.0,
+      "type_line": "Creature — Human Warrior",
+      "oracle_text": "Menace\nWhenever one or more creatures you control deal combat damage to a player, create a Treasure token.\nSacrifice a Treasure: Exile the top card of your library. You may play that card this turn.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Treasure",
+        "Menace"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "86ef6474-613f-41fb-931c-d4279b03ed99",
+      "name": "Pyretic Ritual",
+      "layout": "normal",
+      "mana_cost": "{1}{R}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "Add {R}{R}{R}.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "37108cd4-bbab-4ce3-9ed6-f60e8422e703",
+      "name": "Ragavan, Nimble Pilferer",
+      "layout": "normal",
+      "mana_cost": "{R}",
+      "mana_value": 1.0,
+      "type_line": "Legendary Creature — Monkey Pirate",
+      "oracle_text": "Whenever Ragavan deals combat damage to a player, create a Treasure token and exile the top card of that player's library. Until end of turn, you may cast that card.\nDash {1}{R} (You may cast this spell for its dash cost. If you do, it gains haste, and it's returned from the battlefield to its owner's hand at the beginning of the next end step.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Treasure",
+        "Dash"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "3adb7681-977f-4a32-9ec8-51481b958268",
+      "name": "Rakdos Signet",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "{1}, {T}: Add {B}{R}.",
+      "colors": [],
+      "color_identity": [
+        "B",
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "8539f295-5d58-4436-a73a-b9277c4c7795",
+      "name": "Rampant Growth",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "f56596be-e12f-4ab6-af61-3ef8dc87134c",
+      "name": "Reverse Engineer",
+      "layout": "normal",
+      "mana_cost": "{3}{U}{U}",
+      "mana_value": 5.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Improvise (Your artifacts can help cast this spell. Each artifact you tap after you're done activating mana abilities pays for {1}.)\nDraw three cards.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Improvise"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "e3afc704-220f-498f-9eaa-0821b17dc24c",
+      "name": "Sakura-Tribe Elder",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Creature — Snake Shaman",
+      "oracle_text": "Sacrifice this creature: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "90edaf33-d0ab-47e0-8f6a-6fba38286e6e",
+      "name": "Saw It Coming",
+      "layout": "normal",
+      "mana_cost": "{1}{U}{U}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "Counter target spell.\nForetell {1}{U} (During your turn, you may pay {2} and exile this card from your hand face down. Cast it on a later turn for its foretell cost.)",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Foretell"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "367ec7c5-8c76-4af6-b941-a3a8c2ff67ff",
+      "name": "Scarscale Ritual",
+      "layout": "normal",
+      "mana_cost": "{1}{U/B}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "As an additional cost to cast this spell, put a -1/-1 counter on a creature you control.\nDraw two cards.",
+      "colors": [
+        "B",
+        "U"
+      ],
+      "color_identity": [
+        "B",
+        "U"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "64bf8929-f5f2-4d50-8667-13b1d007bcfc",
+      "name": "Seething Song",
+      "layout": "normal",
+      "mana_cost": "{2}{R}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "Add {R}{R}{R}{R}{R}.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "1b9f9f5b-8712-4f00-90cb-1b7b9970eccc",
+      "name": "Sevinne's Reclamation",
+      "layout": "normal",
+      "mana_cost": "{2}{W}",
+      "mana_value": 3.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Return target permanent card with mana value 3 or less from your graveyard to the battlefield. If this spell was cast from a graveyard, you may copy this spell and may choose a new target for the copy.\nFlashback {4}{W} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "Flashback"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "d3c623f3-c7c9-47c0-8096-6dee3267baff",
+      "name": "Shrapnel Blast",
+      "layout": "normal",
+      "mana_cost": "{1}{R}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "As an additional cost to cast this spell, sacrifice an artifact.\nShrapnel Blast deals 5 damage to any target.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "717bbb9d-0a5b-4979-a24b-9d54aac7657a",
+      "name": "Shriekmaw",
+      "layout": "normal",
+      "mana_cost": "{4}{B}",
+      "mana_value": 5.0,
+      "type_line": "Creature — Elemental",
+      "oracle_text": "Fear (This creature can't be blocked except by artifact creatures and/or black creatures.)\nWhen this creature enters, destroy target nonartifact, nonblack creature.\nEvoke {1}{B} (You may cast this spell for its evoke cost. If you do, it's sacrificed when it enters.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Evoke",
+        "Fear"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "20053847-6623-493c-8cdb-a69cda3b1577",
+      "name": "Skrelv, Defector Mite",
+      "layout": "normal",
+      "mana_cost": "{W}",
+      "mana_value": 1.0,
+      "type_line": "Legendary Artifact Creature — Phyrexian Mite",
+      "oracle_text": "Toxic 1 (Players dealt combat damage by this creature also get a poison counter.)\nSkrelv can't block.\n{W/P}, {T}: Choose a color. Another target creature you control gains toxic 1 and hexproof from that color until end of turn. It can't be blocked by creatures of that color this turn. ({W/P} can be paid with either {W} or 2 life.)",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "Toxic"
+      ],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "153376c9-dffd-458c-8ce3-a4c8269bc4e9",
+      "name": "Smothering Tithe",
+      "layout": "normal",
+      "mana_cost": "{3}{W}",
+      "mana_value": 4.0,
+      "type_line": "Enchantment",
+      "oracle_text": "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "Treasure"
+      ],
+      "all_types": [
+        "Enchantment"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "324824cb-f938-401c-b9b5-d8908b431ef0",
+      "name": "Snuff Out",
+      "layout": "normal",
+      "mana_cost": "{3}{B}",
+      "mana_value": 4.0,
+      "type_line": "Instant",
+      "oracle_text": "If you control a Swamp, you may pay 4 life rather than pay this spell's mana cost.\nDestroy target nonblack creature. It can't be regenerated.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "1cbfe1f2-776b-429d-9a60-8da32058a927",
+      "name": "Sojourner's Companion",
+      "layout": "normal",
+      "mana_cost": "{7}",
+      "mana_value": 7.0,
+      "type_line": "Artifact Creature — Salamander",
+      "oracle_text": "Affinity for artifacts\nArtifact landcycling {2} ({2}, Discard this card: Search your library for an artifact land card, reveal it, put it into your hand, then shuffle.)",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [
+        "Affinity",
+        "Landcycling",
+        "Typecycling",
+        "Cycling"
+      ],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "6ad8011d-3471-4369-9d68-b264cc027487",
+      "name": "Sol Ring",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "mana_value": 1.0,
+      "type_line": "Artifact",
+      "oracle_text": "{T}: Add {C}{C}.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "dcb9c2a7-ae54-4ddc-a567-640bf4bf4366",
+      "name": "Solitude",
+      "layout": "normal",
+      "mana_cost": "{3}{W}{W}",
+      "mana_value": 5.0,
+      "type_line": "Creature — Elemental Incarnation",
+      "oracle_text": "Flash\nLifelink\nWhen this creature enters, exile up to one other target creature. That creature's controller gains life equal to its power.\nEvoke—Exile a white card from your hand.",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "Lifelink",
+        "Evoke",
+        "Flash"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "81fa8e6a-5fb8-43de-802f-df5b985c6a7d",
+      "name": "Spell Swindle",
+      "layout": "normal",
+      "mana_cost": "{3}{U}{U}",
+      "mana_value": 5.0,
+      "type_line": "Instant",
+      "oracle_text": "Counter target spell. Create X Treasure tokens, where X is that spell's mana value. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Treasure"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "09c96077-3804-4f12-a613-5bebc5e0413f",
+      "name": "Sphere of Resistance",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "mana_value": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "Spells cost {1} more to cast.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "all_types": [
+        "Artifact"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "8b33d890-7d67-44a8-a253-e2b171d7ca9d",
+      "name": "Sprout Swarm",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Instant",
+      "oracle_text": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nBuyback {3} (You may pay an additional {3} as you cast this spell. If you do, put this card into your hand as it resolves.)\nCreate a 1/1 green Saproling creature token.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Buyback",
+        "Convoke"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "124a5dd7-c4f8-479c-9eb0-669aca01d045",
+      "name": "Squee, Dubious Monarch",
+      "layout": "normal",
+      "mana_cost": "{2}{R}",
+      "mana_value": 3.0,
+      "type_line": "Legendary Creature — Goblin Noble",
+      "oracle_text": "Haste\nWhenever Squee attacks, create a 1/1 red Goblin creature token that's tapped and attacking.\nYou may cast this card from your graveyard by paying {3}{R} and exiling four other cards from your graveyard rather than paying its mana cost.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Haste"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "e7b92789-47a9-430a-ad57-be7b6c3d63cb",
+      "name": "Starnheim Aspirant",
+      "layout": "normal",
+      "mana_cost": "{2}{W}",
+      "mana_value": 3.0,
+      "type_line": "Creature — Human Cleric",
+      "oracle_text": "Angel spells you cast cost {2} less to cast.",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "2249001c-08d5-4c0a-86f8-d97519a39f37",
+      "name": "Stoke the Flames",
+      "layout": "normal",
+      "mana_cost": "{2}{R}{R}",
+      "mana_value": 4.0,
+      "type_line": "Instant",
+      "oracle_text": "Convoke (Your creatures can help cast this spell. Each creature you tap while casting this spell pays for {1} or one mana of that creature's color.)\nStoke the Flames deals 4 damage to any target.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Convoke"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        4.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "3bfa088c-9a47-4123-aee5-4de44e355bef",
+      "name": "Surgical Extraction",
+      "layout": "normal",
+      "mana_cost": "{B/P}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "({B/P} can be paid with either {B} or 2 life.)\nChoose target card in a graveyard other than a basic land card. Search its owner's graveyard, hand, and library for any number of cards with the same name as that card and exile them. Then that player shuffles.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ee24bf27-484d-4e1c-998e-6a74e3d3f6c4",
+      "name": "Sylvan Scrying",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Search your library for a land card, reveal it, put it into your hand, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "837e3fde-241f-4826-ad04-f146fdcf2278",
+      "name": "Tasigur, the Golden Fang",
+      "layout": "normal",
+      "mana_cost": "{5}{B}",
+      "mana_value": 6.0,
+      "type_line": "Legendary Creature — Human Shaman",
+      "oracle_text": "Delve (Each card you exile from your graveyard while casting this spell pays for {1}.)\n{2}{G/U}{G/U}: Mill two cards, then return a nonland card of an opponent's choice from your graveyard to your hand.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B",
+        "G",
+        "U"
+      ],
+      "keywords": [
+        "Delve",
+        "Mill"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        6.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "9b7f1d05-707c-4ed3-9f0e-8ced1232c2ee",
+      "name": "Thalia, Guardian of Thraben",
+      "layout": "normal",
+      "mana_cost": "{1}{W}",
+      "mana_value": 2.0,
+      "type_line": "Legendary Creature — Human Soldier",
+      "oracle_text": "First strike\nNoncreature spells cost {1} more to cast.",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "First strike"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "e229d55c-9513-437d-bd67-015ac46aaa18",
+      "name": "The Infamous Cruelclaw",
+      "layout": "normal",
+      "mana_cost": "{1}{B}{R}",
+      "mana_value": 3.0,
+      "type_line": "Legendary Creature — Weasel Mercenary",
+      "oracle_text": "Menace\nWhenever The Infamous Cruelclaw deals combat damage to a player, exile cards from the top of your library until you exile a nonland card. You may cast that card by discarding a card rather than paying its mana cost.",
+      "colors": [
+        "B",
+        "R"
+      ],
+      "color_identity": [
+        "B",
+        "R"
+      ],
+      "keywords": [
+        "Menace"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "bbd7b756-bbee-451e-9446-06019791cb36",
+      "name": "The Pride of Hull Clade",
+      "layout": "normal",
+      "mana_cost": "{10}{G}",
+      "mana_value": 11.0,
+      "type_line": "Legendary Creature — Crocodile Elk Turtle",
+      "oracle_text": "This spell costs {X} less to cast, where X is the total toughness of creatures you control.\nDefender\n{2}{U}{U}: Until end of turn, target creature you control gets +1/+0, gains \"Whenever this creature deals combat damage to a player, draw cards equal to its toughness,\" and can attack as though it didn't have defender.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [
+        "Defender"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        11.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "9deded8b-cec4-4ede-a50b-131404d456d4",
+      "name": "Thought Monitor",
+      "layout": "normal",
+      "mana_cost": "{6}{U}",
+      "mana_value": 7.0,
+      "type_line": "Artifact Creature — Construct",
+      "oracle_text": "Affinity for artifacts (This spell costs {1} less to cast for each artifact you control.)\nFlying\nWhen this creature enters, draw two cards.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Flying",
+        "Affinity"
+      ],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "cce9bbff-82dc-4b2f-addd-d6715588de20",
+      "name": "Thoughtcast",
+      "layout": "normal",
+      "mana_cost": "{4}{U}",
+      "mana_value": 5.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Affinity for artifacts (This spell costs {1} less to cast for each artifact you control.)\nDraw two cards.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Affinity"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "1b882a0e-0ede-4d1a-bd1a-9b7cffbcde8e",
+      "name": "Three Visits",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Search your library for a Forest card, put it onto the battlefield, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "88d0a394-79e2-42ac-9a37-1a7b78231941",
+      "name": "Thunderclap Drake",
+      "layout": "normal",
+      "mana_cost": "{1}{U}",
+      "mana_value": 2.0,
+      "type_line": "Creature — Drake",
+      "oracle_text": "Flying\nInstant and sorcery spells you cast cost {1} less to cast.\n{2}{U}, Sacrifice this creature: When you next cast an instant or sorcery spell this turn, copy it for each time you've cast your commander from the command zone this game. You may choose new targets for the copies.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Flying"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "5b6bdf5a-2742-4851-92cd-a857a3852836",
+      "name": "Treasure Cruise",
+      "layout": "normal",
+      "mana_cost": "{7}{U}",
+      "mana_value": 8.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Delve (Each card you exile from your graveyard while casting this spell pays for {1}.)\nDraw three cards.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Delve"
+      ],
+      "all_types": [
+        "Sorcery"
+      ],
+      "castable_cmcs": [
+        8.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "27e0948b-9916-473b-8d8c-a51bdfbc7457",
+      "name": "Underworld Breach",
+      "layout": "normal",
+      "mana_cost": "{1}{R}",
+      "mana_value": 2.0,
+      "type_line": "Enchantment",
+      "oracle_text": "Each nonland card in your graveyard has escape. The escape cost is equal to the card's mana cost plus exile three other cards from your graveyard. (You may cast cards from your graveyard for their escape cost.)\nAt the beginning of the end step, sacrifice this enchantment.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Enchantment"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ee302659-59ed-4eef-babe-451b9ccf7f14",
+      "name": "Uro, Titan of Nature's Wrath",
+      "layout": "normal",
+      "mana_cost": "{1}{G}{U}",
+      "mana_value": 3.0,
+      "type_line": "Legendary Creature — Elder Giant",
+      "oracle_text": "When Uro enters, sacrifice it unless it escaped.\nWhenever Uro enters or attacks, you gain 3 life and draw a card, then you may put a land card from your hand onto the battlefield.\nEscape—{G}{G}{U}{U}, Exile five other cards from your graveyard. (You may cast this card from your graveyard for its escape cost.)",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "keywords": [
+        "Escape"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "cae3ec72-436d-4086-9dcb-17b3d92ad5c4",
+      "name": "Valgavoth, Terror Eater",
+      "layout": "normal",
+      "mana_cost": "{6}{B}{B}{B}",
+      "mana_value": 9.0,
+      "type_line": "Legendary Creature — Elder Demon",
+      "oracle_text": "Flying, lifelink\nWard—Sacrifice three nonland permanents.\nIf a card you didn't control would be put into an opponent's graveyard from anywhere, exile it instead.\nDuring your turn, you may play cards exiled with Valgavoth. If you cast a spell this way, pay life equal to its mana value rather than pay its mana cost.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Flying",
+        "Lifelink",
+        "Ward"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        9.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "64cf5d59-7bcd-4b0b-a160-c8468d4c0f60",
+      "name": "Vault Skirge",
+      "layout": "normal",
+      "mana_cost": "{1}{B/P}",
+      "mana_value": 2.0,
+      "type_line": "Artifact Creature — Phyrexian Imp",
+      "oracle_text": "({B/P} can be paid with either {B} or 2 life.)\nFlying\nLifelink (Damage dealt by this creature also causes you to gain that much life.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Flying",
+        "Lifelink"
+      ],
+      "all_types": [
+        "Artifact",
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "ec577886-fb25-455b-9c3d-5fd610959436",
+      "name": "Vesuvan Shapeshifter",
+      "layout": "normal",
+      "mana_cost": "{3}{U}{U}",
+      "mana_value": 5.0,
+      "type_line": "Creature — Shapeshifter",
+      "oracle_text": "As this creature enters or is turned face up, you may choose another creature on the battlefield. If you do, until this creature is turned face down, it becomes a copy of that creature, except it has \"At the beginning of your upkeep, you may turn this creature face down.\"\nMorph {1}{U}",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Morph"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        5.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "365548fb-5acc-4a8a-b20b-26d28b7d029f",
+      "name": "Village Rites",
+      "layout": "normal",
+      "mana_cost": "{B}",
+      "mana_value": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nDraw two cards.",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "bce18f34-848e-4dd2-9a38-6084c0695f78",
+      "name": "Voyaging Satyr",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "mana_value": 2.0,
+      "type_line": "Creature — Satyr Druid",
+      "oracle_text": "{T}: Untap target land.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "152b91c9-cc07-4ca8-944f-9bc2242a2283",
+      "name": "Whir of Invention",
+      "layout": "normal",
+      "mana_cost": "{X}{U}{U}{U}",
+      "mana_value": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "Improvise (Your artifacts can help cast this spell. Each artifact you tap after you're done activating mana abilities pays for {1}.)\nSearch your library for an artifact card with mana value X or less, put it onto the battlefield, then shuffle.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Improvise"
+      ],
+      "all_types": [
+        "Instant"
+      ],
+      "castable_cmcs": [
+        3.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "0aae277e-e58e-4115-b5fd-0459451e17ec",
+      "name": "Willbender",
+      "layout": "normal",
+      "mana_cost": "{1}{U}",
+      "mana_value": 2.0,
+      "type_line": "Creature — Human Wizard",
+      "oracle_text": "Morph {1}{U} (You may cast this card face down as a 2/2 creature for {3}. Turn it face up any time for its morph cost.)\nWhen this creature is turned face up, change the target of target spell or ability with a single target.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Morph"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        2.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "83d0c4bc-aab9-4c14-a7dc-a344fcce4fea",
+      "name": "Wretched Gryff",
+      "layout": "normal",
+      "mana_cost": "{7}",
+      "mana_value": 7.0,
+      "type_line": "Creature — Eldrazi Hippogriff",
+      "oracle_text": "Emerge {5}{U} (You may cast this spell by sacrificing a creature and paying the emerge cost reduced by that creature's mana value.)\nWhen you cast this spell, draw a card.\nFlying",
+      "colors": [],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Flying",
+        "Emerge"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        7.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    },
+    {
+      "oracle_id": "46808926-d95b-4313-89d1-6bdfe13fcb77",
+      "name": "Zurgo Bellstriker",
+      "layout": "normal",
+      "mana_cost": "{R}",
+      "mana_value": 1.0,
+      "type_line": "Legendary Creature — Orc Warrior",
+      "oracle_text": "Zurgo can't block creatures with power 2 or greater.\nDash {1}{R} (You may cast this spell for its dash cost. If you do, it gains haste, and it's returned from the battlefield to its owner's hand at the beginning of the next end step.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Dash"
+      ],
+      "all_types": [
+        "Creature"
+      ],
+      "castable_cmcs": [
+        1.0
+      ],
+      "faces": [],
+      "commander_legal": "legal"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+schema_version: research-golden-questions.v1
+questions:
+  - &defaults
+    id: ambiguous-001
+    ask: Find me better interaction for this deck.
+    clarified_ask: Ask which threats, interaction type, and deck context the player wants to optimize before searching.
+    required_oracle_ids: []
+    forbidden_oracle_ids: []
+    expected_absences: []
+    category: ambiguous
+    difficulty: basic
+    context_id: null
+    clarification_expected: true
+    no_finding_expected: false
+    labeller: Codex agent draft
+    labelled_on: 2026-09-08
+    contested: true
+
+  - <<: *defaults
+    id: ambiguous-002
+    ask: Is this card better than the other one?
+    clarified_ask: Ask for both card identities and the deck or strategic objective that defines better.
+
+  - <<: *defaults
+    id: ambiguous-003
+    ask: Do I have enough mana in here?
+    clarified_ask: Ask whether the player means land count, coloured-source timing, total mana sources, or a simulator objective.
+    context_id: cedh:kinnan-basalt-fixture
+
+  - <<: *defaults
+    id: ambiguous-004
+    ask: What should I cut for Force?
+    clarified_ask: Ask which Force card the player means and which deck revision should be compared; do not infer Force of Will.
+    context_id: cedh:kinnan-basalt-fixture
+
+  - <<: *defaults
+    id: ambiguous-005
+    ask: How fast is the deck?
+    clarified_ask: Ask which measurable objective, turn horizon, and deck revision define speed before proposing a study.
+    context_id: cedh:kinnan-basalt-fixture
+
+  - <<: *defaults
+    id: ambiguous-006
+    ask: Show cards like this one.
+    clarified_ask: Ask which card is being referenced and which mechanical property should define similarity.
+
+  - <<: *defaults
+    id: ambiguous-007
+    ask: Does the combo work through interaction?
+    clarified_ask: Ask which combo line and which opposing interaction or game state the player means.
+    context_id: cedh:kinnan-basalt-fixture
+    difficulty: intermediate
+
+  - <<: *defaults
+    id: ambiguous-008
+    ask: Compare my list to the field.
+    clarified_ask: Ask which deck revision, field cohort, time window, and deck property should be compared.
+    context_id: cedh:kinnan-basalt-fixture
+    difficulty: intermediate
+
+  - <<: *defaults
+    id: ambiguous-009
+    ask: Run it thirty thousand times.
+    clarified_ask: Ask which complete deck revision and authored simulator objective should be run before queueing a study.
+    context_id: cedh:kinnan-basalt-fixture
+
+  - <<: *defaults
+    id: ambiguous-010
+    ask: Why do people play that card?
+    clarified_ask: Ask which card, commander cohort, and evidence window the player means before retrieving facts or field evidence.

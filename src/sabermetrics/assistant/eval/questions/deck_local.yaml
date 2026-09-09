@@ -1,0 +1,123 @@
+schema_version: research-golden-questions.v1
+questions:
+  - &defaults
+    id: deck-local-001
+    ask: Am I light on blue sources for turn-one interaction?
+    clarified_ask: Profile untapped turn-one blue sources in this Kinnan fixture and state the assumptions rather than using a generic land count.
+    required_oracle_ids: []
+    forbidden_oracle_ids: []
+    expected_absences: []
+    category: deck_local
+    difficulty: intermediate
+    context_id: cedh:kinnan-basalt-fixture
+    clarification_expected: false
+    no_finding_expected: false
+    labeller: Codex agent draft
+    labelled_on: 2026-09-08
+    contested: true
+
+  - <<: *defaults
+    id: deck-local-002
+    ask: Which cards in this list find Basalt Monolith directly?
+    clarified_ask: Identify cards in the current Kinnan fixture that can search directly for Basalt Monolith under their printed restrictions.
+    required_oracle_ids:
+      - 71e6dee3-514f-58f5-9b9e-4599139dca70
+      - 39c9c537-f46a-54dc-99b1-0861953f8187
+      - d4a7ecca-504f-544c-9cf2-b011194b07b1
+
+  - <<: *defaults
+    id: deck-local-003
+    ask: How many cards in this deck are invisible to the simulator?
+    clarified_ask: Report modeled, inert, and unauthored card counts from this deck's saved simulation without guessing the per-card list unavailable in result v3.
+    required_oracle_ids: []
+    expected_absences:
+      - per-card inert and unauthored identities are unavailable in simulator result v3
+
+  - <<: *defaults
+    id: deck-local-004
+    ask: Which interaction in my list can be used while tapped out?
+    clarified_ask: Find cards already in this Kinnan fixture with a conditional or alternate non-mana casting cost for interaction.
+    required_oracle_ids:
+      - e272683f-a2cb-5599-85d4-90de2858e45f
+      - ea86f7b9-a5ba-591a-aa51-b0db15061055
+      - 8d61ab14-627e-520c-83fc-e2aadac40133
+      - 0f3e82c7-d12f-50cd-9bfa-d17b6fdb4f94
+
+  - <<: *defaults
+    id: deck-local-005
+    ask: Do I have enough outlets for the Basalt line?
+    clarified_ask: Identify outlets already present for the Kinnan plus Basalt Monolith assembly line and state what the corpus cannot establish about the word enough.
+    required_oracle_ids:
+      - 210f06b9-fc4b-55fd-8fcc-7fe267e69a46
+    expected_absences:
+      - card presence alone cannot establish the optimal outlet count
+
+  - <<: *defaults
+    id: deck-local-006
+    ask: Where is this list relying on the commander being in play?
+    clarified_ask: Identify cards and lines in the fixture whose stated role depends mechanically on Kinnan remaining on the battlefield.
+    required_oracle_ids:
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+      - 38d25a87-dcc1-5cc2-a086-48796e7cdced
+    difficulty: hard
+
+  - <<: *defaults
+    id: deck-local-007
+    ask: Which cards compete with Kinnan for activated-ability mana?
+    clarified_ask: Find repeatable activated abilities in the current fixture that consume mana during the same turns Kinnan's activation would.
+    required_oracle_ids:
+      - 210f06b9-fc4b-55fd-8fcc-7fe267e69a46
+      - 38d25a87-dcc1-5cc2-a086-48796e7cdced
+
+  - <<: *defaults
+    id: deck-local-008
+    ask: Show the mana rocks that do not make coloured mana.
+    clarified_ask: Within this deck fixture, find artifact mana sources whose mana ability cannot produce blue or green.
+    required_oracle_ids:
+      - 7d556b35-62ab-5a43-bdb9-346c2dff694a
+      - 1a9e5ed4-b8ab-5b87-b44c-e12f4717aaae
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+      - e8f4f2dd-630c-5228-b16c-f61d172b06a3
+    forbidden_oracle_ids:
+      - d7ced5e3-3fcc-5df5-b6c8-7fb744248d1b
+
+  - <<: *defaults
+    id: deck-local-009
+    ask: Which cards can put a creature straight onto the battlefield?
+    clarified_ask: Find cards in the current list whose resolution or activated ability can put a creature card from the library onto the battlefield.
+    required_oracle_ids:
+      - 425fa23d-c8d6-5599-b019-42f8a9807b87
+      - b3a21c5e-26bf-5fd0-976a-ef8630fbbdd4
+      - 38d25a87-dcc1-5cc2-a086-48796e7cdced
+
+  - <<: *defaults
+    id: deck-local-010
+    ask: Which cards are both mana sources and useful top-deck hits for Kinnan?
+    clarified_ask: Find non-Human creature mana sources in the fixture that Kinnan's activated ability may put onto the battlefield.
+    required_oracle_ids:
+      - 90748a1e-5fc6-5996-84eb-afdd8ff2e50d
+      - 6f7be947-5fef-5510-a94a-469839eb31f2
+      - c1b4fbbd-d3ed-5d0b-87f2-59679424ed87
+      - 0fee529d-6515-5fe5-9b2b-36b3add47c61
+    forbidden_oracle_ids:
+      - 2dec0954-d0e2-56e4-9de7-dcbec32353c5
+    difficulty: hard
+
+  - <<: *defaults
+    id: deck-local-011
+    ask: What interaction also occupies a land slot?
+    clarified_ask: Within this fixture, find modal double-faced or channel lands whose nonland mode provides interaction.
+    required_oracle_ids:
+      - 78318e5e-a4c9-53f4-86a2-e2ced0a9cd77
+      - fe60fdd0-310c-5453-9800-4aede60cdd41
+      - f9278be2-7dd5-590f-af15-6aafa3962a9e
+
+  - <<: *defaults
+    id: deck-local-012
+    ask: Why is Hullbreaker Horror in this version?
+    clarified_ask: Explain Hullbreaker Horror's mechanical role in this exact fixture, including the simulator's known inability or misclassification if applicable.
+    required_oracle_ids:
+      - 3a036bc8-aa47-58dc-a879-81712a932a7c
+    expected_absences:
+      - simulator result v3 cannot identify the specific misclassified card structurally
+    difficulty: hard

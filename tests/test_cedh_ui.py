@@ -160,6 +160,27 @@ class TestBuild:
         assert "$" not in body.split("<main")[-1]
         assert "budget" not in body.split("<main")[-1]
 
+    def test_an_unexplained_candidate_says_so_on_the_page(self, client):
+        """`absence_is_visible`: a missing narrative is stated, not omitted.
+
+        conftest strips HF_TOKEN, so every UI build runs with no gateway. Before
+        this was fixed the whole "How it plays" section vanished, which reads
+        as a deck nobody explained rather than one no model was configured for.
+        """
+        body = client.get(_build(client)).data.decode()
+        assert "How it plays" in body
+        assert "Not explained." in body
+
+    def test_the_absence_is_stated_at_build_time_too(self, client):
+        """The stored build-time warning, not the current environment.
+
+        This is what makes the page honest about a *historical* build: the
+        warning is persisted with the candidate, so provisioning a credential
+        later cannot retroactively claim this build had one.
+        """
+        body = client.get(_build(client)).data.decode()
+        assert "No model provider is configured" in body
+
     def test_flex_slots_are_honoured(self, client):
         location = _build(client, flex_slots="3")
         document = json.loads(client.get(f"{location}.json").data.decode())

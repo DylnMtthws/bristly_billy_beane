@@ -1,0 +1,87 @@
+schema_version: research-golden-questions.v1
+questions:
+  - &defaults
+    id: rules-001
+    ask: If I pay life for Mental Misstep, did I still cast a spell with mana value one?
+    clarified_ask: Explain whether paying the Phyrexian symbol with life changes Mental Misstep's status as cast or its mana value on the stack.
+    required_oracle_ids:
+      - dd0eb273-355e-5af9-aa43-81fd6c1d4040
+    forbidden_oracle_ids: []
+    expected_absences: []
+    category: rules
+    difficulty: basic
+    context_id: null
+    clarification_expected: false
+    no_finding_expected: false
+    labeller: Codex agent draft
+    labelled_on: 2026-09-08
+    contested: true
+
+  - <<: *defaults
+    id: rules-002
+    ask: Does exiling a blue card to Force of Will change its mana value?
+    clarified_ask: Explain Force of Will's mana value and cast status when its alternate cost is paid.
+    required_oracle_ids:
+      - e272683f-a2cb-5599-85d4-90de2858e45f
+
+  - <<: *defaults
+    id: rules-003
+    ask: What exactly happens if I cannot pay for Pact of Negation next upkeep?
+    clarified_ask: Explain Pact of Negation's delayed triggered ability, when it triggers, and the consequence of not paying.
+    required_oracle_ids:
+      - 0f3e82c7-d12f-50cd-9bfa-d17b6fdb4f94
+
+  - <<: *defaults
+    id: rules-004
+    ask: Does channeling Boseiju count as casting a spell?
+    clarified_ask: Explain whether activating Boseiju, Who Endures's channel ability is casting a spell and what interaction can respond.
+    required_oracle_ids:
+      - 78318e5e-a4c9-53f4-86a2-e2ced0a9cd77
+
+  - <<: *defaults
+    id: rules-005
+    ask: What are Sink into Stupor's characteristics when I play its land face?
+    clarified_ask: Explain the characteristics and mana value of Sink into Stupor while it is a land on the battlefield versus a spell on the stack.
+    required_oracle_ids:
+      - f9278be2-7dd5-590f-af15-6aafa3962a9e
+    difficulty: intermediate
+
+  - <<: *defaults
+    id: rules-006
+    ask: Can Copy Artifact copy an artifact that entered at the same time?
+    clarified_ask: Explain when Copy Artifact chooses what to copy and whether a simultaneously entering artifact is available to choose.
+    required_oracle_ids:
+      - ccc250da-3ef9-5759-b589-4eabe1bbcbbe
+    difficulty: hard
+
+  - <<: *defaults
+    id: rules-007
+    ask: Is Kinnan's extra mana a replacement effect or a triggered ability?
+    clarified_ask: Classify Kinnan's nonland mana ability and explain whether it uses the stack.
+    required_oracle_ids:
+      - 38d25a87-dcc1-5cc2-a086-48796e7cdced
+    difficulty: intermediate
+
+  - <<: *defaults
+    id: rules-008
+    ask: Is Basalt Monolith's untap ability a mana ability?
+    clarified_ask: Explain whether Basalt Monolith's untap activation is a mana ability and when it may be activated.
+    required_oracle_ids:
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+    difficulty: intermediate
+
+  - <<: *defaults
+    id: rules-009
+    ask: When I evoke Endurance, how do its enter and sacrifice triggers stack?
+    clarified_ask: Explain who orders Endurance's enters-the-battlefield ability and evoke sacrifice trigger, and when targets are selected.
+    required_oracle_ids:
+      - f10d2704-4b90-5bdd-a953-4f4f9e46d808
+    difficulty: hard
+
+  - <<: *defaults
+    id: rules-010
+    ask: What kinds of spells can Commandeer take control of?
+    clarified_ask: Explain Commandeer's target restriction and what changing control of a spell does and does not change.
+    required_oracle_ids:
+      - 61204fc6-b20f-5e68-8fb0-2cb141e3d885
+    difficulty: intermediate

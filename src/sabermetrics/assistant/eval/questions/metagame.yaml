@@ -1,0 +1,99 @@
+schema_version: research-golden-questions.v1
+questions:
+  - &defaults
+    id: metagame-001
+    ask: How often do recorded Kinnan lists play Basalt Monolith?
+    clarified_ask: Report Basalt Monolith inclusion among recorded Kinnan lists with the denominator, date window, and event-size floor.
+    required_oracle_ids:
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+    forbidden_oracle_ids: []
+    expected_absences: []
+    category: metagame
+    difficulty: basic
+    context_id: null
+    clarification_expected: false
+    no_finding_expected: false
+    labeller: Codex agent draft
+    labelled_on: 2026-09-08
+    contested: true
+
+  - <<: *defaults
+    id: metagame-002
+    ask: How many Kinnan lists run both Rhystic Study and Mystic Remora?
+    clarified_ask: Count recorded Kinnan lists containing both named enchantments and state the eligible-list denominator and window.
+    required_oracle_ids:
+      - a1fb9375-c93b-57a2-953f-c75473fa5898
+      - 57e35965-1dea-5c00-9535-b6e9b6bdec6a
+
+  - <<: *defaults
+    id: metagame-003
+    ask: Are Kinnan lists moving from creature mana toward artifacts?
+    clarified_ask: Compare complete recorded Kinnan lists across two stated windows on creature-mana and artifact-mana counts, with denominators.
+    required_oracle_ids: []
+    difficulty: hard
+
+  - <<: *defaults
+    id: metagame-004
+    ask: What is the median land count in complete Kinnan lists?
+    clarified_ask: Report the median land count only among complete recorded Kinnan lists, with denominator, date window, and event-size floor.
+    required_oracle_ids: []
+
+  - <<: *defaults
+    id: metagame-005
+    ask: How common is Fierce Guardianship in recent Kinnan finishes?
+    clarified_ask: Report Fierce Guardianship inclusion among eligible Kinnan tournament lists with denominator, window, and event-size floor.
+    required_oracle_ids:
+      - 8d61ab14-627e-520c-83fc-e2aadac40133
+
+  - <<: *defaults
+    id: metagame-006
+    ask: Which zero-mana counters co-occur with Force of Will in Kinnan?
+    clarified_ask: Among eligible Kinnan lists containing Force of Will, report co-inclusion counts for zero-mana counterspells with all denominators stated.
+    required_oracle_ids:
+      - e272683f-a2cb-5599-85d4-90de2858e45f
+    difficulty: hard
+
+  - <<: *defaults
+    id: metagame-007
+    ask: Do recent Kinnan lists still use Thrasios as the colourless outlet?
+    clarified_ask: Report Thrasios inclusion in eligible Kinnan lists and compare two stated windows without interpreting inclusion as quality.
+    required_oracle_ids:
+      - 210f06b9-fc4b-55fd-8fcc-7fe267e69a46
+
+  - <<: *defaults
+    id: metagame-008
+    ask: How many recorded Kinnan lists are complete enough for mana-base comparison?
+    clarified_ask: Count complete and incomplete eligible Kinnan lists separately and state why incomplete lists are excluded from mana-base statistics.
+    required_oracle_ids: []
+
+  - <<: *defaults
+    id: metagame-009
+    ask: Compare The One Ring and Consecrated Sphinx in the Kinnan field.
+    clarified_ask: Compare recorded inclusion and co-inclusion of The One Ring and Consecrated Sphinx with denominators and no claim that popularity proves quality.
+    required_oracle_ids:
+      - f665b8df-e7ab-567c-89bd-ee5a60783da5
+      - e4cbbb90-d472-5518-a14d-219830d8f1f2
+    difficulty: intermediate
+
+  - <<: *defaults
+    id: metagame-010
+    ask: Which interactive lands appear most often in complete Kinnan lists?
+    clarified_ask: Rank interactive lands in complete eligible Kinnan lists by inclusion count and report denominator, window, and event-size floor.
+    required_oracle_ids:
+      - 78318e5e-a4c9-53f4-86a2-e2ced0a9cd77
+      - fe60fdd0-310c-5453-9800-4aede60cdd41
+
+  - <<: *defaults
+    id: metagame-011
+    ask: Is Mox Diamond more common than Chrome Mox in Kinnan?
+    clarified_ask: Compare Mox Diamond and Chrome Mox inclusion counts over the same eligible Kinnan cohort and state its denominator.
+    required_oracle_ids:
+      - 89dcb7b8-931a-57a2-91c5-063dd3b1ca67
+      - 95d18e34-a715-5e4d-968f-9337add992c3
+
+  - <<: *defaults
+    id: metagame-012
+    ask: What fraction of recent Kinnan lists play at least three free interaction spells?
+    clarified_ask: Define the free-interaction tag, count eligible Kinnan lists meeting a threshold of three, and state numerator, denominator, window, and event-size floor.
+    required_oracle_ids: []
+    difficulty: hard

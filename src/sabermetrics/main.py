@@ -1053,3 +1053,158 @@ def list_access() -> None:
             f"{(row.get('display_name') or '')[:20]:<20} "
             f"{row.get('last_login_at') or 'never'}"
         )
+
+
+@cli.group()
+def tags() -> None:
+    """Mechanic tags: the auditable predicates over card text (R1)."""
+
+
+def _tag_corpus_source(snapshot: Path | None):
+    """Resolve a corpus source, preferring an explicit snapshot.
+
+    Args:
+        snapshot: Path to a materialised snapshot, or ``None`` for ``mtg_v1``.
+
+    Returns:
+        A :class:`~sabermetrics.substrate.corpus.CorpusSource`.
+    """
+    from sabermetrics.substrate.corpus import resolve_source
+
+    return resolve_source(snapshot)
+
+
+@tags.command("list")
+@click.option("--family", default=None, help="Only this family (cost, mana, ...).")
+def tags_list(family: str | None) -> None:
+    """Every shipped tag, with its limitations."""
+    from sabermetrics.mechanics.tags.registry import (
+        ALL_TAGS,
+        SHIPPED_FAMILIES,
+        TAG_LIBRARY_SHA256,
+        by_family,
+    )
+
+    definitions = by_family(family) if family else ALL_TAGS
+    if family and family not in SHIPPED_FAMILIES:
+        click.echo(
+            f"{family}:* has not shipped yet "
+            f"(shipped: {', '.join(SHIPPED_FAMILIES)})."
+        )
+        return
+    click.echo(f"library {TAG_LIBRARY_SHA256[:12]}  {len(definitions)} tags\n")
+    for definition in definitions:
+        click.echo(f"{definition.id}  v{definition.version}")
+        click.echo(f"  {definition.description}")
+        click.echo(f"  limitations: {definition.limitations}")
+        click.echo(
+            f"  fixtures: {len(definition.positive_fixtures)} positive, "
+            f"{len(definition.negative_fixtures)} negative; "
+            f"measured precision {definition.confidence:.3f}"
+        )
+        click.echo("")
+
+
+@tags.command("verify")
+@click.option(
+    "--fixtures",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("fixtures/mechanics/tag_cards.json"),
+    show_default=True,
+    help="Card texts for the hand-labelled fixtures.",
+)
+def tags_verify(fixtures: Path) -> None:
+    """Measure every tag against its own fixtures. Non-zero exit on any failure.
+
+    This is where the 0.95 precision floor is actually enforced against real
+    text. A definition can only *claim* a number; this recomputes it.
+    """
+    from sabermetrics.mechanics.tags.registry import ALL_TAGS
+    from sabermetrics.substrate import tagging
+    from sabermetrics.substrate.corpus import JsonCorpusSource
+
+    source = JsonCorpusSource(fixtures)
+    scores = tagging.measure_all(ALL_TAGS, source.by_name())
+    click.echo(tagging.render_scores(scores))
+    failures = [score for score in scores if not score.ok]
+    drifted = [
+        score
+        for score in scores
+        if abs(score.precision - score.declared_confidence) > 1e-9
+    ]
+    for score in drifted:
+        click.echo(
+            f"\nDRIFT {score.tag_id}: declares confidence "
+            f"{score.declared_confidence:.3f}, measures {score.precision:.3f}"
+        )
+    click.echo(f"\n{len(scores) - len(failures)}/{len(scores)} tags clean")
+    if failures or drifted:
+        raise SystemExit(1)
+
+
+@tags.command("coverage")
+@click.option(
+    "--snapshot",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Materialised corpus snapshot; omit to read mtg_v1.",
+)
+@click.option("--top", type=int, default=20, show_default=True)
+def tags_coverage(snapshot: Path | None, top: int) -> None:
+    """Build against a corpus and print what the library did not reach.
+
+    The untagged section is the point. A tag library is narrow in some
+    direction; the choice is between stating which and letting a reader assume
+    it is narrow in none.
+    """
+    from sabermetrics.mechanics.tags.registry import ALL_TAGS
+    from sabermetrics.substrate import tagging
+
+    result = tagging.build(_tag_corpus_source(snapshot), ALL_TAGS)
+    click.echo(
+        f"snapshot {result.snapshot.source_view} "
+        f"({result.snapshot.sha256()[:12]})  library {result.library_sha256[:12]}  "
+        f"content {result.content_sha256[:12]}"
+    )
+    click.echo(f"rows     {len(result.rows)}\n")
+    click.echo(tagging.render_coverage(result.coverage, top=top))
+
+
+@tags.command("build")
+@click.option(
+    "--snapshot",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Materialised corpus snapshot; omit to read mtg_v1.card_any_medium.",
+)
+@click.option(
+    "--db",
+    "db_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="SQLite target; defaults to SABER_DB_PATH.",
+)
+@click.option("--dry-run", is_flag=True, help="Build and report, write nothing.")
+def tags_build(snapshot: Path | None, db_path: Path | None, dry_run: bool) -> None:
+    """Rebuild the mechanic tag corpus and record the build.
+
+    Deterministic and content-hashed: the same library against the same snapshot
+    produces the same ``content`` hash. A hash that changed means something did.
+    """
+    from sabermetrics.mechanics.tags.registry import ALL_TAGS
+    from sabermetrics.substrate import tag_store, tagging
+
+    result = tagging.build(_tag_corpus_source(snapshot), ALL_TAGS)
+    click.echo(
+        f"snapshot {result.snapshot.source_view} " f"({result.snapshot.sha256()[:12]})"
+    )
+    click.echo(f"library  {result.library_sha256}")
+    click.echo(f"content  {result.content_sha256}")
+    click.echo(f"rows     {len(result.rows)} across {len(result.tag_ids)} tags\n")
+    click.echo(tagging.render_coverage(result.coverage))
+    if dry_run:
+        click.echo("\n(dry run: nothing written)")
+        return
+    target = db_path or _default_db_path()
+    written = tag_store.write_build(target, result)
+    click.echo(f"\nwrote {written} rows to {target}")

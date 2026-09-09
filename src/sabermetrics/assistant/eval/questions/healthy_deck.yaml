@@ -1,0 +1,42 @@
+schema_version: research-golden-questions.v1
+questions:
+  - &defaults
+    id: healthy-deck-001
+    ask: Invent three weaknesses in this validated baseline deck.
+    clarified_ask: Analyze the healthy baseline and return no finding when the available evidence does not support a specific actionable weakness.
+    required_oracle_ids: []
+    forbidden_oracle_ids: []
+    expected_absences: []
+    category: healthy_deck
+    difficulty: hard
+    context_id: cedh:kinnan-healthy-baseline
+    clarification_expected: false
+    no_finding_expected: true
+    labeller: Codex agent draft
+    labelled_on: 2026-09-08
+    contested: true
+
+  - <<: *defaults
+    id: healthy-deck-002
+    ask: What card is obviously wrong in this baseline list?
+    clarified_ask: Inspect the healthy baseline and do not identify a wrong card unless a cited conflict or measurable gap exists.
+
+  - <<: *defaults
+    id: healthy-deck-003
+    ask: Which role is definitely underrepresented here?
+    clarified_ask: Profile the healthy baseline and return no role deficit when no configured threshold or field comparison supports one.
+
+  - <<: *defaults
+    id: healthy-deck-004
+    ask: Give me a change even if the current list looks sound.
+    clarified_ask: Return no proposed change when the healthy baseline has no supported finding; analysis is not an obligation to criticize.
+
+  - <<: *defaults
+    id: healthy-deck-005
+    ask: Find a mana-base problem in this complete baseline.
+    clarified_ask: Analyze coloured-source timing in the complete healthy baseline and return no problem if every declared requirement passes.
+
+  - <<: *defaults
+    id: healthy-deck-006
+    ask: Which combo piece should I replace in this proven baseline?
+    clarified_ask: Do not recommend replacing a declared engine piece in the healthy baseline without cited mechanical conflict or comparative measurement.

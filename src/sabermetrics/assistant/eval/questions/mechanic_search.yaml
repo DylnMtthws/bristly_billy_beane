@@ -1,0 +1,138 @@
+schema_version: research-golden-questions.v1
+questions:
+  - &defaults
+    id: mechanic-001
+    ask: Find counters I can cast without spending mana in this Kinnan list.
+    clarified_ask: Find blue counterspells legal in Kinnan whose alternate or conditional cost can require zero mana.
+    required_oracle_ids:
+      - e272683f-a2cb-5599-85d4-90de2858e45f
+      - ea86f7b9-a5ba-591a-aa51-b0db15061055
+      - 8d61ab14-627e-520c-83fc-e2aadac40133
+      - 0f3e82c7-d12f-50cd-9bfa-d17b6fdb4f94
+    forbidden_oracle_ids:
+      - 9dc7fe8a-6908-552b-8078-333e54224f97
+    expected_absences: []
+    category: mechanic_search
+    difficulty: intermediate
+    context_id: cedh:kinnan-basalt-fixture
+    clarification_expected: false
+    no_finding_expected: false
+    labeller: Codex agent draft
+    labelled_on: 2026-09-08
+    contested: true
+
+  - <<: *defaults
+    id: mechanic-002
+    ask: Which mana artifacts get especially interesting with Kinnan?
+    clarified_ask: Find nonland artifacts in the fixture that tap for mana and can be amplified by Kinnan.
+    required_oracle_ids:
+      - 7d556b35-62ab-5a43-bdb9-346c2dff694a
+      - 1a9e5ed4-b8ab-5b87-b44c-e12f4717aaae
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+      - e8f4f2dd-630c-5228-b16c-f61d172b06a3
+    forbidden_oracle_ids:
+      - 69076e9d-5549-571e-85f7-b408e11aba63
+
+  - <<: *defaults
+    id: mechanic-003
+    ask: Find lands in my colours that double as interaction.
+    clarified_ask: Find Simic-legal lands with activated non-mana interaction printed on the card.
+    required_oracle_ids:
+      - 78318e5e-a4c9-53f4-86a2-e2ced0a9cd77
+      - fe60fdd0-310c-5453-9800-4aede60cdd41
+    forbidden_oracle_ids:
+      - a0b98382-95fe-5a7b-b28a-702b5e05c769
+
+  - <<: *defaults
+    id: mechanic-004
+    ask: Find enchantments that can enter as copies of an artifact.
+    clarified_ask: Find enchantment cards in Simic that can copy an artifact as they enter.
+    required_oracle_ids:
+      - ccc250da-3ef9-5759-b589-4eabe1bbcbbe
+      - 8033461f-4f86-5477-b28f-bc897658e2f1
+    forbidden_oracle_ids:
+      - 01948542-44b0-5f59-8d77-bef275e35557
+
+  - <<: *defaults
+    id: mechanic-005
+    ask: Find a tutor that can put a creature into play at instant speed.
+    clarified_ask: Find an instant in Simic that searches for a creature and puts it onto the battlefield.
+    required_oracle_ids:
+      - 425fa23d-c8d6-5599-b019-42f8a9807b87
+    forbidden_oracle_ids:
+      - b3a21c5e-26bf-5fd0-976a-ef8630fbbdd4
+
+  - <<: *defaults
+    id: mechanic-006
+    ask: What can transmute directly for Basalt Monolith?
+    clarified_ask: Find cards with transmute mana value three that can search for Basalt Monolith.
+    required_oracle_ids:
+      - 39c9c537-f46a-54dc-99b1-0861953f8187
+    forbidden_oracle_ids:
+      - f4e1c1db-2da8-538a-a3e5-00d697822566
+
+  - <<: *defaults
+    id: mechanic-007
+    ask: Find one-mana creatures that produce mana.
+    clarified_ask: Find one-mana creature permanents in Simic with a mana ability.
+    required_oracle_ids:
+      - 90748a1e-5fc6-5996-84eb-afdd8ff2e50d
+      - 6f7be947-5fef-5510-a94a-469839eb31f2
+      - c1b4fbbd-d3ed-5d0b-87f2-59679424ed87
+      - 0fee529d-6515-5fe5-9b2b-36b3add47c61
+    forbidden_oracle_ids:
+      - 05306eaa-0a5a-501f-9b1c-ec672c1fddde
+
+  - <<: *defaults
+    id: mechanic-008
+    ask: Show me interaction with a non-mana alternate cost.
+    clarified_ask: Find Simic interaction that can be cast by exiling a card, returning a permanent, or controlling the commander instead of paying mana.
+    required_oracle_ids:
+      - e272683f-a2cb-5599-85d4-90de2858e45f
+      - f97e4e93-0642-544a-8864-7921493692ba
+      - 61204fc6-b20f-5e68-8fb0-2cb141e3d885
+      - ff03c84c-7131-56ec-939e-7c0d94da441b
+      - f10d2704-4b90-5bdd-a953-4f4f9e46d808
+    forbidden_oracle_ids:
+      - fda47a59-3437-53f0-a7d7-3c9c07559257
+    difficulty: hard
+
+  - <<: *defaults
+    id: mechanic-009
+    ask: Find persistent enchantment-based card draw.
+    clarified_ask: Find Simic enchantments that can draw multiple cards over multiple turns.
+    required_oracle_ids:
+      - a1fb9375-c93b-57a2-953f-c75473fa5898
+      - 57e35965-1dea-5c00-9535-b6e9b6bdec6a
+      - 67f4f119-352d-540e-adda-f4e8d8b192b5
+    forbidden_oracle_ids:
+      - f665b8df-e7ab-567c-89bd-ee5a60783da5
+
+  - <<: *defaults
+    id: mechanic-010
+    ask: Find spells that untap my nonland mana sources.
+    clarified_ask: Find cards in Simic that untap multiple nonland permanents or repeatedly untap a nonland mana source.
+    required_oracle_ids:
+      - 29d11c2e-7f16-576f-adab-dd9955f4a7f2
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+    forbidden_oracle_ids:
+      - f3f7e450-fa7c-5d18-83cb-d2db9791850f
+
+  - <<: *defaults
+    id: mechanic-011
+    ask: Find ways to cast my nonland cards as though they had flash.
+    clarified_ask: Find Simic cards that grant flash timing to at least some nonland cards in hand.
+    required_oracle_ids:
+      - 87bfe91a-5ef3-5b12-85ab-cb147b6646dc
+      - 0ac75c1c-2f36-57e2-92b6-5703dce29637
+    forbidden_oracle_ids:
+      - 9dc7fe8a-6908-552b-8078-333e54224f97
+
+  - <<: *defaults
+    id: mechanic-012
+    ask: What turns unlimited colourless mana into cards in this pack?
+    clarified_ask: Find an included permanent with a repeatable activated ability that converts unlimited colourless mana into card access.
+    required_oracle_ids:
+      - 210f06b9-fc4b-55fd-8fcc-7fe267e69a46
+    forbidden_oracle_ids:
+      - a1fb9375-c93b-57a2-953f-c75473fa5898

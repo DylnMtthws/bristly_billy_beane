@@ -502,3 +502,75 @@ def test_the_cedh_path_does_not_import_a_vendor_model_sdk():
             m.startswith(("anthropic", "openai", "google.generativeai"))
             for m in modules
         ), f"{path} imports a vendor SDK"
+
+
+class TestAbsenceOfAModelIsVisible:
+    """`absence_is_visible` applied to the narrative layer.
+
+    The deck is deterministic, so running with no model provider is a supported
+    mode rather than a broken one — but a supported mode still has to say what
+    it did not do. Before this was fixed the run returned an empty ``warnings``
+    list while both narrative fields were ``None``, so a reader met a deck with
+    no explanation and nothing telling them why.
+
+    Note the contrast these tests pin: a provider *failure* already warned
+    (``_call``); only the never-configured path was silent.
+    """
+
+    def test_a_missing_gateway_warns_that_there_is_no_explanation(
+        self, cedh_cards, cedh_meta_populated, cedh_simulator
+    ):
+        result = _lab(cedh_cards, cedh_meta_populated, cedh_simulator, None).run(
+            LabRequest(pack_id="kinnan_basalt")
+        )
+        assert result.explanation is None
+        assert any(
+            "no written explanation" in w for w in result.warnings
+        ), f"an absent explanation must be stated, got {result.warnings!r}"
+
+    def test_a_missing_gateway_warns_that_evidence_was_not_summarised(
+        self, cedh_cards, cedh_meta_populated, cedh_simulator
+    ):
+        result = _lab(cedh_cards, cedh_meta_populated, cedh_simulator, None).run(
+            LabRequest(pack_id="kinnan_basalt")
+        )
+        assert result.evidence_summary is None
+        assert any("not summarised" in w for w in result.warnings)
+
+    def test_an_empty_evidence_package_is_not_also_called_unsummarised(
+        self, cedh_cards, cedh_meta_populated, cedh_simulator
+    ):
+        """The chunks guard runs before the gateway guard, so gaps never double up.
+
+        Tested directly rather than through a fixture: an absent *tournament*
+        corpus still yields curated strategy chunks, so no repository fixture
+        reaches zero chunks. The ordering is a real invariant even though the
+        fixtures cannot reach it, and asserting it here is how it survives
+        someone reordering the two guards later.
+        """
+        from types import SimpleNamespace
+
+        lab = _lab(cedh_cards, cedh_meta_populated, cedh_simulator, None)
+        warnings: list[str] = []
+        assert lab._summarise_evidence(SimpleNamespace(chunks=[]), [], warnings) is None
+        assert warnings == []
+
+    def test_absent_tournament_data_still_reports_both_gaps_separately(
+        self, cedh_cards, cedh_meta_absent, cedh_simulator
+    ):
+        """Two distinct gaps read as two distinct sentences, not one merged claim.
+
+        No tournament corpus and no model provider are different failures with
+        different fixes, and the curated chunks that remain really were left
+        unsummarised.
+        """
+        result = _lab(cedh_cards, cedh_meta_absent, cedh_simulator, None).run(
+            LabRequest(pack_id="kinnan_basalt")
+        )
+        assert any("No tournament evidence is available" in w for w in result.warnings)
+        assert any("not summarised" in w for w in result.warnings)
+
+    def test_a_configured_gateway_adds_neither_warning(self, lab):
+        result = lab.run(LabRequest(pack_id="kinnan_basalt"))
+        assert result.explanation is not None
+        assert not any("No model provider is configured" in w for w in result.warnings)

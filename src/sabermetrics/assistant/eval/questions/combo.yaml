@@ -1,0 +1,87 @@
+schema_version: research-golden-questions.v1
+questions:
+  - &defaults
+    id: combo-001
+    ask: What is the primary assembly line in this pack?
+    clarified_ask: Identify the pack-declared Kinnan plus Basalt Monolith line and its colourless-mana outlet without discovering a new combo.
+    required_oracle_ids:
+      - 38d25a87-dcc1-5cc2-a086-48796e7cdced
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+      - 210f06b9-fc4b-55fd-8fcc-7fe267e69a46
+    forbidden_oracle_ids: []
+    expected_absences: []
+    category: combo
+    difficulty: basic
+    context_id: cedh:kinnan-basalt-fixture
+    clarification_expected: false
+    no_finding_expected: false
+    labeller: Codex agent draft
+    labelled_on: 2026-09-08
+    contested: true
+
+  - <<: *defaults
+    id: combo-002
+    ask: Which piece of the Basalt line is my commander?
+    clarified_ask: Separate the commander, library engine piece, and outlet in the pack-declared Basalt assembly line.
+    required_oracle_ids:
+      - 38d25a87-dcc1-5cc2-a086-48796e7cdced
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+      - 210f06b9-fc4b-55fd-8fcc-7fe267e69a46
+
+  - <<: *defaults
+    id: combo-003
+    ask: Can Basalt Monolith make unlimited mana here without Kinnan?
+    clarified_ask: Evaluate the declared Basalt Monolith line with Kinnan absent and distinguish the untap loop from net mana production.
+    required_oracle_ids:
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+      - 38d25a87-dcc1-5cc2-a086-48796e7cdced
+    difficulty: intermediate
+
+  - <<: *defaults
+    id: combo-004
+    ask: What cards in my list can find either half of the engine?
+    clarified_ask: Identify current-list tutors for Kinnan or Basalt Monolith under each tutor's actual restrictions.
+    required_oracle_ids:
+      - 71e6dee3-514f-58f5-9b9e-4599139dca70
+      - 425fa23d-c8d6-5599-b019-42f8a9807b87
+      - 39c9c537-f46a-54dc-99b1-0861953f8187
+      - d4a7ecca-504f-544c-9cf2-b011194b07b1
+
+  - <<: *defaults
+    id: combo-005
+    ask: Am I one card away from another two-card combo?
+    clarified_ask: Compare this fixture to the configured combo corpus and report one-piece-away lines, or explicitly state that no combo corpus is available.
+    required_oracle_ids: []
+    expected_absences:
+      - combo corpus is deferred and unavailable in R0 through R4
+    difficulty: hard
+
+  - <<: *defaults
+    id: combo-006
+    ask: Does Copy Artifact give me another Basalt combo line?
+    clarified_ask: Determine from configured combo evidence whether Copy Artifact plus cards in this list forms a declared terminating line; do not infer one from similarity alone.
+    required_oracle_ids:
+      - ccc250da-3ef9-5759-b589-4eabe1bbcbbe
+      - 0efb9f5d-56a1-53a3-9357-9b244761b075
+    expected_absences:
+      - no configured combo corpus can establish an undeclared line
+    difficulty: hard
+
+  - <<: *defaults
+    id: combo-007
+    ask: Which outlet is explicitly declared by the strategy pack?
+    clarified_ask: Return only the colourless-mana outlet named by the pack's authored objective, not plausible outlets inferred from card text.
+    required_oracle_ids:
+      - 210f06b9-fc4b-55fd-8fcc-7fe267e69a46
+    forbidden_oracle_ids:
+      - b3a21c5e-26bf-5fd0-976a-ef8630fbbdd4
+
+  - <<: *defaults
+    id: combo-008
+    ask: Does Dramatic Reversal terminate a simulated run by itself?
+    clarified_ask: Explain whether the installed simulator pack declares Dramatic Reversal as a terminal assembly pattern, distinguishing card effect from modeled objective.
+    required_oracle_ids:
+      - 29d11c2e-7f16-576f-adab-dd9955f4a7f2
+    expected_absences:
+      - a card's presence does not establish a simulator terminal state
+    difficulty: hard
