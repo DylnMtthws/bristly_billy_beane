@@ -182,7 +182,7 @@ button { cursor: pointer; }
 .dl-deck-card-copy .dl-deck-tags { margin-top: 10px; }
 .dl-deck-tags span, .dl-tag-label { width: max-content; padding: 4px 8px; border: 1px solid #303958; border-radius: 6px; background: var(--panel-2); color: #aab2cf; font: 10px var(--mono); letter-spacing: .02em; }
 .dl-deck-card-foot { min-height: 33px; margin-top: auto; display: flex; align-items: center; gap: 10px; padding-top: 3px; border-top: 1px solid var(--line); }
-.dl-deck-card-foot time { color: #6f7899; font: 10px var(--mono); text-transform: uppercase; }
+.dl-deck-card-foot time, .dl-deck-card-foot .dl-deck-recency { color: #6f7899; font: 10px var(--mono); text-transform: uppercase; }
 .dl-deck-card-foot form { position: relative; z-index: 2; margin: 0 0 0 auto; }
 .dl-deck-favorite { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: #66708f; font-size: 17px; cursor: pointer; transition: color .15s ease, background-color .15s ease, transform .15s ease; }
 .dl-deck-favorite:hover, .dl-deck-favorite:focus-visible { background: rgba(255,255,255,.06); color: #aab2cf; }

@@ -42,11 +42,12 @@
 <section>
     <div class="dl-page-head"><div><div class="dl-eyebrow">Pick up where you left off</div></div><a class="dl-button dl-button-quiet" href="{{ url_for('builder.library') }}">All decks →</a></div>
     <div class="dl-library-grid">
+    {% set show_card_count = true %}
     {% for d in recent_documents[:2] %}
-        {% set card_count = d.library_count + d.commander_count %}
-        <a class="dl-card dl-deck-card" href="{{ url_for('builder.deck', deck_id=d.id) }}"><div><h2>{{ d.title }}</h2><p>{{ d.commander_names or 'Commander not chosen' }}</p></div><div class="dl-deck-recency"><span>{{ card_count }} card{% if card_count != 1 %}s{% endif %}</span><span aria-hidden="true">·</span><time datetime="{{ d.updated_at }}">Updated {{ d.updated_at|short_date }}</time></div></a>
+        {% include 'deck_lab/_deck_card.html' %}
     {% endfor %}
     </div>
 </section>
 {% endif %}
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='deck-lab-library.js') }}" defer></script>{% endblock %}
