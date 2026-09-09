@@ -73,16 +73,36 @@
   function zoneEntries(zoneId) { return state.entries.filter(function (entry) { return !entry.is_commander && entry.zone_id === zoneId; }); }
   function qty(entries) { return entries.reduce(function (n, entry) { return n + Number(entry.quantity || 0); }, 0); }
   function zoneName(zoneId) { var zone = state.zones.find(function (item) { return item.id === zoneId; }); return zone ? zone.name : "Unsorted"; }
+  function manaToken(symbol) {
+    var upper = String(symbol || "").toUpperCase(), token = node("i", "dl-mana-symbol", upper.replace("/", "⁄"));
+    if (/^[WUBRGC]$/.test(upper)) token.classList.add("mana", "mana-" + upper);
+    else token.classList.add("dl-mana-generic");
+    token.setAttribute("aria-hidden", "true");
+    return token;
+  }
+  function appendManaText(container, text) {
+    var raw = String(text || ""), last = 0, match, pattern = /\{([^}]+)\}/g;
+    function appendPlain(chunk) {
+      chunk.split("\n").forEach(function (line, index) {
+        if (index) container.appendChild(node("br"));
+        if (line) container.appendChild(document.createTextNode(line));
+      });
+    }
+    while ((match = pattern.exec(raw))) {
+      if (match.index > last) appendPlain(raw.slice(last, match.index));
+      var wrap = node("span", "dl-mana-inline");
+      wrap.appendChild(manaToken(match[1]));
+      wrap.appendChild(node("span", "dl-visually-hidden", match[0]));
+      container.appendChild(wrap);
+      last = match.index + match[0].length;
+    }
+    if (last < raw.length) appendPlain(raw.slice(last));
+  }
   function manaCost(entry) {
     var wrap = node("span", "dl-mana-cost"), raw = String(entry.mana_cost || "").trim(), matches = Array.from(raw.matchAll(/\{([^}]+)\}/g));
     wrap.setAttribute("aria-label", raw ? "Mana cost " + raw.replace(/[{}]/g, " ").trim() : "No mana cost");
     if (!matches.length) { wrap.textContent = "—"; return wrap; }
-    matches.forEach(function (match) {
-      var symbol = match[1].toUpperCase(), token = node("i", "dl-mana-symbol", symbol.replace("/", "⁄"));
-      if (/^[WUBRGC]$/.test(symbol)) token.classList.add("mana", "mana-" + symbol);
-      else token.classList.add("dl-mana-generic");
-      token.setAttribute("aria-hidden", "true"); wrap.appendChild(token);
-    });
+    matches.forEach(function (match) { wrap.appendChild(manaToken(match[1])); });
     return wrap;
   }
   function roleSelect(entry) {
@@ -138,7 +158,7 @@
     }); container.appendChild(rows);
   }
   function renderGrid(group, container) { var grid = node("div", "dl-grid-display"); group.entries.forEach(function (entry) { var card = node("div", "dl-grid-card"); card.title = entry.name; var url = cardImage(entry); if (url) { var img = node("img"); img.src = url; img.alt = entry.name; img.loading = "lazy"; card.appendChild(img); } else card.appendChild(node("div", "fallback", entry.name)); card.appendChild(node("b", "", entry.quantity + "×")); grid.appendChild(card); }); container.appendChild(grid); }
-  function renderSpoiler(group, container) { var grid = node("div", "dl-spoiler-display"); group.entries.forEach(function (entry) { var card = node("article", "dl-spoiler-card"), url = cardImage(entry); if (url) { var img = node("img"); img.src = url; img.alt = ""; img.loading = "lazy"; card.appendChild(img); } else card.appendChild(node("div", "dl-card-art")); var body = node("div"); body.append(node("strong", "", entry.quantity + "× " + entry.name), node("p", "", entry.oracle_text || entry.type_line || "Card details unavailable.")); card.appendChild(body); grid.appendChild(card); }); container.appendChild(grid); }
+  function renderSpoiler(group, container) { var grid = node("div", "dl-spoiler-display"); group.entries.forEach(function (entry) { var card = node("article", "dl-spoiler-card"), url = cardImage(entry); if (url) { var img = node("img"); img.src = url; img.alt = ""; img.loading = "lazy"; card.appendChild(img); } else card.appendChild(node("div", "dl-card-art")); var body = node("div"), rules = node("p"); appendManaText(rules, entry.oracle_text || entry.type_line || "Card details unavailable."); body.append(node("strong", "", entry.quantity + "× " + entry.name), rules); card.appendChild(body); grid.appendChild(card); }); container.appendChild(grid); }
   function renderTable() {
     var view = document.getElementById("table-view"); if (!view) return; view.replaceChildren();
     var collapsed = []; try { collapsed = JSON.parse(preference("collapsed_json", "[]")); } catch (_) {}
