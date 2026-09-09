@@ -63,7 +63,12 @@ planning documentation already on main. It does not permit arbitrary backend cha
 the exception cannot apply again.
 
 This app has one SQLite writer; a rolling replacement can briefly interrupt service.
-Backups remain in `/data/release-backups` and snapshots remain with Fly. Monitor the
+Online SQLite copies are staged on temporary root-disk storage, integrity-checked,
+compressed into `/data/release-backups/*.db.gz`, and read back to verify their SHA-256
+before atomic publication. The receipt records the digest and sizes. Existing backups
+are preserved and snapshots remain with Fly. To restore, decompress into a separate
+file and verify its recorded SHA-256 before following the explicit restore procedure.
+Monitor the
 1 GB volume and remove obsolete backups through an explicit maintenance procedure;
 this workflow does not automatically delete database backups.
 
@@ -81,3 +86,19 @@ Use the recorded previous immutable image for an explicitly approved rollback.
 Database restore is a separate decision because it can discard writes made after
 backup. Never mount a second writer on the production volume or restore a preview
 fixture database into production. No deployment or rollback happens automatically.
+
+## September 8 backup-space repair rollout
+
+Two retained 232 MB raw backups left only 208 MB free on the 1 GB production
+volume. The former backup method demanded another full database copy on that
+volume and stopped before replacing production. Compressed backup staging avoids
+that temporary space requirement while preserving existing backups. Low temporary
+or persistent space still fails safely and removes only the new partial file.
+
+This changes the trusted release controller, so use the reviewed controller rollout
+exception rather than widening the ordinary UI release allowlist. After approving
+and merging this PR, set `RELEASE_BOOTSTRAP_BASE_SHA` to the currently verified live
+SHA for this controller-only rollout, then dispatch the successful main CI run and
+approve its production environment job. Once live advances, the exception no longer
+applies. Reset the variable after the successful rollout. No backup is deleted by
+this change.

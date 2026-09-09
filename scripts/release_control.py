@@ -368,6 +368,61 @@ def bootstrap_safe(files, live_sha, configured_base):
     return bool(files)
 
 
+def online_backup_program(destination, source="/data/sabermetrics.db", scratch="/tmp"):
+    """A consistent SQLite backup, staged off-volume and verified after compression."""
+    return (
+        f"source={source!r}\ndestination={destination!r}\nscratch={scratch!r}\n" + """
+import gzip, hashlib, json, os, pathlib, shutil, sqlite3, tempfile, uuid
+source, destination = pathlib.Path(source), pathlib.Path(destination)
+destination.parent.mkdir(parents=True, exist_ok=True)
+reserve = 50_000_000
+source_size = source.stat().st_size
+if shutil.disk_usage(scratch).free < source_size * 1.2 + reserve:
+    raise RuntimeError('Insufficient temporary disk space for online backup')
+if destination.exists():
+    raise RuntimeError('Refusing to overwrite an existing release backup')
+partial = destination.with_name(destination.name + '.' + uuid.uuid4().hex + '.partial')
+try:
+    with tempfile.TemporaryDirectory(prefix='release-backup-', dir=scratch) as temporary:
+        staged = pathlib.Path(temporary) / 'snapshot.db'
+        with sqlite3.connect(source.as_uri() + '?mode=ro', uri=True) as reader:
+            with sqlite3.connect(staged) as writer:
+                reader.backup(writer)
+                if writer.execute('pragma integrity_check').fetchone()[0] != 'ok':
+                    raise RuntimeError('Backup integrity check failed')
+        reader.close()
+        writer.close()
+        expected = hashlib.sha256()
+        with staged.open('rb') as reader, partial.open('xb') as raw:
+            os.chmod(partial, 0o600)
+            with gzip.GzipFile(fileobj=raw, mode='wb', compresslevel=1, mtime=0) as packed:
+                while chunk := reader.read(1024 * 1024):
+                    if shutil.disk_usage(destination.parent).free < reserve + 2 * 1024 * 1024:
+                        raise RuntimeError('Insufficient data-volume space for compressed backup')
+                    expected.update(chunk)
+                    packed.write(chunk)
+            raw.flush()
+            os.fsync(raw.fileno())
+        actual = hashlib.sha256()
+        with gzip.open(partial, 'rb') as reader:
+            while chunk := reader.read(1024 * 1024):
+                actual.update(chunk)
+        if actual.digest() != expected.digest():
+            raise RuntimeError('Compressed backup verification failed')
+        os.replace(partial, destination)
+        directory = os.open(destination.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        print(json.dumps({'backup': 'ok', 'sha256': actual.hexdigest(),
+            'source_bytes': staged.stat().st_size, 'compressed_bytes': destination.stat().st_size}))
+finally:
+    partial.unlink(missing_ok=True)
+"""
+    )
+
+
 def deploy(folder):
     require(
         os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
@@ -452,17 +507,8 @@ def deploy(folder):
 
     save()
     try:
-        backup = f"/data/release-backups/{manifest['sha']}-{int(time.time())}.db"
-        program = (
-            "import sqlite3,json,pathlib,shutil; "
-            f"p=pathlib.Path({backup!r});p.parent.mkdir(parents=True,exist_ok=True); "
-            "assert shutil.disk_usage('/data').free > "
-            "pathlib.Path('/data/sabermetrics.db').stat().st_size * 1.2 + 50_000_000; "
-            "s=sqlite3.connect('file:/data/sabermetrics.db?mode=ro',uri=True); "
-            "d=sqlite3.connect(p);s.backup(d); "
-            "assert d.execute('pragma integrity_check').fetchone()[0]=='ok'; "
-            "d.close();s.close();print(json.dumps({'backup':'ok'}))"
-        )
+        backup = f"/data/release-backups/{manifest['sha']}-{int(time.time())}.db.gz"
+        program = online_backup_program(backup)
         result = fly_json(
             "machine",
             "exec",
@@ -480,6 +526,7 @@ def deploy(folder):
             "Online backup failed; production was not replaced",
         )
         receipt["backup_path"] = backup
+        receipt["backup_verification"] = json.loads(result["stdout"])
         previous_ids = {
             item.get("id")
             for item in fly_json(
