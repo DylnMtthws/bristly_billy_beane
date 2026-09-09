@@ -57,27 +57,6 @@
 <div class="dl-empty">No decks were edited in the last 30 days.</div>
 {% endif %}
 
-{% if jobs %}
-<section class="dl-legacy">
-    <div class="dl-eyebrow" style="margin-bottom:12px">Strategy pack builds</div>
-    <div class="dl-card">{% for job in jobs %}<div class="dl-legacy-row"><div><strong>Build {{ job.status }}</strong><div class="dl-muted" style="font-size:12px">Started {{ job.created_at }}{% if job.status=='failed' %} · This build did not complete.{% endif %}</div></div><a class="dl-button" href="{{ url_for('cedh.job_status',job_id=job.id) }}">{% if job.status=='failed' %}Review failure{% else %}View progress{% endif %}</a></div>{% endfor %}</div>
-</section>
-{% endif %}
-
-{% if generated or candidates %}
-<section class="dl-legacy">
-    <div class="dl-eyebrow" style="margin-bottom:12px">Ready to edit</div>
-    <div class="dl-card">
-    {% for d in generated %}
-        <div class="dl-legacy-row"><div><strong>{{ d.deck_name or d.commander_name }}</strong><div class="dl-muted" style="font-size:12px">{{ d.commander_name }} · generated list</div></div><form method="post" action="{{ url_for('builder.import_generated', generated_id=d.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-button" type="submit">Open in builder</button></form></div>
-    {% endfor %}
-    {% for c in candidates %}
-        <div class="dl-legacy-row"><div><strong>{{ c.commander_name }}</strong><div class="dl-muted" style="font-size:12px">{{ c.pack_id }} · cEDH candidate{% if c.simulation_status %} · {{ c.simulation_status }}{% endif %}</div></div><form method="post" action="{{ url_for('builder.import_candidate', candidate_id=c.candidate_id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-button" type="submit">Open in builder</button></form></div>
-    {% endfor %}
-    </div>
-</section>
-{% endif %}
-
 <dialog id="new-deck-dialog" class="dl-dialog">
     <form method="post" action="{{ url_for('builder.create_deck') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
