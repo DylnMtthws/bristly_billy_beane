@@ -232,3 +232,85 @@ def test_failed_backup_prevents_registry_push_and_deployment(tmp_path, monkeypat
     assert json.loads((tmp_path / "deployment.json").read_text())["status"].startswith(
         "failed"
     )
+
+
+def test_online_backup_is_compressed_consistent_and_preserves_existing_files(tmp_path):
+    import gzip
+    import hashlib
+    import sqlite3
+    import subprocess
+    import sys
+
+    source = tmp_path / "source.db"
+    with sqlite3.connect(source) as db:
+        db.execute("create table records(value text)")
+        db.executemany("insert into records values(?)", [("test data" * 100,)] * 10000)
+    original = source.read_bytes()
+    old = tmp_path / "previous.db"
+    old.write_bytes(b"previous backup retained")
+    backup = tmp_path / "new.db.gz"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            release.online_backup_program(str(backup), str(source), str(tmp_path)),
+        ],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    proof = json.loads(result.stdout)
+    restored = gzip.decompress(backup.read_bytes())
+    assert proof["backup"] == "ok"
+    assert proof["sha256"] == hashlib.sha256(restored).hexdigest()
+    assert backup.stat().st_size < source.stat().st_size / 10
+    assert source.read_bytes() == original
+    assert old.read_bytes() == b"previous backup retained"
+    restored_path = tmp_path / "restored.db"
+    restored_path.write_bytes(restored)
+    with sqlite3.connect(restored_path) as db:
+        assert db.execute("pragma integrity_check").fetchone()[0] == "ok"
+        assert db.execute("select count(*) from records").fetchone()[0] == 10000
+    assert not list(tmp_path.glob("*.partial"))
+    assert not list(tmp_path.glob("release-backup-*"))
+
+
+def test_online_backup_refuses_overwrite_and_cleans_partial_on_low_volume_space(
+    tmp_path,
+):
+    import sqlite3
+    import subprocess
+    import sys
+
+    source = tmp_path / "source.db"
+    with sqlite3.connect(source) as db:
+        db.execute("create table records(value text)")
+    backup = tmp_path / "existing.db.gz"
+    backup.write_bytes(b"keep this backup")
+    program = release.online_backup_program(str(backup), str(source), str(tmp_path))
+    result = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, check=False
+    )
+    assert result.returncode != 0
+    assert backup.read_bytes() == b"keep this backup"
+    missing = tmp_path / "new.db.gz"
+    program = release.online_backup_program(str(missing), str(source), str(tmp_path))
+    # The first disk check is temporary storage; the second is the data volume.
+    program = program.replace(
+        "reserve = 50_000_000",
+        """reserve = 50_000_000
+from types import SimpleNamespace
+space_calls = 0
+def available(path):
+    global space_calls
+    space_calls += 1
+    return SimpleNamespace(free=1_000_000_000 if space_calls == 1 else 0)
+shutil.disk_usage = available""",
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, check=False
+    )
+    assert result.returncode != 0
+    assert not missing.exists()
+    assert not list(tmp_path.glob("*.partial"))
+    assert not list(tmp_path.glob("release-backup-*"))
