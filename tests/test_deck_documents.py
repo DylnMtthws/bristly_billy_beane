@@ -150,7 +150,7 @@ def test_playmat_dimensions_are_persisted_and_bounded(deck_db):
                 "type": "update_presentation",
                 "canvas_width": 9999,
                 "canvas_height": 9999,
-                "surface": "night-ritual",
+                "surface": "slate-grid",
             },
             {
                 "type": "move_zone",
@@ -162,7 +162,7 @@ def test_playmat_dimensions_are_persisted_and_bounded(deck_db):
     )
     assert document["presentation"]["canvas_width"] == 2400
     assert document["presentation"]["canvas_height"] == 1800
-    assert document["presentation"]["surface"] == "night-ritual"
+    assert document["presentation"]["surface"] == "slate-grid"
     assert document["zones"][0]["x"] == 2220
     assert document["zones"][0]["y"] == 1700
 

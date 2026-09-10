@@ -12,7 +12,7 @@
     <input class="dl-field" type="search" name="q" value="{{ query }}" placeholder="Search a card, a commander, or an archetype" aria-label="Search Research">
     <kbd aria-hidden="true">/</kbd>
 </form>
-<p class="dl-research-status" data-research-status role="status" aria-live="polite"{% if not status_text %} hidden{% endif %}>{{ status_text }}</p>
+<p class="dl-research-status{% if status_text and not status_visible %} dl-visually-hidden{% endif %}" data-research-status role="status" aria-live="polite"{% if not status_text %} hidden{% endif %}>{{ status_text }}</p>
 <noscript><p><a href="{{ full_results_href }}">Load full results without JavaScript</a></p><style>.dl-research-page .dl-filters{display:block;position:static;max-height:none}</style></noscript>
 <div id="research-live" data-research-live>
     {% include "deck_lab/research_fragment.html" %}

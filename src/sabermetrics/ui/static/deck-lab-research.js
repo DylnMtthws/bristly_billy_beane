@@ -20,11 +20,16 @@
     return meta ? meta.content : "";
   }
 
-  function setStatus(text, retry) {
+  function setStatus(text, options) {
     var node = statusNode();
     if (!node) return;
+    if (typeof options === "boolean") options = { retry: options };
+    options = options || {};
+    var retry = !!options.retry;
+    var quiet = !!options.quiet && !retry;
     node.textContent = text || "";
     node.hidden = !text;
+    node.classList.toggle("dl-visually-hidden", quiet);
     if (retry) {
       var button = document.createElement("button");
       button.type = "button";
@@ -168,7 +173,7 @@
       "Accept": "text/html"
     };
     markPrevious(true);
-    if (!hydrating) setStatus("Updating results… Showing previous results until ready.");
+    if (!hydrating) setStatus("Updating results… Showing previous results until ready.", { quiet: true });
     var init = { credentials: "same-origin", headers: headers, cache: "no-store" };
     if (controller) init.signal = controller.signal;
     return fetch(url.toString(), init).then(function (response) {
@@ -220,7 +225,7 @@
       ? liveNode.querySelector("[data-research-freshness]").getAttribute("data-research-freshness")
       : "fresh";
     if (freshness === "stale") {
-      setStatus("Updating results. Previous field is still shown.");
+      setStatus("Updating results. Previous field is still shown.", { quiet: true });
     } else {
       setStatus("");
     }
@@ -253,7 +258,10 @@
         return;
       }
       if (result.pending || result.freshness === "stale") {
-        setStatus(result.pending ? "Preparing commander results." : "Updating results. Showing previous results.");
+        setStatus(
+          result.pending ? "Preparing commander results." : "Updating results. Showing previous results.",
+          { quiet: true }
+        );
         pollTimer = window.setTimeout(function () { pollUntilReady(url, started); }, 800);
       }
     });
@@ -651,10 +659,10 @@
 
   var initial = results();
   if (initial && initial.getAttribute("data-research-freshness") === "pending") {
-    setStatus("Preparing commander results.");
+    setStatus("Preparing commander results.", { quiet: true });
     pollUntilReady(new URL(location.href), Date.now());
   } else if (initial && initial.getAttribute("data-research-freshness") === "stale") {
-    setStatus("Updating results. Previous field is still shown.");
+    setStatus("Updating results. Previous field is still shown.", { quiet: true });
     pollUntilReady(new URL(location.href), Date.now());
   }
 })();

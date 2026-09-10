@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePath
 from urllib.parse import urlsplit
 
 from flask import (
@@ -20,11 +20,22 @@ from flask import (
 from flask_login import current_user
 
 from sabermetrics import db
+from sabermetrics.account_playmats import (
+    LIBRARY_SURFACE,
+    AccountPlaymatRepo,
+    PlaymatNotFound,
+    orphan_custom_path,
+)
 from sabermetrics.deck_documents import (
     DeckDocumentRepo,
     DeckNotFound,
     InvalidCommand,
     RevisionConflict,
+)
+from sabermetrics.deck_text_import import (
+    MAX_IMPORT_CHARS,
+    DeckTextImportError,
+    oversized_request_error,
 )
 from sabermetrics.ui.feedback_images import sanitize_image
 
@@ -43,6 +54,8 @@ def _gate():
         "builder.upload_playmat",
         "builder.playmat_image",
         "builder.shared_playmat",
+        "builder.list_playmats",
+        "builder.library_playmat",
     } and not current_app.config.get("DECK_LAB_PLAYMAT_ENABLED"):
         abort(404)
     if request.endpoint in {"builder.shared", "builder.shared_playmat"}:
@@ -54,8 +67,7 @@ def _gate():
     return None
 
 
-@bp.get("/build")
-def library():
+def _library_page(**extra):
     query = (request.args.get("q") or "").strip()
     active_filter = request.args.get("filter", "all")
     sort = request.args.get("sort", "edited")
@@ -79,7 +91,98 @@ def library():
         active_filter=active_filter,
         sort=sort,
         library_stats=library_stats,
+        import_title=extra.get("import_title", ""),
+        import_text=extra.get("import_text", ""),
+        import_errors=extra.get("import_errors") or [],
+        import_preview=extra.get("import_preview"),
     )
+
+
+def _import_request_values() -> tuple[str, str, list[str] | None]:
+    length = request.content_length
+    if length is not None and length > MAX_IMPORT_CHARS + 4096:
+        raise oversized_request_error()
+    values = request.get_json(silent=True) if request.is_json else request.form
+    values = values or {}
+    if not hasattr(values, "get"):
+        raise DeckTextImportError(
+            [{"line": None, "message": "Provide a decklist object."}]
+        )
+    title = str(values.get("title") or "").strip()
+    text = str(values.get("text") or values.get("decklist") or "")
+    raw_ids = (
+        values.get("commander_card_ids")
+        if request.is_json
+        else request.form.getlist("commander_card_ids")
+    )
+    commander_ids: list[str] | None
+    if raw_ids is None:
+        commander_ids = [
+            str(values[key])
+            for key in ("commander_card_id", "partner_card_id")
+            if values.get(key)
+        ]
+        if not commander_ids:
+            commander_ids = [
+                str(item) for item in request.form.getlist("commander_card_ids") if item
+            ]
+        if not commander_ids:
+            commander_ids = None
+    elif isinstance(raw_ids, list):
+        commander_ids = [str(item) for item in raw_ids if str(item).strip()] or None
+    elif str(raw_ids).strip():
+        commander_ids = [str(raw_ids)]
+    else:
+        commander_ids = None
+    return title, text, commander_ids
+
+
+def _import_error_response(exc: DeckTextImportError, title: str, text: str):
+    payload = {"errors": exc.errors, "title": title, "text": text}
+    if request.is_json or request.accept_mimetypes.best == "application/json":
+        return jsonify(payload), 400
+    return (
+        _library_page(import_title=title, import_text=text, import_errors=exc.errors),
+        400,
+    )
+
+
+@bp.get("/build")
+def library():
+    return _library_page()
+
+
+@bp.post("/build/import/preview")
+def import_preview():
+    title, text = "", ""
+    try:
+        title, text, commander_ids = _import_request_values()
+        preview = _repo().preview_text_import(
+            text, title=title, commander_card_ids=commander_ids
+        )
+    except DeckTextImportError as exc:
+        return _import_error_response(exc, title, text)
+    if request.is_json or request.accept_mimetypes.best == "application/json":
+        return jsonify(preview)
+    return _library_page(import_title=title, import_text=text, import_preview=preview)
+
+
+@bp.post("/build/import")
+def import_deck():
+    title, text = "", ""
+    try:
+        title, text, commander_ids = _import_request_values()
+        deck_id = _repo().import_text(
+            current_user.id,
+            text,
+            title=title,
+            commander_card_ids=commander_ids,
+        )
+    except DeckTextImportError as exc:
+        return _import_error_response(exc, title, text)
+    if request.is_json or request.accept_mimetypes.best == "application/json":
+        return jsonify(id=deck_id, url=url_for("builder.deck", deck_id=deck_id)), 201
+    return redirect(url_for("builder.deck", deck_id=deck_id))
 
 
 @bp.post("/build/new")
@@ -174,8 +277,8 @@ def delete_deck(deck_id: str):
         abort(404)
     if custom_surface:
         asset_dir = Path(current_app.config["DECK_LAB_ASSET_DIR"]).resolve()
-        surface_path = Path(custom_surface).resolve()
-        if surface_path.parent == asset_dir:
+        surface_path = orphan_custom_path(custom_surface, asset_dir)
+        if surface_path is not None:
             try:
                 surface_path.unlink(missing_ok=True)
             except OSError:
@@ -330,6 +433,29 @@ def revoke_share(deck_id: str):
     return jsonify(ok=True)
 
 
+@bp.get("/api/playmats")
+def list_playmats():
+    mats = AccountPlaymatRepo(Path(current_app.config["DB_PATH"])).public_summaries(
+        current_user.id
+    )
+    return jsonify(results=mats)
+
+
+@bp.get("/api/playmats/<playmat_id>")
+def library_playmat(playmat_id: str):
+    try:
+        path, mime = AccountPlaymatRepo(Path(current_app.config["DB_PATH"])).open_owned(
+            current_user.id,
+            playmat_id,
+            Path(current_app.config["DECK_LAB_ASSET_DIR"]),
+        )
+    except (PlaymatNotFound, ValueError):
+        abort(404)
+    response = send_file(path, mimetype=mime, conditional=True, max_age=0)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
 @bp.post("/api/decks/<deck_id>/playmat")
 def upload_playmat(deck_id: str):
     upload = request.files.get("playmat")
@@ -343,28 +469,42 @@ def upload_playmat(deck_id: str):
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
     asset_dir = Path(current_app.config["DECK_LAB_ASSET_DIR"]).resolve()
-    asset_dir.mkdir(parents=True, exist_ok=True)
-    target = asset_dir / f"{deck_id}-{db.new_id()}.png"
-    target.write_bytes(image.content)
+    title = PurePath(upload.filename or "custom-playmat").stem
+    playmats = AccountPlaymatRepo(Path(current_app.config["DB_PATH"]))
+    saved = playmats.add_upload(
+        current_user.id,
+        title=title,
+        content=image.content,
+        asset_dir=asset_dir,
+        suffix=".png",
+    )
     try:
-        previous = _repo().set_custom_surface(current_user.id, deck_id, str(target))
-    except Exception:
-        target.unlink(missing_ok=True)
-        raise
-    if previous:
-        old = Path(previous)
-        if old.parent == asset_dir and old != target:
-            old.unlink(missing_ok=True)
-    return jsonify(ok=True, surface="custom")
+        previous = _repo().assign_library_playmat(current_user.id, deck_id, saved["id"])
+    except DeckNotFound:
+        return jsonify(error="not_found"), 404
+    except InvalidCommand as exc:
+        return jsonify(error="invalid_command", detail=str(exc)), 400
+    leftover = orphan_custom_path(previous, asset_dir)
+    if leftover is not None:
+        leftover.unlink(missing_ok=True)
+    return jsonify(ok=True, surface=LIBRARY_SURFACE, playmat_id=saved["id"])
 
 
 @bp.get("/api/decks/<deck_id>/playmat")
 def playmat_image(deck_id: str):
     try:
-        document = _repo().get(current_user.id, deck_id)
-    except DeckNotFound:
+        path, mime = AccountPlaymatRepo(
+            Path(current_app.config["DB_PATH"])
+        ).open_deck_playmat(
+            current_user.id,
+            deck_id,
+            Path(current_app.config["DECK_LAB_ASSET_DIR"]),
+        )
+    except (PlaymatNotFound, ValueError):
         abort(404)
-    return _send_playmat(str(document["id"]))
+    response = send_file(path, mimetype=mime, conditional=True, max_age=0)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @bp.get("/shared/deck/<token>")
@@ -378,28 +518,4 @@ def shared(token: str):
 
 @bp.get("/shared/deck/<token>/playmat")
 def shared_playmat(token: str):
-    try:
-        document = _repo().get_shared(token)
-    except DeckNotFound:
-        abort(404)
-    return _send_playmat(str(document["id"]))
-
-
-def _send_playmat(deck_id: str):
-    with db.connect(current_app.config["DB_PATH"]) as conn:
-        row = conn.execute(
-            "SELECT custom_surface_path FROM deck_presentations WHERE deck_id=?",
-            (deck_id,),
-        ).fetchone()
-    raw_path = row[0] if row else None
-    if not raw_path:
-        abort(404)
-    path = Path(str(raw_path))
-    asset_dir = Path(current_app.config["DECK_LAB_ASSET_DIR"]).resolve()
-    try:
-        resolved = path.resolve(strict=True)
-    except FileNotFoundError:
-        abort(404)
-    if resolved.parent != asset_dir:
-        abort(404)
-    return send_file(resolved, mimetype="image/png", conditional=True, max_age=3600)
+    abort(404)

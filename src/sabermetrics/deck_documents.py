@@ -15,6 +15,14 @@ from pathlib import Path
 from typing import Any, cast
 
 from sabermetrics import db
+from sabermetrics.account_playmats import (
+    BUILTIN_SURFACES,
+    CUSTOM_SURFACE,
+    LIBRARY_SURFACE,
+    AccountPlaymatRepo,
+    owner_presentation,
+    public_presentation,
+)
 from sabermetrics.card_discovery import (
     format_legal_sql,
     primary_type,
@@ -23,6 +31,13 @@ from sabermetrics.commander_pairs import (
     can_participate_in_pair,
     compatible_pair,
     pair_id,
+)
+from sabermetrics.deck_text_import import (
+    ZONE_LIBRARY,
+    ResolvedImport,
+    build_card_lookup,
+    parse_deck_text,
+    resolve_import,
 )
 
 
@@ -259,6 +274,157 @@ class DeckDocumentRepo:
                 )
             self._event(conn, owner_id, "deck.created", deck_id)
         return deck_id
+
+    def _card_lookup(self, conn: sqlite3.Connection) -> dict[str, list[dict[str, Any]]]:
+        rows = conn.execute(
+            "SELECT id, oracle_id, name, type_line, mana_cost, cmc, oracle_text, "
+            "color_identity, image_uri, is_legal_commander, is_legal_in_99 "
+            "FROM cards"
+        ).fetchall()
+        return build_card_lookup(rows)
+
+    def preview_text_import(
+        self,
+        text: str,
+        *,
+        title: str = "",
+        commander_card_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Parse and match a pasted list without writing a deck."""
+        parsed = parse_deck_text(text)
+        with self._connect() as conn:
+            resolved = resolve_import(
+                parsed, self._card_lookup(conn), commander_card_ids
+            )
+        return self._text_import_preview(title, resolved)
+
+    def import_text(
+        self,
+        owner_id: str,
+        text: str,
+        *,
+        title: str = "Untitled deck",
+        commander_card_ids: list[str] | None = None,
+    ) -> str:
+        """Atomically create a private editable deck from a pasted list."""
+        parsed = parse_deck_text(text)
+        deck_id = db.new_id()
+        clean_title = str(title or "").strip()[:160] or "Untitled deck"
+        with self._connect() as conn:
+            resolved = resolve_import(
+                parsed, self._card_lookup(conn), commander_card_ids
+            )
+            conn.execute(
+                "INSERT INTO deck_documents "
+                "(id, owner_id, title, source_kind) VALUES (?, ?, ?, ?)",
+                (deck_id, owner_id, clean_title, "text_import"),
+            )
+            zone_ids = {ZONE_LIBRARY: db.new_id()}
+            conn.execute(
+                "INSERT INTO deck_zones(id, deck_id, name, sort_order, x, y) "
+                "VALUES (?, ?, 'Unsorted', 0, 80, 120)",
+                (zone_ids[ZONE_LIBRARY], deck_id),
+            )
+            extra = 1
+            needed_zones = {
+                item.zone
+                for item in resolved.entries
+                if not item.is_commander and item.zone != ZONE_LIBRARY
+            }
+            for zone_name in ("Sideboard", "Maybeboard"):
+                if zone_name not in needed_zones:
+                    continue
+                zone_ids[zone_name] = db.new_id()
+                conn.execute(
+                    "INSERT INTO deck_zones(id, deck_id, name, sort_order, x, y) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        zone_ids[zone_name],
+                        deck_id,
+                        zone_name,
+                        extra,
+                        80 + extra * 40,
+                        120 + extra * 40,
+                    ),
+                )
+                extra += 1
+            conn.execute(
+                "INSERT INTO deck_presentations(deck_id,canvas_width,canvas_height) "
+                "VALUES (?,1600,900)",
+                (deck_id,),
+            )
+            for order, item in enumerate(resolved.entries):
+                self._insert_card(
+                    conn,
+                    deck_id=deck_id,
+                    zone_id=None if item.is_commander else zone_ids[item.zone],
+                    card=item.card,
+                    quantity=item.quantity,
+                    is_commander=item.is_commander,
+                    order=order,
+                )
+            self._event(
+                conn,
+                owner_id,
+                "deck.imported",
+                deck_id,
+                {"source_kind": "text_import"},
+            )
+        return deck_id
+
+    @staticmethod
+    def _text_import_preview(title: str, resolved: ResolvedImport) -> dict[str, Any]:
+        commanders = []
+        zones: dict[str, list[dict[str, Any]]] = {}
+        validate_entries: list[dict[str, Any]] = []
+        for item in resolved.entries:
+            card = item.card
+            format_legal = bool(card.get("is_legal_in_99"))
+            preview_card = {
+                "card_id": card.get("id"),
+                "oracle_id": card.get("oracle_id"),
+                "name": card.get("name") or "Unknown card",
+                "quantity": item.quantity,
+                "type_line": card.get("type_line") or "",
+                "format_legal": format_legal,
+                "is_commander": item.is_commander,
+            }
+            entry = {
+                "name": preview_card["name"],
+                "zone_name": item.zone,
+                "quantity": item.quantity,
+                "is_commander": item.is_commander,
+                "oracle_id": card.get("oracle_id"),
+                "oracle_text": card.get("oracle_text"),
+                "type_line": card.get("type_line"),
+                "color_identity": card.get("color_identity") or [],
+                "format_legal": format_legal,
+                "commander_legal": bool(
+                    card.get("is_legal_commander") and format_legal
+                ),
+            }
+            validate_entries.append(entry)
+            if item.is_commander:
+                commanders.append(preview_card)
+            else:
+                zones.setdefault(item.zone, []).append(preview_card)
+        zone_list = [
+            {"name": name, "cards": zones[name]}
+            for name in ("Unsorted", "Sideboard", "Maybeboard")
+            if name in zones
+        ]
+        return {
+            "title": str(title or "").strip()[:160] or "Untitled deck",
+            "commanders": commanders,
+            "zones": zone_list,
+            "validation": DeckDocumentRepo.validate(validate_entries),
+            "eligible_commanders": [
+                {"id": card["id"], "name": card["name"]}
+                for card in resolved.eligible_commanders
+            ],
+            "needs_commander_selection": resolved.needs_commander_selection,
+            "warnings": list(resolved.warnings),
+        }
 
     def import_generated(self, owner_id: str, generated_id: str) -> str:
         with self._connect() as conn:
@@ -619,6 +785,9 @@ class DeckDocumentRepo:
             presentation_row = conn.execute(
                 "SELECT * FROM deck_presentations WHERE deck_id=?", (deck_id,)
             ).fetchone()
+            playmats: list[dict[str, Any]] = []
+            if owner_id:
+                playmats = AccountPlaymatRepo.list_for_owner_conn(conn, owner_id)
             pref_row = (
                 conn.execute(
                     "SELECT * FROM deck_view_preferences WHERE deck_id=? AND owner_id=?",
@@ -636,7 +805,9 @@ class DeckDocumentRepo:
                     (deck_id,),
                 ).fetchall()
             ]
+        zone_names = {z["id"]: z["name"] for z in zones}
         for entry in entries:
+            entry["zone_name"] = zone_names.get(entry["zone_id"], "Unsorted")
             entry["color_identity"] = _json(entry.get("color_identity"), [])
             format_legal = entry.pop("is_legal_in_99", None)
             commander_flag = entry.pop("is_legal_commander", None)
@@ -648,11 +819,17 @@ class DeckDocumentRepo:
             document["visibility"] = "private"
         document["zones"] = zones
         document["entries"] = entries
-        presentation = dict(presentation_row) if presentation_row else {}
-        presentation["has_custom_surface"] = bool(
-            presentation.pop("custom_surface_path", None)
-        )
-        document["presentation"] = presentation
+        raw_presentation = dict(presentation_row) if presentation_row else {}
+        if owner_id:
+            owned_ids = {str(item["id"]) for item in playmats}
+            document["presentation"] = owner_presentation(
+                raw_presentation, owned_ids=owned_ids
+            )
+            document["playmats"] = [
+                {"id": item["id"], "title": item["title"]} for item in playmats
+            ]
+        else:
+            document["presentation"] = public_presentation(raw_presentation)
         document["preferences"] = (
             dict(pref_row)
             if pref_row
@@ -672,6 +849,11 @@ class DeckDocumentRepo:
 
     @staticmethod
     def validate(entries: list[dict[str, Any]]) -> dict[str, Any]:
+        entries = [
+            e
+            for e in entries
+            if e["is_commander"] or _is_public_library_zone(e.get("zone_name"))
+        ]
         commander_entries = [e for e in entries if e["is_commander"]]
         commanders = sum(int(e["quantity"]) for e in commander_entries)
         library = sum(int(e["quantity"]) for e in entries if not e["is_commander"])
@@ -1496,20 +1678,30 @@ class DeckDocumentRepo:
                     (value, owner_id, deck_id),
                 )
         elif kind == "update_presentation":
-            allowed_surface = {
-                "slate-grid",
-                "felt-weave",
-                "deep-field",
-                "graph-paper",
-                "night-ritual",
-                "void",
-            }
             updates: dict[str, Any] = {}
-            if "surface" in command:
-                surface = str(command["surface"])
-                if surface not in allowed_surface:
+            requested_playmat = (
+                command.get("playmat_id") if "playmat_id" in command else None
+            )
+            if requested_playmat not in (None, ""):
+                playmat_id = str(requested_playmat)
+                owned = AccountPlaymatRepo.get_owned_conn(conn, owner_id, playmat_id)
+                if owned is None:
                     raise InvalidCommand("Unknown playmat surface.")
-                updates["surface"] = surface
+                updates["playmat_id"] = playmat_id
+                updates["surface"] = LIBRARY_SURFACE
+            else:
+                if "playmat_id" in command:
+                    updates["playmat_id"] = None
+                if "surface" in command:
+                    surface = str(command["surface"])
+                    if surface in BUILTIN_SURFACES:
+                        updates["surface"] = surface
+                        updates["playmat_id"] = None
+                    elif surface == CUSTOM_SURFACE:
+                        updates["surface"] = CUSTOM_SURFACE
+                        updates["playmat_id"] = None
+                    else:
+                        raise InvalidCommand("Unknown playmat surface.")
             for key in ("snap_to_grid", "show_zone_outlines", "dim_inactive"):
                 if key in command:
                     updates[key] = 1 if command[key] else 0
@@ -1737,7 +1929,11 @@ class DeckDocumentRepo:
             )
 
     def delete(self, owner_id: str, deck_id: str) -> str | None:
-        """Delete an owned editable deck and return its custom playmat path."""
+        """Delete an owned editable deck.
+
+        Returns a leftover deck-scoped custom playmat path, never a reusable
+        library image.
+        """
         with self._connect() as conn:
             self._owned_revision(conn, owner_id, deck_id)
             presentation = conn.execute(
@@ -1746,14 +1942,59 @@ class DeckDocumentRepo:
             ).fetchone()
             self._event(conn, owner_id, "deck.deleted", deck_id)
             conn.execute("DELETE FROM deck_documents WHERE id=?", (deck_id,))
-        return (
-            str(presentation["custom_surface_path"])
-            if presentation and presentation["custom_surface_path"]
-            else None
-        )
+            leftover = (
+                str(presentation["custom_surface_path"])
+                if presentation and presentation["custom_surface_path"]
+                else None
+            )
+            if (
+                leftover
+                and conn.execute(
+                    "SELECT 1 FROM account_playmats WHERE file_path=?", (leftover,)
+                ).fetchone()
+            ):
+                leftover = None
+        return leftover
+
+    def assign_library_playmat(
+        self, owner_id: str, deck_id: str, playmat_id: str
+    ) -> str | None:
+        """Point this deck at an owned library mat. Returns a replaced custom path."""
+        with self._connect() as conn:
+            self._owned_revision(conn, owner_id, deck_id)
+            owned = AccountPlaymatRepo.get_owned_conn(conn, owner_id, playmat_id)
+            if owned is None:
+                raise InvalidCommand("Unknown playmat surface.")
+            previous = conn.execute(
+                "SELECT custom_surface_path FROM deck_presentations WHERE deck_id=?",
+                (deck_id,),
+            ).fetchone()
+            conn.execute(
+                "UPDATE deck_presentations SET surface=?, playmat_id=?, "
+                "custom_surface_path=NULL WHERE deck_id=?",
+                (LIBRARY_SURFACE, playmat_id, deck_id),
+            )
+            conn.execute(
+                "UPDATE deck_documents SET revision=revision+1,updated_at=? WHERE id=?",
+                (_now(), deck_id),
+            )
+            self._event(conn, owner_id, "deck.playmat_uploaded", deck_id)
+            leftover = str(previous[0]) if previous and previous[0] else None
+            if (
+                leftover
+                and conn.execute(
+                    "SELECT 1 FROM account_playmats WHERE file_path=?", (leftover,)
+                ).fetchone()
+            ):
+                leftover = None
+        return leftover
 
     def set_custom_surface(self, owner_id: str, deck_id: str, path: str) -> str | None:
-        """Select a validated uploaded surface and return the replaced path."""
+        """Select a validated uploaded surface and return the replaced path.
+
+        New uploads should use the account library. This keeps a deck-scoped
+        custom path working for existing files without deleting library images.
+        """
         with self._connect() as conn:
             self._owned_revision(conn, owner_id, deck_id)
             previous = conn.execute(
@@ -1761,15 +2002,24 @@ class DeckDocumentRepo:
                 (deck_id,),
             ).fetchone()
             conn.execute(
-                "UPDATE deck_presentations SET surface='custom',custom_surface_path=? WHERE deck_id=?",
-                (path, deck_id),
+                "UPDATE deck_presentations SET surface=?, custom_surface_path=?, "
+                "playmat_id=NULL WHERE deck_id=?",
+                (CUSTOM_SURFACE, path, deck_id),
             )
             conn.execute(
                 "UPDATE deck_documents SET revision=revision+1,updated_at=? WHERE id=?",
                 (_now(), deck_id),
             )
             self._event(conn, owner_id, "deck.playmat_uploaded", deck_id)
-        return str(previous[0]) if previous and previous[0] else None
+            leftover = str(previous[0]) if previous and previous[0] else None
+            if (
+                leftover
+                and conn.execute(
+                    "SELECT 1 FROM account_playmats WHERE file_path=?", (leftover,)
+                ).fetchone()
+            ):
+                leftover = None
+        return leftover
 
     @staticmethod
     def export_text(document: dict[str, Any]) -> str:

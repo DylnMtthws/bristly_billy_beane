@@ -108,6 +108,14 @@ def test_initial_html_does_not_call_slow_loader_inline(tmp_path, monkeypatch):
     assert b'data-research-freshness="pending"' in response.data
     assert b"Load results" in response.data
     assert b"results=full" in response.data
+    assert b"data-research-updated" not in response.data
+    assert b"Updated <time" not in response.data
+    assert b"dl-research-stale-label" not in response.data
+    assert b"Showing previous results while" not in response.data
+    assert b"dl-research-loading" in response.data
+    assert b'aria-label="Loading results"' in response.data
+    assert b"dl-research-status dl-visually-hidden" in response.data
+    assert b"Commander results are still being prepared." not in response.data
     assert b"Loading Commander" not in response.data
     fragment = client.get(
         "/research/?tab=metagame",
@@ -139,6 +147,9 @@ def test_prepared_snapshot_serves_default_and_meta_without_reload(
     assert fragment.headers["Cache-Control"] == "private, no-store"
     assert fragment.headers["X-Research-Freshness"] == "fresh"
     assert b"Loading Commander" in fragment.data
+    assert b"data-research-updated" not in fragment.data
+    assert b"Updated <time" not in fragment.data
+    assert b"dl-research-stale-label" not in fragment.data
     baseline = len(calls)
     first = client.get("/research/")
     meta = client.get("/research/?tab=metagame")
@@ -146,6 +157,8 @@ def test_prepared_snapshot_serves_default_and_meta_without_reload(
     assert first.headers["Cache-Control"] == "private, no-store"
     assert b"Loading Commander" in first.data
     assert b"Loading Commander" in meta.data
+    assert b"data-research-updated" not in first.data
+    assert b"data-research-updated" not in meta.data
     assert len(calls) == baseline
     assert client.get("/research/?tab=metagame&q=missing").status_code == 200
     assert len(calls) == baseline + 1
@@ -242,6 +255,8 @@ def test_full_results_computes_when_snapshot_missing(tmp_path, monkeypatch):
     assert full.status_code == 200
     assert b"Loading Commander" in full.data
     assert b"research-filters" in full.data
+    assert b"data-research-updated" not in full.data
+    assert b"Updated <time" not in full.data
 
 
 def test_healthz_does_not_wait_for_research_warm(tmp_path, monkeypatch):

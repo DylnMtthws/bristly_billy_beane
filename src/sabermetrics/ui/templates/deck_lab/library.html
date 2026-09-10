@@ -14,6 +14,7 @@
                 <svg aria-hidden="true" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5"></circle><path d="m12.7 12.7 4 4"></path></svg>
                 <input type="search" name="q" value="{{ query }}" placeholder="Filter by name or commander" autocomplete="off" data-deck-search>
             </label>
+            <button class="dl-button" type="button" data-import-deck aria-haspopup="dialog">Import deck</button>
             <button class="dl-button dl-button-primary" type="button" data-new-deck>New deck</button>
         </div>
     </header>
@@ -66,6 +67,51 @@
         <button class="dl-button dl-button-primary" type="submit">Create deck</button>
     </form>
 </dialog>
-<div class="dl-bottom-action"><button class="dl-button dl-button-primary" type="button" data-new-deck>New deck</button></div>
+<dialog id="import-deck-dialog" class="dl-dialog dl-import-dialog"{% if import_errors or import_preview %} open{% endif %}>
+    <form method="post" action="{{ url_for('builder.import_preview') }}" data-import-form>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="dl-dialog-head"><div><div class="dl-eyebrow">Import deck</div><h2>Paste a plain-text list</h2></div><button class="dl-icon-button" type="button" data-dialog-close aria-label="Close">×</button></div>
+        <label>Deck name<input class="dl-field" name="title" value="{{ import_title or 'Untitled deck' }}" maxlength="160" required></label>
+        <label>Decklist<textarea class="dl-field dl-import-text" name="text" rows="12" required placeholder="1 Card Name&#10;1x Card Name (SET) 12&#10;Commander&#10;1 Commander Name" data-import-text>{{ import_text }}</textarea></label>
+        <div class="dl-import-errors" data-import-errors {% if not import_errors %}hidden{% endif %}>
+            {% for error in import_errors or [] %}
+            <p>{% if error.line %}Line {{ error.line }}: {% endif %}{{ error.message }}</p>
+            {% endfor %}
+        </div>
+        <div class="dl-import-preview" data-import-preview {% if not import_preview %}hidden{% endif %}>
+            {% if import_preview %}
+            {% if import_preview.warnings %}
+            <ul class="dl-import-warnings">{% for warning in import_preview.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+            {% endif %}
+            {% if import_preview.commanders %}
+            {% for card in import_preview.commanders %}<input type="hidden" name="commander_card_ids" value="{{ card.card_id }}">{% endfor %}
+            <section><h3>Commanders</h3><ul>{% for card in import_preview.commanders %}<li>{{ card.quantity }} {{ card.name }}</li>{% endfor %}</ul></section>
+            {% endif %}
+            {% for zone in import_preview.zones %}
+            <section><h3>{{ zone.name }}</h3><ul>{% for card in zone.cards %}<li>{{ card.quantity }} {{ card.name }}</li>{% endfor %}</ul></section>
+            {% endfor %}
+            {% if import_preview.validation and import_preview.validation.issues %}
+            <ul class="dl-import-issues">{% for issue in import_preview.validation.issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+            {% endif %}
+            {% if import_preview.needs_commander_selection and import_preview.eligible_commanders %}
+            <fieldset class="dl-import-commanders">
+                <legend>Choose commander{% if import_preview.eligible_commanders|length > 1 %}s{% endif %} from this list</legend>
+                {% for card in import_preview.eligible_commanders %}
+                <label><input type="checkbox" name="commander_card_ids" value="{{ card.id }}"> {{ card.name }}</label>
+                {% endfor %}
+            </fieldset>
+            {% endif %}
+            {% endif %}
+        </div>
+        <div class="dl-dialog-actions">
+            <button class="dl-button" type="submit">Preview</button>
+            <button class="dl-button dl-button-primary" type="submit" formaction="{{ url_for('builder.import_deck') }}" data-import-confirm {% if not import_preview %}hidden{% endif %}>Create deck</button>
+        </div>
+    </form>
+</dialog>
+<div class="dl-bottom-action">
+    <button class="dl-button" type="button" data-import-deck aria-haspopup="dialog">Import deck</button>
+    <button class="dl-button dl-button-primary" type="button" data-new-deck>New deck</button>
+</div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='deck-lab-commanders.js') }}" defer></script><script src="{{ url_for('static', filename='deck-lab-library.js') }}" defer></script>{% endblock %}
