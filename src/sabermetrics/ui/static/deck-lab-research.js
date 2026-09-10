@@ -56,7 +56,7 @@
     var tab = form.querySelector("input[name='tab']");
     if (tab) tab.value = url.searchParams.get("tab") || "commanders";
     var q = form.querySelector("input[name='q']");
-    if (q && document.activeElement !== q) q.value = url.searchParams.get("q") || "";
+    if (q && (document.activeElement !== q || lastRequest.restore)) q.value = url.searchParams.get("q") || "";
     var windowField = form.querySelector("input[name='window']");
     var windowValue = url.searchParams.get("window");
     if (url.searchParams.get("tab") === "metagame") {
@@ -189,10 +189,10 @@
     });
   }
 
-  function navigate(url, push) {
+  function navigate(url, push, restore) {
     window.clearTimeout(pollTimer);
     hydrating = false;
-    lastRequest = {url: url, push: push};
+    lastRequest = {url: url, push: push, restore: !!restore};
     fetchFragment(url, { push: push }).then(function (result) {
       if (!result || result.seq !== sequence) return;
       if (result.auth) return;
@@ -207,7 +207,7 @@
     if (!node || typeof node.closest !== "function") return;
     if (node.closest("[data-research-retry]")) {
       event.preventDefault();
-      navigate(lastRequest.url, lastRequest.push);
+      navigate(lastRequest.url, lastRequest.push, lastRequest.restore);
       return;
     }
     var button = node.closest("[data-filter-open]");
@@ -329,7 +329,7 @@
   });
 
   window.addEventListener("popstate", function () {
-    navigate(new URL(location.href), false);
+    navigate(new URL(location.href), false, true);
   });
 
   bindImages(page);
