@@ -235,6 +235,10 @@ def create_app(db_path: Path | None = None) -> Flask:
             "build_sha": os.environ.get("SABER_BUILD_SHA", "unknown"),
         }
 
+    from sabermetrics.research_cache import configure_research_cache
+
+    configure_research_cache(app)
+
     @app.after_request
     def _security_headers(response):
         """Baseline response hardening.

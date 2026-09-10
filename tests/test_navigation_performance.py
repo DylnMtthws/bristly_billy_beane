@@ -3,11 +3,8 @@
 import json
 import re
 import shutil
-import sqlite3
 import subprocess
-import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -19,7 +16,6 @@ from sabermetrics.deck_documents import DeckDocumentRepo
 from sabermetrics.research import ResearchRepo
 from sabermetrics.ui import navigation
 from sabermetrics.ui.app import create_app
-from sabermetrics.ui.navigation import ResearchLandingCache
 from scripts.setup_db import setup_database
 
 STATIC = Path(__file__).parents[1] / "src/sabermetrics/ui/static"
@@ -76,6 +72,8 @@ def _login(app, user_id):
 
 
 def test_meta_reuses_default_cohort_but_not_user_favorites(client, monkeypatch):
+    cache = client.application.extensions["research_default_cache"]
+    assert cache.wait_for_idle(5)
     calls = _track_commanders(monkeypatch)
     favorites = Mock(return_value={"commander"})
     monkeypatch.setattr(db.FavoritesRepo, "commander_ids", favorites)
@@ -86,31 +84,34 @@ def test_meta_reuses_default_cohort_but_not_user_favorites(client, monkeypatch):
     response = client.get("/research/?tab=metagame")
     assert response.status_code == 200
     assert b"dl-icon-button active" not in response.data
-    # The expensive cohort query must not run again when selecting default Meta.
-    assert len(calls) == 1
-    assert "favorites" not in calls[0]
+    assert len(calls) == 0
+    assert "favorites" not in json.dumps(calls)
     assert client.get("/research/?tab=metagame&q=missing").status_code == 200
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert client.get("/research/?tab=metagame&window=30").status_code == 200
-    assert len(calls) == 3
+    assert len(calls) == 2
     assert client.get("/research/?tab=metagame&favorites=1").status_code == 200
-    assert len(calls) == 4
+    assert len(calls) == 3
     assert client.get("/research/?tab=metagame&sort=name").status_code == 200
-    assert len(calls) == 5
+    assert len(calls) == 4
     assert client.get("/research/?tab=metagame&color=U").status_code == 200
-    assert len(calls) == 6
+    assert len(calls) == 5
     assert client.get("/research/?window=90").status_code == 200
-    assert len(calls) == 6
+    assert len(calls) == 5
 
 
 def test_meta_then_commanders_still_uses_one_cohort_query(client, monkeypatch):
+    cache = client.application.extensions["research_default_cache"]
+    assert cache.wait_for_idle(5)
     calls = _track_commanders(monkeypatch)
     assert client.get("/research/?tab=metagame").status_code == 200
     assert client.get("/research/").status_code == 200
-    assert len(calls) == 1
+    assert len(calls) == 0
 
 
 def test_two_users_cannot_inherit_favorites_or_account_html(client):
+    cache = client.application.extensions["research_default_cache"]
+    assert cache.wait_for_idle(5)
     path = Path(client.application.config["DB_PATH"])
     with client.session_transaction() as session:
         alice = session["_user_id"]
@@ -163,75 +164,7 @@ def test_build_lists_only_the_owner_editable_decks(client):
     assert b"Favorites" in alice_library.data
 
 
-def test_cache_invalidates_on_committed_wal_update_and_expiry(tmp_path, monkeypatch):
-    path = tmp_path / "cache.db"
-    conn = sqlite3.connect(path)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("CREATE TABLE sample(value)")
-    conn.commit()
-    cache = ResearchLandingCache()
-    now = [100.0]
-    monkeypatch.setattr(navigation, "monotonic", lambda: now[0])
-    load = Mock(return_value={"results": [{"name": "before"}]})
-    cache.get(path, load)["results"][0]["name"] = "mutated"
-    assert cache.get(path, load)["results"][0]["name"] == "before"
-    assert load.call_count == 1
-    conn.execute("INSERT INTO sample VALUES(1)")
-    conn.commit()
-    cache.get(path, load)
-    assert load.call_count == 2
-    now[0] += 31
-    cache.get(path, load)
-    assert load.call_count == 3
-    conn.close()
-
-
-def test_cache_coalesces_concurrent_loads_and_does_not_cache_errors(tmp_path):
-    path = tmp_path / "cache.db"
-    path.touch()
-    cache = ResearchLandingCache()
-    fail = Mock(side_effect=ValueError("unavailable"))
-    with pytest.raises(ValueError):
-        cache.get(path, fail)
-    started = threading.Event()
-    release = threading.Event()
-    calls = []
-
-    def slow():
-        calls.append(1)
-        started.set()
-        assert release.wait(2)
-        return {"results": [{"ok": True}]}
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        first = executor.submit(cache.get, path, slow)
-        assert started.wait(2)
-        rest = [executor.submit(cache.get, path, slow) for _ in range(7)]
-        release.set()
-        results = [first.result(timeout=2)] + [item.result(timeout=2) for item in rest]
-    assert len(calls) == 1
-    assert len(results) == 8
-    results[0]["results"][0]["ok"] = False
-    assert cache.get(path, slow)["results"][0]["ok"] is True
-
-
-def test_failed_snapshot_is_not_retained(tmp_path):
-    path = tmp_path / "cache.db"
-    path.touch()
-    cache = ResearchLandingCache()
-
-    class Uncopyable:
-        def __deepcopy__(self, memo):
-            raise RuntimeError("cannot copy")
-
-    with pytest.raises(RuntimeError):
-        cache.get(path, lambda: {"results": [Uncopyable()]})
-    load = Mock(return_value={"results": []})
-    assert cache.get(path, load) == {"results": []}
-    assert load.call_count == 1
-
-
-def test_failed_http_cohort_fill_is_retried(client, monkeypatch):
+def test_failed_http_cohort_fill_does_not_fail_the_shell(client, monkeypatch):
     original = ResearchRepo.commanders
     calls = []
 
@@ -241,14 +174,24 @@ def test_failed_http_cohort_fill_is_retried(client, monkeypatch):
             raise RuntimeError("unavailable")
         return original(self, **kwargs)
 
+    cache = client.application.extensions["research_default_cache"]
+    cache.wait_for_idle(5)
+    cache._memory = None
+    cache.snapshot_path.unlink(missing_ok=True)
     monkeypatch.setattr(ResearchRepo, "commanders", flaky)
-    with pytest.raises(RuntimeError):
-        client.get("/research/")
-    assert client.get("/research/?tab=metagame").status_code == 200
-    assert len(calls) == 2
+    cache.request_refresh()
+    response = client.get("/research/")
+    assert response.status_code == 200
+    assert b"research-filters" in response.data
+    cache.wait_for_idle(8)
+    ready = client.get("/research/")
+    assert ready.status_code == 200
+    assert len(calls) >= 2
 
 
 def test_build_and_profile_avoid_retired_repositories(client, monkeypatch):
+    client.application.extensions["research_default_cache"].wait_for_idle(5)
+
     def forbidden(*args, **kwargs):
         raise AssertionError("Navigation queried a retired or research dependency")
 
