@@ -1,4 +1,3 @@
-{% if computed_at %}<p class="dl-muted" data-research-updated>Updated <time datetime="{{ computed_at }}">{{ computed_at[:16]|replace("T", " ") }} UTC</time></p>{% endif %}
 {% set research_sort_options = [('meta','Meta share'),('top16','Top 16 rate'),('decks','Recorded entries'),('trend','Trend'),('name','Name A–Z')] %}
 <nav class="dl-segments" aria-label="Research type" data-research-tabs>
     {% for key,label in [('cards','Cards'),('commanders','Commanders'),('metagame','Meta'),('decks','Decks')] %}<a href="{{ url_for('research.index', tab=key) }}" {% if tab==key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
@@ -105,9 +104,9 @@
         <div class="dl-filter-actions"><button class="dl-button dl-button-primary" type="submit">Apply</button><a class="dl-button" href="{{ url_for('research.index',tab=tab,window=window_days) }}">Clear</a></div>
     </form>
     <section>
-        {% if tab == 'metagame' %}<div class="dl-card" style="padding:18px;margin-bottom:14px"><div class="dl-eyebrow">Field view · {% if data.window_days == 0 %}all time{% else %}last {{ data.window_days }} days{% endif %}</div><p style="color:var(--muted);line-height:1.55;margin-bottom:0">{% if freshness == 'pending' %}Preparing qualifying entries for this window.{% else %}{{ data.recorded_entries }} qualifying entries across the configured local corpus. The ranked field below uses the same scope as every displayed percentage. Missing tournament evidence is omitted, not shown as zero.{% endif %}</p></div>{% endif %}
+        {% if tab == 'metagame' and freshness != 'pending' %}<div class="dl-card" style="padding:18px;margin-bottom:14px"><div class="dl-eyebrow">Field view · {% if data.window_days == 0 %}all time{% else %}last {{ data.window_days }} days{% endif %}</div><p style="color:var(--muted);line-height:1.55;margin-bottom:0">{{ data.recorded_entries }} qualifying entries across the configured local corpus. The ranked field below uses the same scope as every displayed percentage. Missing tournament evidence is omitted, not shown as zero.</p></div>{% endif %}
         <div class="dl-research-summary">
-            <span>{% if freshness == 'pending' %}Preparing results{% else %}{{ data.total }} commanders · {{ data.recorded_entries }} entries recorded{% endif %}</span>
+            <span>{% if freshness == 'pending' %}<span class="dl-visually-hidden">Loading results</span>{% else %}{{ data.total }} commanders · {{ data.recorded_entries }} entries recorded{% endif %}</span>
             <div class="dl-research-summary-actions">
                 {% if tab == 'metagame' %}<div class="dl-research-window"><select class="dl-field" data-scope-window aria-label="Tournament window"><option value="30" {% if window_days==30 %}selected{% endif %}>Last 30 days</option><option value="60" {% if window_days==60 %}selected{% endif %}>Last 60 days</option><option value="90" {% if window_days==90 %}selected{% endif %}>Last 90 days</option><option value="180" {% if window_days==180 %}selected{% endif %}>Last 180 days</option><option value="0" {% if window_days==0 %}selected{% endif %}>All time</option></select></div>{% endif %}
                 <details class="dl-library-sort dl-research-sort" data-research-sort-menu>
@@ -120,13 +119,12 @@
             <button class="dl-button" type="button" data-filter-open>Filters</button>
         </div>
         {% if freshness == 'pending' %}
-        <div class="dl-research-placeholder" data-research-results data-research-freshness="pending" role="status" aria-busy="true">
-            <p>Commander results are still being prepared.</p>
+        <div class="dl-research-placeholder" data-research-results data-research-freshness="pending" role="status" aria-busy="true" aria-label="Loading results">
+            <span class="dl-research-loading" aria-hidden="true"></span>
             <p><a class="dl-button" href="{{ full_results_href }}" data-research-full-results>Load results</a></p>
         </div>
         {% else %}
         <div class="dl-card dl-research-table-wrap" data-research-results data-research-freshness="{{ freshness }}"{% if freshness == 'stale' %} aria-busy="true"{% endif %}>
-            {% if freshness == 'stale' %}<p class="dl-research-stale-label">Showing previous results while the current field updates.</p>{% endif %}
             <table class="dl-research-table">
                 <thead><tr><th>Commander</th><th>Identity</th><th>Meta share</th><th>Top 16 rate</th><th>Entries</th><th>{% if data.window_days == 0 %}Trend{% else %}{{ data.window_days }}-day trend{% endif %}</th></tr></thead>
                 <tbody>{% for c in data.results %}<tr><td><a href="{{ url_for('research.commander',card_id=c.id,window=data.window_days) }}">{{ c.name }}</a></td><td>{% for color in c.color_identity %}<span class="mana mana-{{ color }}">{{ color }}</span>{% endfor %}</td><td>{% if c.meta_share is not none %}<span class="dl-percent"><b>{{ '%.1f'|format(c.meta_share*100) }}%</b><span class="dl-bar"><i style="width:{{ [c.meta_share*400,100]|min }}%"></i></span></span>{% else %}—{% endif %}</td><td>{% if c.top16_rate is not none %}<span class="dl-mono">{{ '%.1f'|format(c.top16_rate*100) }}%</span><small class="dl-muted"> {{ c.finish_coverage }} known</small>{% else %}<span class="dl-muted">unavailable</span>{% endif %}</td><td class="dl-mono">{{ c.entries }}</td><td class="dl-mono">{% if c.trend is not none %}{{ '%+.1f'|format(c.trend*100) }} pp{% else %}—{% endif %}</td></tr>{% endfor %}</tbody>

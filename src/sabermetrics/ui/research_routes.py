@@ -230,6 +230,7 @@ def _load_index_state() -> dict[str, Any]:
     freshness = "fresh"
     computed_at = ""
     status_text = ""
+    status_visible = False
     deck_filters = _deck_filter_args()
     data: dict[str, Any]
     if tab == "cards":
@@ -278,12 +279,14 @@ def _load_index_state() -> dict[str, Any]:
                 if _force_full_results()
                 else "Preparing commander results."
             )
+            status_visible = _force_full_results()
         else:
             data = apply_favorites(view.data, fav_ids)
             freshness = view.freshness
             computed_at = view.computed_at
             if freshness == "stale":
                 status_text = "Updating results. Previous field is still shown."
+                status_visible = False
                 cache.request_refresh()
     else:
         data = _research().commanders(
@@ -313,6 +316,7 @@ def _load_index_state() -> dict[str, Any]:
         "freshness": freshness,
         "computed_at": computed_at,
         "status_text": status_text,
+        "status_visible": status_visible,
         "full_results_href": _full_results_href(),
         "type_options": CARD_TYPES,
         "super_options": SUPERTYPES,

@@ -677,6 +677,7 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
             deck_id TEXT PRIMARY KEY REFERENCES deck_documents(id) ON DELETE CASCADE,
             surface TEXT NOT NULL DEFAULT 'slate-grid',
             custom_surface_path TEXT,
+            playmat_id TEXT,
             snap_to_grid INTEGER NOT NULL DEFAULT 1,
             show_zone_outlines INTEGER NOT NULL DEFAULT 1,
             dim_inactive INTEGER NOT NULL DEFAULT 0,
@@ -793,6 +794,9 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
         "VALUES ('deck-tags-v1', 'Global deck tags and per-deck assignments')"
     )
     ensure_schema(conn)
+    from sabermetrics.account_playmats import ensure_account_playmat_schema
+
+    ensure_account_playmat_schema(conn)
     conn.commit()
 
 

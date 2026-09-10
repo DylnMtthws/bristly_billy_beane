@@ -120,7 +120,6 @@ def main():
         ):
             assert client.get(route).status_code == 200, route
         for asset in (
-            "playmats/night-ritual.jpg",
             "avatar.css",
             "profile-avatar.js",
             "deck-lab-builder.js",
@@ -130,6 +129,8 @@ def main():
         ):
             response = client.get("/static/" + asset)
             assert response.status_code == 200 and response.data, asset
+
+        assert client.get("/static/playmats/night-ritual.jpg").status_code == 404
 
         def picture():
             output = io.BytesIO()

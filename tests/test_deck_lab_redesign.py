@@ -176,6 +176,9 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     assert b'aria-label="Deck options"' in builder
     assert b"Choose commanders / partner" in builder
     assert b"Find or create a tag" in builder
+    assert b"My playmats" in builder
+    assert b'data-surface="night-ritual"' not in builder
+    assert b"playmats/night-ritual.jpg" not in builder
     tag_results = client.get("/api/deck-tags?q=tur").get_json()["results"]
     assert tag_results[0]["name"] == "Turbo"
     assert tag_results[0]["usage_count"] == 1
@@ -237,15 +240,20 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
         content_type="multipart/form-data",
     )
     assert uploaded.status_code == 200
+    playmat_id = uploaded.get_json()["playmat_id"]
     served = client.get(f"/api/decks/{deck_id}/playmat")
     assert served.status_code == 200
     assert served.content_type == "image/png"
-    assert any((tmp_path / "assets").iterdir())
+    assert client.get(f"/api/playmats/{playmat_id}").status_code == 200
+    assert any((tmp_path / "assets").rglob("*.png"))
 
     deleted = client.post(f"/build/deck/{deck_id}/delete")
     assert deleted.status_code == 302
     assert client.get(f"/api/decks/{deck_id}").status_code == 404
-    assert not any((tmp_path / "assets").iterdir())
+    listed = client.get("/api/playmats").get_json()["results"]
+    assert listed[0]["id"] == playmat_id
+    assert client.get(f"/api/playmats/{playmat_id}").status_code == 200
+    assert any((tmp_path / "assets").rglob("*.png"))
     assert b"All 0" in client.get("/build").data
 
 

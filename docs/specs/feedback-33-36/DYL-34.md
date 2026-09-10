@@ -1,0 +1,2 @@
+# DYL-34 — Quiet Research transitions
+Remove visible Updating results / previous-results prose during normal tab/filter/Back/cache refresh transitions. Preserve current results, request cancellation, race protection, history, cache and retry. Keep accessible busy/live announcements visually hidden during normal loading; actual errors and actionable retry remain visible. Initial empty loading can use a subtle nonverbal indicator with accessible label. Do not hide the whole status region indiscriminately or remove errors. Verify fast/cold transitions and errors.
