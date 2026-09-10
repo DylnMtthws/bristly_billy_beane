@@ -26,7 +26,7 @@ from flask import (
     send_file,
     url_for,
 )
-from flask_login import current_user
+from flask_login import current_user, logout_user
 
 from sabermetrics import db
 from sabermetrics.analytics.cvar import PRICE_FLOOR_USD
@@ -324,26 +324,85 @@ def remove_profile_avatar():
     return redirect(url_for("main.profile"))
 
 
-@bp.route("/profile/password", methods=["POST"])
+@bp.route("/profile/password", methods=["GET", "POST"])
 def change_password():
-    """Change the current user's password (requires the current one)."""
+    """Deliberate password change: current password, policy, and a fresh login."""
     db_path = _db_path()
     users = db.UsersRepo(db_path)
+    row = users.get(current_user.id)
+    if row is None or row.get("status") != "active":
+        abort(403)
+    template = (
+        "deck_lab/change_password.html"
+        if current_app.config.get("DECK_LAB_REDESIGN_ENABLED")
+        else "change_password.html"
+    )
+    if request.method == "GET":
+        return render_template(template)
+
     current = request.form.get("current_password") or ""
     new = request.form.get("new_password") or ""
     confirm = request.form.get("confirm_password") or ""
+    if (
+        len(current) > db.PASSWORD_MAX_LENGTH
+        or len(new) > db.PASSWORD_MAX_LENGTH
+        or len(confirm) > db.PASSWORD_MAX_LENGTH
+    ):
+        flash("Password is too long.", "error")
+        return render_template(template), 400
 
-    row = users.get(current_user.id)
+    from sabermetrics.ui.auth import LOGIN_FAILURE_THRESHOLD, LOGIN_LOCK_MINUTES
+
+    locked_until = users.lock_expires_at(row)
+    if locked_until is not None:
+        flash(
+            "Too many failed attempts. This account is locked for a few minutes.",
+            "error",
+        )
+        return render_template(template), 429
+
     if not db.verify_password(row.get("password_hash"), current):
+        if users.register_failed_login(
+            current_user.id,
+            threshold=LOGIN_FAILURE_THRESHOLD,
+            lock_minutes=LOGIN_LOCK_MINUTES,
+        ):
+            flash(
+                "Too many failed attempts. This account is locked for a few minutes.",
+                "error",
+            )
+            return render_template(template), 429
         flash("Current password is incorrect.", "error")
-    elif len(new) < 8:
-        flash("New password must be at least 8 characters.", "error")
-    elif new != confirm:
+        return render_template(template), 400
+
+    policy = db.password_policy_error(new)
+    if policy:
+        flash(policy, "error")
+        return render_template(template), 400
+    if new != confirm:
         flash("New passwords do not match.", "error")
-    else:
-        users.set_password(current_user.id, db.hash_password(new))
-        flash("Password changed.", "success")
-    return redirect(url_for("main.profile"))
+        return render_template(template), 400
+    if new == current:
+        flash("Choose a different password.", "error")
+        return render_template(template), 400
+
+    if not users.change_password_if_current(
+        current_user.id,
+        expected_hash=str(row.get("password_hash") or ""),
+        expected_session_version=int(row.get("session_version") or 0),
+        new_hash=db.hash_password(new),
+    ):
+        logout_user()
+        flash(
+            "Password was already changed. Sign in with your current password.",
+            "error",
+        )
+        return redirect(url_for("auth.login"))
+    users.clear_failed_logins(current_user.id)
+    db.PasswordResetRepo(db_path).revoke_all_for_user(current_user.id)
+    logout_user()
+    flash("Password changed. Sign in with your new password.", "success")
+    return redirect(url_for("auth.login"))
 
 
 @bp.route("/commander/<path:name>/profile")

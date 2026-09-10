@@ -26,6 +26,8 @@ DDL_STATEMENTS = [
         set_code TEXT,
         rarity TEXT,
         image_uri TEXT,
+        power TEXT,
+        toughness TEXT,
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """,
@@ -449,7 +451,7 @@ ranked AS (
         ) AS _rn
     FROM cards c
     LEFT JOIN latest_prices lp ON lp.card_id = c.id
-    WHERE c.is_legal_commander = 1
+    WHERE c.is_legal_commander = 1 AND c.is_legal_in_99 = 1
 )
 SELECT * FROM ranked WHERE _rn = 1
 """
@@ -479,6 +481,10 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
             ("locked_until", "TIMESTAMP"),
             ("session_version", "INTEGER NOT NULL DEFAULT 0"),
         ],
+        "cards": [
+            ("power", "TEXT"),
+            ("toughness", "TEXT"),
+        ],
     }
     for table, cols in column_migrations.items():
         cursor = conn.execute(f"PRAGMA table_info({table})")
@@ -487,6 +493,7 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
             if col_name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
 
+    conn.execute("DROP VIEW IF EXISTS commander_candidates")
     conn.execute(COMMANDER_CANDIDATE_VIEW_SQL)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_generated_decks_owner "
@@ -608,6 +615,8 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
             favorite INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            visibility TEXT NOT NULL DEFAULT 'private'
+                CHECK(visibility IN ('private', 'public')),
             UNIQUE(owner_id, source_kind, source_id)
         );
         CREATE INDEX IF NOT EXISTS idx_deck_documents_owner_updated
@@ -747,6 +756,21 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
             "ALTER TABLE deck_presentations ADD COLUMN canvas_height "
             "INTEGER NOT NULL DEFAULT 900"
         )
+    document_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(deck_documents)")
+    }
+    if "visibility" not in document_columns:
+        conn.execute(
+            "ALTER TABLE deck_documents ADD COLUMN visibility "
+            "TEXT NOT NULL DEFAULT 'private'"
+        )
+    # Index after the additive column so existing DBs without visibility
+    # do not fail CREATE INDEX during upgrade.
+    conn.execute("DROP INDEX IF EXISTS idx_deck_documents_public")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_deck_documents_public "
+        "ON deck_documents(visibility, updated_at DESC, id)"
+    )
     conn.executemany(
         "INSERT OR IGNORE INTO deck_tags(id,name,normalized_name) VALUES(?,?,?)",
         [

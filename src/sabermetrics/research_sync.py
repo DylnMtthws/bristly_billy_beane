@@ -19,6 +19,7 @@ from pathlib import Path
 from tempfile import TemporaryFile
 from typing import Any
 
+from sabermetrics.card_discovery import imported_commander_eligible
 from sabermetrics.cedh.adapters_postgres import _query
 from sabermetrics.cedh.repositories import assert_v1_only
 
@@ -29,7 +30,7 @@ MIN_EVENT_SIZE = 16
 CARD_SQL = """
 SELECT c.oracle_id, c.name, c.mana_cost, c.mana_value, c.type_line,
        c.oracle_text, c.color_identity, c.keywords, c.rep_scryfall_card_id,
-       c.rep_set_code, c.rep_rarity, c.content_updated_at,
+       c.rep_set_code, c.rep_rarity, c.content_updated_at, c.power, c.toughness,
        l.status AS commander_legality
 FROM mtg_v1.card_any_medium c
 LEFT JOIN mtg_v1.card_legality l ON l.oracle_id=c.oracle_id AND l.format='commander'
@@ -83,10 +84,8 @@ def apply_snapshot(
             type_line = card.get("type_line") or ""
             oracle_text = card.get("oracle_text") or ""
             legal = card.get("commander_legality") == "legal"
-            commander = legal and (
-                ("Legendary" in type_line and "Creature" in type_line)
-                or "Background" in type_line
-                or "can be your commander" in oracle_text
+            commander = legal and imported_commander_eligible(
+                type_line, oracle_text, card.get("power"), card.get("toughness")
             )
             printing = str(card.get("rep_scryfall_card_id") or "")
             image = (
@@ -111,12 +110,14 @@ def apply_snapshot(
                     card.get("rep_rarity"),
                     image,
                     str(card.get("content_updated_at") or now),
+                    card.get("power"),
+                    card.get("toughness"),
                 )
             )
         conn.executemany(
             """INSERT INTO cards(id,oracle_id,name,mana_cost,cmc,type_line,oracle_text,
                 color_identity,keywords,is_legal_commander,is_legal_in_99,set_code,
-                rarity,image_uri,last_updated) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                rarity,image_uri,last_updated,power,toughness) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,mana_cost=excluded.mana_cost,cmc=excluded.cmc,
                 type_line=excluded.type_line,oracle_text=excluded.oracle_text,
@@ -124,7 +125,7 @@ def apply_snapshot(
                 is_legal_commander=excluded.is_legal_commander,
                 is_legal_in_99=excluded.is_legal_in_99,set_code=excluded.set_code,
                 rarity=excluded.rarity,image_uri=excluded.image_uri,
-                last_updated=excluded.last_updated""",
+                last_updated=excluded.last_updated,power=excluded.power,toughness=excluded.toughness""",
             values,
         )
         # Only our namespaced source records are replaced. Documents store their

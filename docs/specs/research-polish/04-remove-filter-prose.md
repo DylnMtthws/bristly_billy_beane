@@ -1,0 +1,2 @@
+# 4. Remove card-filter explanatory prose
+Remove repeated helper paragraphs such as 'Leave the full range to include all values', '10+ means 10 or more', and imported numeric-stat coverage/disclaimers from card search filters. Keep concise field labels, selected range outputs, endpoints including 10+, Clear, Apply, and accessible input names. Shared numeric controls can omit the repeated prose in all tabs. No filtering semantics changes. Preserve actionable runtime error messages and honest representative-list disclosures elsewhere.

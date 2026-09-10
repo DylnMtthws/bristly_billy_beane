@@ -44,6 +44,7 @@
     </nav>
     <div class="dl-drawer-bottom">
         <a href="{{ url_for('main.profile') }}">Profile</a>
+        {% if config.AUTH_MODE in ['password', 'hybrid'] %}<a href="{{ url_for('main.change_password') }}">Account security</a>{% endif %}
         <a href="{{ url_for('auth.logout') }}">Sign out</a>
     </div>
 </aside>

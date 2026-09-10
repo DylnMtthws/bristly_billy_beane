@@ -28,7 +28,7 @@ from sabermetrics.research import ResearchRepo
 
 logger = logging.getLogger(__name__)
 
-CALCULATION_VERSION = 1
+CALCULATION_VERSION = 2
 SNAPSHOT_SCHEMA = "research-default-cohort.v1"
 SNAPSHOT_FILENAME = "research-default-cohort.json"
 DEFAULT_WINDOW_DAYS = 90
@@ -403,7 +403,7 @@ class ResearchDefaultCache:
 
     def _load_public_cohort(self) -> dict[str, Any]:
         """Run the default commanders() query off any Flask request context."""
-        return ResearchRepo(self.db_path).commanders()
+        return ResearchRepo(self.db_path).commanders(observed_only=True)
 
     def _publish(
         self, payload: dict[str, Any], key: tuple[str, int, int, str, int]

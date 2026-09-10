@@ -10,6 +10,20 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+from sabermetrics.card_discovery import (
+    CARD_TYPES,
+    PRIMARY_TYPES,
+    RARITIES,
+    SUPERTYPES,
+    apply_colors,
+    apply_discrete_range,
+    apply_type_token,
+    commander_eligible_sql,
+    format_legal_sql,
+    full_range,
+    numeric_stat_sql,
+    primary_type,
+)
 from sabermetrics.research_identities import attach_members
 
 
@@ -51,15 +65,91 @@ class ResearchRepo:
             conn.close()
 
     def commander_choices(self, *, limit: int = 250) -> list[dict[str, str]]:
-        """Return a bounded alphabetical list for comparison controls."""
+        """Return a bounded alphabetical list of format-legal commander-eligible cards."""
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT c.id,c.name FROM research_commanders c "
-                "ORDER BY EXISTS(SELECT 1 FROM tournament_results r WHERE "
-                "COALESCE(r.commander_identity_id,r.commander_id)=c.id) DESC, c.name COLLATE NOCASE LIMIT ?",
+                "SELECT c.id,c.name FROM commander_candidates c "
+                f"WHERE {commander_eligible_sql('c')} "
+                "ORDER BY c.name COLLATE NOCASE LIMIT ?",
                 (max(1, min(limit, 500)),),
             ).fetchall()
         return [{"id": str(row["id"]), "name": str(row["name"])} for row in rows]
+
+    def commander_catalog(
+        self,
+        *,
+        query: str = "",
+        colors: list[str] | None = None,
+        color_mode: str = "all",
+        mana_min: float | None = None,
+        mana_max: float | None = None,
+        mana_min_bound: int | None = None,
+        mana_max_bound: int | None = None,
+        favorites: set[str] | None = None,
+        favorite_only: bool = False,
+        page: int = 1,
+        per_page: int = 24,
+    ) -> dict[str, Any]:
+        """Alphabetical catalog of legal commander-eligible cards, no meta join."""
+        page = max(1, page)
+        per_page = max(1, min(per_page, 100))
+        where = [commander_eligible_sql("c"), "c.name LIKE ?"]
+        params: list[Any] = [f"%{query}%"]
+        apply_colors(where, params, list(colors or []), color_mode)
+        if mana_min_bound is not None or mana_max_bound is not None:
+            apply_discrete_range(where, params, "c.cmc", mana_min_bound, mana_max_bound)
+        else:
+            if mana_min is not None:
+                where.append("c.cmc>=?")
+                params.append(mana_min)
+            if mana_max is not None:
+                where.append("c.cmc<=?")
+                params.append(mana_max)
+        if favorite_only:
+            ids = sorted(favorites or set())
+            if not ids:
+                return {
+                    "results": [],
+                    "total": 0,
+                    "page": page,
+                    "has_next": False,
+                    "recorded_entries": None,
+                    "window_days": None,
+                }
+            where.append(f"c.id IN ({','.join('?' for _ in ids)})")
+            params.extend(ids)
+        with self._connect() as conn:
+            count = int(
+                conn.execute(
+                    f"SELECT COUNT(*) FROM commander_candidates c WHERE {' AND '.join(where)}",
+                    params,
+                ).fetchone()[0]
+            )
+            rows = conn.execute(
+                f"""SELECT c.id,c.oracle_id,c.name,c.type_line,c.mana_cost,c.cmc,
+                          c.oracle_text,c.color_identity,c.image_uri
+                    FROM commander_candidates c
+                    WHERE {' AND '.join(where)}
+                    ORDER BY c.name COLLATE NOCASE LIMIT ? OFFSET ?""",
+                [*params, per_page, (page - 1) * per_page],
+            ).fetchall()
+        results = [dict(row) for row in rows]
+        for row in results:
+            row["color_identity"] = _colors(row.get("color_identity"))
+            row["favorited"] = row["id"] in (favorites or set())
+            row["meta_share"] = None
+            row["top16_rate"] = None
+            row["entries"] = None
+            row["trend"] = None
+            row["finish_coverage"] = None
+        return {
+            "results": results,
+            "total": count,
+            "page": page,
+            "has_next": page * per_page < count,
+            "recorded_entries": None,
+            "window_days": None,
+        }
 
     @staticmethod
     def _scope(window_days: int) -> tuple[str, str, str]:
@@ -88,6 +178,7 @@ class ResearchRepo:
         sort: str = "meta",
         page: int = 1,
         per_page: int = 24,
+        observed_only: bool = False,
     ) -> dict[str, Any]:
         window_days = 0 if window_days == 0 else max(7, min(window_days, 365))
         page = max(1, page)
@@ -162,6 +253,11 @@ class ResearchRepo:
             if meta_max is not None:
                 having.append("meta_share<=?")
                 having_params.append(max(0.0, min(meta_max, 1.0)))
+            if observed_only:
+                having.append(
+                    "COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END)>0"
+                )
+                having_params.extend([start, end])
             having_sql = f" HAVING {' AND '.join(having)}" if having else ""
             count = int(
                 conn.execute(
@@ -245,14 +341,26 @@ class ResearchRepo:
         per_page: int = 24,
         oracle_text: str = "",
         type_line: str = "",
+        super_type: str = "",
+        super_op: str = "is",
+        card_type: str = "",
+        type_op: str = "is",
+        sub_type: str = "",
+        sub_op: str = "is",
         colors: list[str] | None = None,
-        color_mode: str = "all",
+        color_mode: str = "include",
         mana_operator: str = "lte",
         mana_value: float | None = None,
+        mana_min_bound: int | None = None,
+        mana_max_bound: int | None = None,
+        power_min_bound: int | None = None,
+        power_max_bound: int | None = None,
+        toughness_min_bound: int | None = None,
+        toughness_max_bound: int | None = None,
         rarity: str = "",
     ) -> dict[str, Any]:
         page = max(page, 1)
-        where = ["c.name LIKE ?"]
+        where = [format_legal_sql("c"), "c.name LIKE ?"]
         values: list[Any] = [f"%{query}%"]
         if oracle_text:
             where.append("c.oracle_text LIKE ?")
@@ -260,44 +368,68 @@ class ResearchRepo:
         if type_line:
             where.append("c.type_line LIKE ?")
             values.append(f"%{type_line}%")
-        selected_colors = [color for color in colors or [] if color in set("WUBRGC")]
-        colored = [color for color in selected_colors if color != "C"]
-        color_tests = ["c.color_identity LIKE ?" for _ in colored]
-        color_values = [f'%"{color}"%' for color in colored]
-        if "C" in selected_colors:
-            color_tests.append("json_array_length(c.color_identity)=0")
-        if color_tests:
-            if color_mode == "any":
-                where.append(f"({' OR '.join(color_tests)})")
-                values.extend(color_values)
-            else:
-                where.extend(color_tests)
-                values.extend(color_values)
-                if color_mode == "exact":
-                    where.append("json_array_length(c.color_identity)=?")
-                    values.append(len(colored))
-        if mana_value is not None:
+        apply_type_token(where, values, super_type, super_op, allowed=SUPERTYPES)
+        apply_type_token(where, values, card_type, type_op, allowed=CARD_TYPES)
+        apply_type_token(where, values, sub_type, sub_op, subtype=True)
+        apply_colors(where, values, list(colors or []), color_mode)
+        if not full_range(mana_min_bound, mana_max_bound):
+            apply_discrete_range(where, values, "c.cmc", mana_min_bound, mana_max_bound)
+        elif mana_value is not None:
             operator = {"eq": "=", "gte": ">=", "lte": "<="}.get(mana_operator, "<=")
             where.append(f"c.cmc {operator} ?")
             values.append(mana_value)
-        if rarity in {"common", "uncommon", "rare", "mythic"}:
+        apply_discrete_range(
+            where,
+            values,
+            numeric_stat_sql("c.power"),
+            power_min_bound,
+            power_max_bound,
+        )
+        apply_discrete_range(
+            where,
+            values,
+            numeric_stat_sql("c.toughness"),
+            toughness_min_bound,
+            toughness_max_bound,
+        )
+        if rarity in RARITIES:
             where.append("c.rarity=?")
             values.append(rarity)
         with self._connect() as conn:
             rows = conn.execute(
                 f"""SELECT c.id,c.oracle_id,c.name,c.type_line,c.mana_cost,c.cmc,
-                          c.oracle_text,c.color_identity,c.image_uri,c.rarity
+                          c.oracle_text,c.color_identity,c.image_uri,c.rarity,
+                          c.power,c.toughness
                    FROM cards c WHERE {' AND '.join(where)}
                      AND c.id=(SELECT c2.id FROM cards c2 WHERE c2.name=c.name
                                ORDER BY c2.image_uri IS NULL,c2.id LIMIT 1)
                    ORDER BY c.name COLLATE NOCASE LIMIT ? OFFSET ?""",
                 [*values, per_page + 1, (page - 1) * per_page],
             ).fetchall()
+            coverage = conn.execute(
+                f"""SELECT COUNT(*) AS total,
+                          SUM(CASE WHEN {numeric_stat_sql("power")} IS NOT NULL
+                                   THEN 1 ELSE 0 END) AS numeric_power,
+                          SUM(CASE WHEN {numeric_stat_sql("toughness")} IS NOT NULL
+                                   THEN 1 ELSE 0 END) AS numeric_toughness
+                   FROM cards c WHERE is_legal_in_99=1
+                     AND c.id=(SELECT c2.id FROM cards c2 WHERE c2.name=c.name
+                               ORDER BY c2.image_uri IS NULL,c2.id LIMIT 1)"""
+            ).fetchone()
         has_next = len(rows) > per_page
         results = [dict(row) for row in rows[:per_page]]
         for row in results:
             row["color_identity"] = _colors(row.get("color_identity"))
-        return {"results": results, "page": page, "has_next": has_next}
+        return {
+            "results": results,
+            "page": page,
+            "has_next": has_next,
+            "stat_coverage": {
+                "legal_cards": int(coverage["total"] or 0),
+                "numeric_power": int(coverage["numeric_power"] or 0),
+                "numeric_toughness": int(coverage["numeric_toughness"] or 0),
+            },
+        }
 
     def commander_detail(
         self, card_id: str, *, window_days: int = 90
@@ -310,6 +442,13 @@ class ResearchRepo:
                 "FROM research_commanders WHERE id=?",
                 (card_id,),
             ).fetchone()
+            if card is None:
+                card = conn.execute(
+                    "SELECT id,oracle_id,name,type_line,mana_cost,cmc,oracle_text,"
+                    "color_identity,image_uri,json_array(id) AS card_ids "
+                    "FROM commander_candidates WHERE id=?",
+                    (card_id,),
+                ).fetchone()
             if card is None:
                 return None
             current_total = int(
@@ -364,17 +503,9 @@ class ResearchRepo:
                    )""",
                 (card_id, start, end),
             ).fetchone()
-            inclusions = conn.execute(
-                """SELECT c.id,c.oracle_id,c.name,c.type_line,c.mana_cost,c.cmc,
-                          c.image_uri,COUNT(DISTINCT tr.deck_id) AS decks_including
-                   FROM research_results tr
-                   JOIN deck_cards dc ON dc.deck_id=tr.deck_id
-                   JOIN cards c ON c.id=dc.card_id
-                   WHERE tr.commander_id=? AND tr.tournament_date>=? AND tr.tournament_date<?
-                     AND dc.is_commander=0
-                   GROUP BY c.oracle_id ORDER BY decks_including DESC,c.name LIMIT 40""",
-                (card_id, start, end),
-            ).fetchall()
+            representative = self._representative_recorded_list(
+                conn, card_id, start, end
+            )
             rulings = conn.execute(
                 "SELECT ruling_date,ruling_text FROM card_rulings WHERE card_oracle_id IN "
                 "(SELECT oracle_id FROM cards WHERE id IN (SELECT value FROM json_each(?))) "
@@ -412,16 +543,159 @@ class ResearchRepo:
             "mv_list_count": int(mana_value["list_count"]),
         }
         result["inclusion_denominator"] = denominator
-        result["inclusions"] = [dict(row) for row in inclusions]
+        result["inclusions"] = []
+        result["representative_list"] = representative
         result["rulings"] = [dict(row) for row in rulings]
         result["recent_lists"] = [dict(row) for row in recent_lists]
         return result
 
+    @staticmethod
+    def _merge_recorded_printings(
+        rows: list[sqlite3.Row],
+    ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+        """Collapse duplicate oracle/name printings using recorded quantities only."""
+        commanders: list[dict[str, Any]] = []
+        groups: dict[str, list[dict[str, Any]]] = {}
+        seen_commanders: dict[str, dict[str, Any]] = {}
+        seen_library: dict[tuple[str, str], dict[str, Any]] = {}
+        for row in rows:
+            key = str(row["oracle_id"] or row["name"] or row["id"])
+            item = {
+                "id": row["id"],
+                "name": row["name"] or "Unknown card",
+                "type_line": row["type_line"] or "",
+                "image_uri": row["image_uri"],
+                "quantity": int(row["quantity"] or 1),
+            }
+            if row["is_commander"]:
+                existing = seen_commanders.get(key)
+                if existing is None:
+                    seen_commanders[key] = item
+                    commanders.append(item)
+                else:
+                    existing["quantity"] += item["quantity"]
+                continue
+            kind = primary_type(item["type_line"])
+            existing = seen_library.get((kind, key))
+            if existing is None:
+                seen_library[(kind, key)] = item
+                groups.setdefault(kind, []).append(item)
+            else:
+                existing["quantity"] += item["quantity"]
+        return commanders, groups
+
+    @staticmethod
+    def _representative_recorded_list(
+        conn: sqlite3.Connection, commander_id: str, start: str, end: str
+    ) -> dict[str, Any] | None:
+        """Pick one recorded list by completeness, then overlap, then deck id."""
+        chosen = conn.execute(
+            """WITH cohort AS (
+                 SELECT DISTINCT tr.deck_id
+                 FROM research_results tr
+                 WHERE tr.commander_id=? AND tr.deck_id IS NOT NULL
+                   AND tr.tournament_date>=? AND tr.tournament_date<?
+                   AND EXISTS (SELECT 1 FROM deck_cards dc WHERE dc.deck_id=tr.deck_id)
+               ),
+               freq AS (
+                 SELECT COALESCE(NULLIF(c.oracle_id,''), dc.card_id) AS oracle_key,
+                        COUNT(DISTINCT dc.deck_id) AS decks_including
+                 FROM cohort
+                 JOIN deck_cards dc
+                   ON dc.deck_id=cohort.deck_id AND dc.is_commander=0
+                 JOIN cards c ON c.id=dc.card_id
+                 GROUP BY COALESCE(NULLIF(c.oracle_id,''), dc.card_id)
+               ),
+               scored AS (
+                 SELECT cohort.deck_id,
+                   COALESCE(SUM(freq.decks_including),0) AS overlap,
+                   COALESCE(SUM(CASE WHEN dc.is_commander=0 THEN dc.quantity ELSE 0 END),0)
+                     AS library_count,
+                   COALESCE(SUM(CASE WHEN dc.is_commander=1 THEN dc.quantity ELSE 0 END),0)
+                     AS commander_count
+                 FROM cohort
+                 LEFT JOIN deck_cards dc ON dc.deck_id=cohort.deck_id
+                 LEFT JOIN cards c ON c.id=dc.card_id
+                 LEFT JOIN freq
+                   ON freq.oracle_key=COALESCE(NULLIF(c.oracle_id,''), dc.card_id)
+                  AND dc.is_commander=0
+                 GROUP BY cohort.deck_id
+               )
+               SELECT s.deck_id, s.overlap, s.library_count, s.commander_count,
+                      r.player_name, r.standing, r.tournament_date
+               FROM scored s
+               JOIN research_results r
+                 ON r.deck_id=s.deck_id AND r.commander_id=?
+                AND r.tournament_date>=? AND r.tournament_date<?
+               WHERE r.id=(
+                 SELECT r2.id FROM research_results r2
+                 WHERE r2.deck_id=s.deck_id AND r2.commander_id=?
+                   AND r2.tournament_date>=? AND r2.tournament_date<?
+                 ORDER BY r2.tournament_date DESC, r2.id
+                 LIMIT 1
+               )
+               ORDER BY CASE
+                          WHEN s.library_count + s.commander_count = 100
+                           AND s.commander_count IN (1, 2) THEN 1
+                          ELSE 0
+                        END DESC,
+                        s.overlap DESC, s.deck_id
+               LIMIT 1""",
+            (
+                commander_id,
+                start,
+                end,
+                commander_id,
+                start,
+                end,
+                commander_id,
+                start,
+                end,
+            ),
+        ).fetchone()
+        if chosen is None:
+            return None
+        deck_id = str(chosen["deck_id"])
+        rows = conn.execute(
+            """SELECT c.id,c.oracle_id,c.name,c.type_line,c.image_uri,
+                      dc.quantity,dc.is_commander
+               FROM deck_cards dc JOIN cards c ON c.id=dc.card_id
+               WHERE dc.deck_id=?
+               ORDER BY dc.is_commander DESC, c.name COLLATE NOCASE, c.id""",
+            (deck_id,),
+        ).fetchall()
+        commanders, groups = ResearchRepo._merge_recorded_printings(list(rows))
+        grouped = [
+            {"type": kind, "cards": groups[kind]}
+            for kind in (*PRIMARY_TYPES, "Other")
+            if kind in groups
+        ]
+        library_count = int(chosen["library_count"] or 0)
+        commander_count = int(chosen["commander_count"] or 0)
+        complete = library_count + commander_count == 100 and commander_count in (1, 2)
+        return {
+            "deck_id": deck_id,
+            "player_name": chosen["player_name"],
+            "standing": chosen["standing"],
+            "tournament_date": chosen["tournament_date"],
+            "library_count": library_count,
+            "commander_count": commander_count,
+            "complete": complete,
+            "overlap": int(chosen["overlap"] or 0),
+            "provenance": (
+                "Recorded example from the local corpus. A representative sample "
+                "for this commander and window, not a guaranteed optimal list."
+            ),
+            "commanders": commanders,
+            "groups": grouped,
+        }
+
     def card_detail(self, card_id: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id,oracle_id,name,type_line,mana_cost,cmc,oracle_text,color_identity,image_uri,rarity "
-                "FROM cards WHERE id=?",
+                "SELECT id,oracle_id,name,type_line,mana_cost,cmc,oracle_text,"
+                "color_identity,image_uri,rarity,power,toughness "
+                "FROM cards WHERE id=? AND is_legal_in_99=1",
                 (card_id,),
             ).fetchone()
             if not row:

@@ -87,7 +87,8 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     assert b"Kinnan Test" in response.data
     assert b"Tournament evidence:" not in response.data
     assert b"Plays this card" not in response.data
-    assert b"data-research-sort-menu" in response.data
+    assert b"data-research-sort-menu" not in response.data
+    assert b"data-research-sort-menu" in client.get("/research?tab=metagame").data
     assert b'id="research-sort"' not in response.data
     card_results = client.get("/research?tab=cards").data
     assert b'class="dl-card-result-grid"' in card_results
@@ -118,10 +119,9 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     all_time_meta = client.get("/research?tab=metagame&window=0").data
     assert "Field view · all time".encode() in all_time_meta
     assert b'<option value="0" selected>All time</option>' in all_time_meta
-    assert (
-        b"Compare commanders"
-        in client.get("/research/compare?left=kinnan&right=kinnan").data
-    )
+    retired = client.get("/research/compare?left=kinnan&right=kinnan")
+    assert retired.status_code == 302
+    assert retired.headers["Location"] == "/research/"
     assert client.get("/admin/").status_code == 200
     assert client.get("/admin/users").status_code == 200
 

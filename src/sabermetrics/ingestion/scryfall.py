@@ -7,7 +7,6 @@ idempotent re-runs via INSERT OR REPLACE.
 
 import json
 import logging
-import re
 import sqlite3
 import tempfile
 from datetime import date, datetime
@@ -16,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from sabermetrics.card_discovery import imported_commander_eligible
 from sabermetrics.errors import FatalError, NetworkError, RecoverableError
 from sabermetrics.ingestion.base import SourceHealthMixin, SyncResult
 from sabermetrics.utils.rate_limit import RateLimiter
@@ -231,8 +231,8 @@ class ScryfallIngestion(SourceHealthMixin):
                     """INSERT OR REPLACE INTO cards
                     (id, oracle_id, name, mana_cost, cmc, type_line, oracle_text,
                      color_identity, keywords, is_legal_commander, is_legal_in_99,
-                     set_code, rarity, image_uri, last_updated)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                     set_code, rarity, image_uri, power, toughness, last_updated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
                     batch,
                 )
                 ingested += len(batch)
@@ -303,28 +303,18 @@ class ScryfallIngestion(SourceHealthMixin):
         color_identity = json.dumps(raw.get("color_identity", []))
         keywords = json.dumps(raw.get("keywords", []))
 
-        # Legality derivation
+        # Format legality and commander eligibility are distinct imported facts.
         legalities = raw.get("legalities", {})
         is_legal_in_99 = legalities.get("commander") == "legal"
-
-        # is_legal_commander: must be legal AND have appropriate type/text
-        is_legal_commander = False
-        if is_legal_in_99:
-            is_legendary_creature = bool(
-                re.search(r"Legendary.*Creature", type_line, re.IGNORECASE)
-            )
-            is_legendary_planeswalker = bool(
-                re.search(r"Legendary.*Planeswalker", type_line, re.IGNORECASE)
-            )
-            can_be_commander_text = bool(
-                oracle_text
-                and re.search(r"can be your commander", oracle_text, re.IGNORECASE)
-            )
-            is_legal_commander = (
-                is_legendary_creature
-                or is_legendary_planeswalker
-                or can_be_commander_text
-            )
+        power = self._printed_stat(raw, card_faces, "power")
+        toughness = self._printed_stat(raw, card_faces, "toughness")
+        front = card_faces[0] if card_faces else raw
+        is_legal_commander = is_legal_in_99 and imported_commander_eligible(
+            front.get("type_line", type_line),
+            front.get("oracle_text", oracle_text) or "",
+            front.get("power", power),
+            front.get("toughness", toughness),
+        )
 
         set_code = raw.get("set", "")
         rarity = raw.get("rarity", "")
@@ -353,6 +343,8 @@ class ScryfallIngestion(SourceHealthMixin):
             set_code,
             rarity,
             image_uri,
+            power,
+            toughness,
         )
 
         # Prices
@@ -371,6 +363,24 @@ class ScryfallIngestion(SourceHealthMixin):
             price_row = None
 
         return card_row, price_row
+
+    @staticmethod
+    def _printed_stat(
+        raw: dict[str, Any], card_faces: list[dict[str, Any]] | None, key: str
+    ) -> str | None:
+        """Return the imported printed power/toughness string, or None.
+
+        Nonnumeric printed values are stored as-is and never coerced to zero.
+        """
+        value = raw.get(key)
+        if value not in (None, ""):
+            return str(value)
+        if card_faces:
+            parts = [
+                str(face[key]) for face in card_faces if face.get(key) not in (None, "")
+            ]
+            return " // ".join(parts) if parts else None
+        return None
 
     @staticmethod
     def _parse_price(value: str | None) -> float | None:

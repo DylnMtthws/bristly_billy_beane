@@ -67,8 +67,12 @@ def test_commander_metrics_and_inclusion_denominators(tmp_path):
     detail = repo.commander_detail("kinnan", window_days=90)
     assert detail is not None
     assert detail["inclusion_denominator"] == 1
-    assert detail["inclusions"][0]["name"] == "Sol Ring"
-    assert detail["inclusions"][0]["decks_including"] == 1
+    representative = detail["representative_list"]
+    assert representative is not None
+    assert representative["complete"] is False
+    assert representative["groups"][0]["cards"][0]["name"] == "Sol Ring"
+    assert representative["groups"][0]["cards"][0]["quantity"] == 1
+    assert detail["inclusions"] == []
     assert detail["metrics"]["average_nonland_mv"] == 1.0
     assert detail["metrics"]["mv_list_count"] == 1
 

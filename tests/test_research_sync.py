@@ -1,6 +1,7 @@
 """Production corpus refresh preserves app state and exact partner cohorts."""
 
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import pytest
 
@@ -60,7 +61,12 @@ def test_refresh_partners_repeatability_and_atomic_failure(tmp_path):
         assert data["results"][0]["meta_share"] == 0.5
         detail = ResearchRepo(path).commander_detail(pair_id(["Thrasios", "Tymna"]))
         assert detail["inclusion_denominator"] == 1
-        assert detail["inclusions"][0]["name"] == "Sol Ring"
+        recorded = [
+            card["name"]
+            for group in (detail["representative_list"] or {}).get("groups", [])
+            for card in group["cards"]
+        ]
+        assert recorded == ["Sol Ring"]
         assert db.UsersRepo(path).get(user_id) is not None
 
     previous = source_state(path)
@@ -180,9 +186,18 @@ def test_exact_pair_cohorts_migration_colors_favorites_and_build(tmp_path, monke
     assert a["metrics"]["entries"] == 2
     assert a["metrics"]["top16_rate"] == 0.5
     assert b["metrics"]["top16_rate"] is None
-    assert [c["name"] for c in a["inclusions"]] == ["White spell"]
+    assert [
+        card["name"]
+        for group in (a["representative_list"] or {}).get("groups", [])
+        for card in group["cards"]
+    ] == ["White spell"]
+    assert a["inclusions"] == []
+    assert b["representative_list"] is None
     assert b["inclusions"] == []
-    assert repo.commander_detail("Rograkh") is None
+    solo = repo.commander_detail("Rograkh")
+    assert solo is not None
+    assert solo["metrics"]["entries"] == 0
+    assert solo["representative_list"] is None
     assert [
         r["id"]
         for r in repo.commanders(colors=["W", "B", "R"], color_mode="exact")["results"]
@@ -203,9 +218,19 @@ def test_exact_pair_cohorts_migration_colors_favorites_and_build(tmp_path, monke
     with client.session_transaction() as session:
         session["_user_id"] = user
         session["_fresh"] = True
-    assert (
-        client.get(f"/research/compare?left={tymna}&right={silas}").status_code == 200
-    )
+    compare = client.get(f"/research/compare?left={tymna}&right={silas}")
+    assert compare.status_code == 302
+    assert urlparse(compare.headers["Location"]).path.rstrip("/") == "/research"
+    assert "/compare" not in compare.headers["Location"]
+    catalog = client.get("/research/?tab=commanders")
+    assert catalog.status_code == 200
+    assert b"Compare" not in catalog.data
+    assert b">Build<" in catalog.data
+    assert b"Favorite" in catalog.data
+    profile = client.get(f"/research/commander/{tymna}")
+    assert profile.status_code == 200
+    assert b"Compare" not in profile.data
+    assert b">Build<" in profile.data
     response = client.post(f"/research/commander/{tymna}/build", data={"top": "40"})
     assert response.status_code == 302
     deck = DeckDocumentRepo(path).get(user, response.location.rsplit("/", 1)[-1])
@@ -214,7 +239,12 @@ def test_exact_pair_cohorts_migration_colors_favorites_and_build(tmp_path, monke
         "Tymna",
     }
     assert deck["validation"]["library_target"] == 98
-    assert deck["validation"]["library_count"] == 1
+    assert deck["validation"]["library_count"] == 0  # retired top-40 shortcut
+    single = client.post(
+        f"/research/commander/{tymna}/build", data={"card_id": "white"}
+    )
+    added = DeckDocumentRepo(path).get(user, single.location.rsplit("/", 1)[-1])
+    assert added["validation"]["library_count"] == 1
     assert (
         client.get("/api/commanders/partners?commander_id=Rograkh&q=Tymna").json[
             "results"
@@ -238,3 +268,34 @@ def test_exact_pair_cohorts_migration_colors_favorites_and_build(tmp_path, monke
     apply_snapshot(path, cards, entries[::-1], [])
     assert fav.commander_ids(user) == {tymna}
     assert repo.commander_detail(tymna)["metrics"]["entries"] == 2
+
+
+def test_legacy_compare_redirects_without_calculating_comparisons(
+    tmp_path, monkeypatch
+):
+    from sabermetrics.ui.app import create_app
+
+    path = tmp_path / "compare.db"
+    setup_database(path)
+    user = db.UsersRepo(path).create(email="compare@example.test", status="active")
+    monkeypatch.setenv("SABER_DECK_LAB_REDESIGN", "1")
+
+    def no_research():
+        raise AssertionError("legacy compare must not calculate comparisons")
+
+    def no_comparison(*_args, **_kwargs):
+        raise AssertionError("legacy compare must not calculate comparisons")
+
+    monkeypatch.setattr("sabermetrics.ui.research_routes._research", no_research)
+    monkeypatch.setattr(ResearchRepo, "commander_choices", no_comparison)
+    monkeypatch.setattr(ResearchRepo, "commander_detail", no_comparison)
+    app = create_app(path)
+    app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, SESSION_COOKIE_SECURE=False)
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user
+        session["_fresh"] = True
+    response = client.get("/research/compare?left=a&right=b&window=90")
+    assert response.status_code == 302
+    assert urlparse(response.headers["Location"]).path.rstrip("/") == "/research"
+    assert "/compare" not in response.headers["Location"]

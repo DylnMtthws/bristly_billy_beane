@@ -1,0 +1,2 @@
+# 3. One row of color icons
+Keep all color filter icons on one horizontal row in Cards, Commanders and Meta (and the new Decks filter). Scope layout to color filter groups, not unrelated chip rows. Six Card colors and five Commander/Meta colors must fit at 320px with comfortable hit targets and no page overflow. Preserve checkboxes, accessible color names, focus and selected states. Prefer a nonwrapping flex/grid row sized to available filter width; avoid hiding icons or shrinking text illegibly.

@@ -5,16 +5,31 @@
 <header class="dl-page-head"><div><h1>Users</h1><p>You control who gets in. {{ total_users }} accounts, {{ counts.get('invited',0) }} waiting.</p></div><button class="dl-button dl-button-primary" data-invite-open>Invite person</button></header>
 {% if invite_result %}<section class="dl-card dl-invite-result" role="status"><strong>{{ invite_result.message }}</strong><span>{{ invite_result.email }} · expires {{ invite_result.expires_at }}</span><div class="dl-invite-link"><code data-invite-link>{{ invite_result.link }}</code><button class="dl-button" data-copy-invite>Copy link</button></div></section>{% endif %}
 <form class="dl-user-controls" method="get"><input class="dl-field" type="search" name="q" value="{{ query }}" placeholder="Search email or name"><div class="dl-segments">{% for key,label in [('', 'All ' ~ total_users),('invited','Invited ' ~ counts.get('invited',0)),('active','Active ' ~ counts.get('active',0)),('disabled','Disabled ' ~ counts.get('disabled',0))] %}<a href="{{ url_for('admin.users',status=key,q=query) }}" {% if status==key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</div></form>
-<section class="dl-library-grid">
-{% for u in users %}<article class="dl-card dl-user-card">
-    <div class="dl-user-card-head"><div><strong>{{ u.email or u.display_name }} {% if u.id==current_user.id %}<span class="dl-eyebrow">You</span>{% endif %}</strong><small>{{ u.display_name or 'No display name' }} · {{ u.role|title }} · {{ u.last_login_at or 'never seen' }}</small></div><span class="dl-status dl-status-{{ u.status }}">{% if u.status=='active' %}●{% elif u.status=='invited' %}◯{% else %}⊘{% endif %} {{ u.status }}</span></div>
-    <div class="dl-user-metrics"><div><span>Decks</span><b>{{ u.decks }}</b></div><div><span>Zones</span><b>{{ u.zones }}</b></div><div><span>Ratings</span><b>{{ u.card_fb }}c/{{ u.deck_fb }}d</b></div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-        {% if u.status=='invited' %}<form method="post" action="{{ url_for('admin.reinvite',user_id=u.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-button">Resend</button></form>{% endif %}
-        {% if u.id!=current_user.id %}<form method="post" action="{{ url_for('admin.set_status',user_id=u.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="{{ 'disabled' if u.status=='active' else 'active' }}"><button class="dl-button">{{ 'Disable' if u.status=='active' else 'Enable' }}</button></form>{% endif %}
-    </div>
-</article>{% else %}<div class="dl-empty">No users match this view.</div>{% endfor %}
-</section>
+<div class="dl-card dl-user-table-wrap">
+<table class="dl-user-table">
+    <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Decks</th><th>Last login</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for u in users %}
+    <tr>
+        <td><strong>{{ u.email or u.display_name }}{% if u.id==current_user.id %} <span class="dl-eyebrow">You</span>{% endif %}</strong></td>
+        <td>{{ u.display_name or '—' }}</td>
+        <td>{{ u.role|title }}</td>
+        <td><span class="dl-status dl-status-{{ u.status }}">{% if u.status=='active' %}●{% elif u.status=='invited' %}◯{% else %}⊘{% endif %} {{ u.status }}</span></td>
+        <td class="dl-mono">{{ u.decks }}</td>
+        <td>{{ u.last_login_at or 'never seen' }}</td>
+        <td>
+            <div class="dl-user-actions">
+                {% if u.status=='invited' %}<form method="post" action="{{ url_for('admin.reinvite',user_id=u.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="dl-button" type="submit">Resend</button></form>{% endif %}
+                {% if u.id!=current_user.id %}<form method="post" action="{{ url_for('admin.set_status',user_id=u.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="{{ 'disabled' if u.status=='active' else 'active' }}"><button class="dl-button" type="submit">{{ 'Disable' if u.status=='active' else 'Enable' }}</button></form>{% endif %}
+            </div>
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7"><div class="dl-empty">No users match this view.</div></td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
 <dialog class="dl-dialog" id="invite-dialog"><form method="post" action="{{ url_for('admin.create_user') }}" id="invite"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="dl-dialog-head"><div><div class="dl-eyebrow">Private beta</div><h2>Invite person</h2></div><button class="dl-icon-button" type="button" data-invite-close>×</button></div><label>Email<input class="dl-field" type="email" name="email" required></label><label>Display name <span class="dl-muted">optional</span><input class="dl-field" name="display_name"></label><label>Role<select class="dl-field" name="role"><option value="user">User</option><option value="admin">Admin</option></select></label><button class="dl-button dl-button-primary">Create and send invite</button></form></dialog>
 <div class="dl-bottom-action"><button class="dl-button dl-button-primary" data-invite-open>Invite person</button></div>
 {% endblock %}

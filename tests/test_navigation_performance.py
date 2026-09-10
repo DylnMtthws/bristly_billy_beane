@@ -79,11 +79,11 @@ def test_meta_reuses_default_cohort_but_not_user_favorites(client, monkeypatch):
     monkeypatch.setattr(db.FavoritesRepo, "commander_ids", favorites)
     first = client.get("/research/")
     assert first.status_code == 200
-    assert b"dl-icon-button active" in first.data
+    assert b'aria-pressed="true"' in first.data
     favorites.return_value = set()
     response = client.get("/research/?tab=metagame")
     assert response.status_code == 200
-    assert b"dl-icon-button active" not in response.data
+    assert b'aria-pressed="true"' not in response.data
     assert len(calls) == 0
     assert "favorites" not in json.dumps(calls)
     assert client.get("/research/?tab=metagame&q=missing").status_code == 200
@@ -132,8 +132,8 @@ def test_two_users_cannot_inherit_favorites_or_account_html(client):
     assert b"bob-nav@example.test" not in alice_page.data
     assert b"navigation@example.test" not in bob_page.data
     assert b"Bob Navigation" not in alice_page.data
-    assert b"dl-icon-button active" in alice_page.data
-    assert b"dl-icon-button active" not in bob_page.data
+    assert b'aria-pressed="true"' in alice_page.data
+    assert b'aria-pressed="true"' not in bob_page.data
     token = re.compile(rb'csrf-token" content="([^"]+)"')
     alice_csrf = token.search(alice_page.data)
     bob_csrf = token.search(bob_page.data)
@@ -208,7 +208,10 @@ def test_build_and_profile_avoid_retired_repositories(client, monkeypatch):
     profile = client.get("/profile")
     assert b"navigation@example.test" in profile.data
     assert b'name="display_name"' in profile.data
-    assert b'name="new_password"' in profile.data
+    assert b'name="new_password"' not in profile.data
+    security = client.get("/profile/password")
+    assert security.status_code == 200
+    assert b'name="new_password"' in security.data
     assert b'name="csrf_token"' in profile.data
 
 

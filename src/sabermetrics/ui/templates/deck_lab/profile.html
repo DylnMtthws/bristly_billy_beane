@@ -11,13 +11,11 @@
             <button class="dl-button dl-button-primary">Save name</button>
         </form>
         {% if config.AUTH_MODE in ['password', 'hybrid'] %}
-        <form method="post" action="{{ url_for('main.change_password') }}" class="dl-card dl-profile-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><h2>Change password</h2>
-            <label>Current password<input class="dl-field" type="password" name="current_password" autocomplete="current-password" required></label>
-            <label>New password<input class="dl-field" type="password" name="new_password" autocomplete="new-password" required></label>
-            <label>Confirm new password<input class="dl-field" type="password" name="confirm_password" autocomplete="new-password" required></label>
-            <button class="dl-button">Update password</button>
-        </form>
+        <div class="dl-card dl-profile-form">
+            <h2>Account security</h2>
+            <p class="dl-muted">Change your password on a dedicated screen. You will sign in again afterward.</p>
+            <a class="dl-button" href="{{ url_for('main.change_password') }}">Change password</a>
+        </div>
         {% endif %}
     </div>
 </div>

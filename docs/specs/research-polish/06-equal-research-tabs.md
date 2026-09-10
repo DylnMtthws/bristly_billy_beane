@@ -1,0 +1,2 @@
+# 6. Equal Research tabs
+Interpret owner's Cards/Commanders/Meta/Decks button/slider sizing feedback as the four Research navigation segments. All four segments must have equal width and equal height, including the selected highlight, on desktop and 320/375/430px mobile widths. Use a four-column layout with centered labels and >=44px hit height; preserve active state, keyboard navigation, AJAX tab changes and no-JS links. Do not change unrelated admin or builder segments.

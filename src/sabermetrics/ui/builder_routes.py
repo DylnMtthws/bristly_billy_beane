@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import (
     Blueprint,
@@ -284,6 +285,31 @@ def export(deck_id: str):
             "Content-Disposition": f'attachment; filename="{filename or "deck"}.txt"'
         },
     )
+
+
+@bp.post("/build/deck/<deck_id>/visibility")
+def set_visibility(deck_id: str):
+    values = request.get_json(silent=True) if request.is_json else request.form
+    if request.is_json and not isinstance(values, dict):
+        abort(400)
+    visibility = str((values or {}).get("visibility") or "").strip()
+    try:
+        _repo().set_visibility(current_user.id, deck_id, visibility)
+    except DeckNotFound:
+        abort(404)
+    except InvalidCommand as exc:
+        if request.is_json:
+            return jsonify(error=str(exc)), 400
+        abort(400, description=str(exc))
+    if request.accept_mimetypes.best == "application/json" or request.is_json:
+        return jsonify(visibility=visibility)
+    previous = urlsplit(request.referrer or "")
+    target = url_for("builder.library")
+    if previous.scheme in {"http", "https"} and previous.netloc == request.host:
+        target = previous.path + ("?" + previous.query if previous.query else "")
+        if not target.startswith("/") or target.startswith("//"):
+            target = url_for("builder.library")
+    return redirect(target)
 
 
 @bp.post("/api/decks/<deck_id>/share")
