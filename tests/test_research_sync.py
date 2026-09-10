@@ -1,6 +1,7 @@
 """Production corpus refresh preserves app state and exact partner cohorts."""
 
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import pytest
 
@@ -217,9 +218,19 @@ def test_exact_pair_cohorts_migration_colors_favorites_and_build(tmp_path, monke
     with client.session_transaction() as session:
         session["_user_id"] = user
         session["_fresh"] = True
-    assert (
-        client.get(f"/research/compare?left={tymna}&right={silas}").status_code == 200
-    )
+    compare = client.get(f"/research/compare?left={tymna}&right={silas}")
+    assert compare.status_code == 302
+    assert urlparse(compare.headers["Location"]).path.rstrip("/") == "/research"
+    assert "/compare" not in compare.headers["Location"]
+    catalog = client.get("/research/?tab=commanders")
+    assert catalog.status_code == 200
+    assert b"Compare" not in catalog.data
+    assert b">Build<" in catalog.data
+    assert b"Favorite" in catalog.data
+    profile = client.get(f"/research/commander/{tymna}")
+    assert profile.status_code == 200
+    assert b"Compare" not in profile.data
+    assert b">Build<" in profile.data
     response = client.post(f"/research/commander/{tymna}/build", data={"top": "40"})
     assert response.status_code == 302
     deck = DeckDocumentRepo(path).get(user, response.location.rsplit("/", 1)[-1])
@@ -257,3 +268,34 @@ def test_exact_pair_cohorts_migration_colors_favorites_and_build(tmp_path, monke
     apply_snapshot(path, cards, entries[::-1], [])
     assert fav.commander_ids(user) == {tymna}
     assert repo.commander_detail(tymna)["metrics"]["entries"] == 2
+
+
+def test_legacy_compare_redirects_without_calculating_comparisons(
+    tmp_path, monkeypatch
+):
+    from sabermetrics.ui.app import create_app
+
+    path = tmp_path / "compare.db"
+    setup_database(path)
+    user = db.UsersRepo(path).create(email="compare@example.test", status="active")
+    monkeypatch.setenv("SABER_DECK_LAB_REDESIGN", "1")
+
+    def no_research():
+        raise AssertionError("legacy compare must not calculate comparisons")
+
+    def no_comparison(*_args, **_kwargs):
+        raise AssertionError("legacy compare must not calculate comparisons")
+
+    monkeypatch.setattr("sabermetrics.ui.research_routes._research", no_research)
+    monkeypatch.setattr(ResearchRepo, "commander_choices", no_comparison)
+    monkeypatch.setattr(ResearchRepo, "commander_detail", no_comparison)
+    app = create_app(path)
+    app.config.update(TESTING=True, WTF_CSRF_ENABLED=False, SESSION_COOKIE_SECURE=False)
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user
+        session["_fresh"] = True
+    response = client.get("/research/compare?left=a&right=b&window=90")
+    assert response.status_code == 302
+    assert urlparse(response.headers["Location"]).path.rstrip("/") == "/research"
+    assert "/compare" not in response.headers["Location"]

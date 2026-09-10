@@ -119,10 +119,9 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     all_time_meta = client.get("/research?tab=metagame&window=0").data
     assert "Field view · all time".encode() in all_time_meta
     assert b'<option value="0" selected>All time</option>' in all_time_meta
-    assert (
-        b"Compare commanders"
-        in client.get("/research/compare?left=kinnan&right=kinnan").data
-    )
+    retired = client.get("/research/compare?left=kinnan&right=kinnan")
+    assert retired.status_code == 302
+    assert retired.headers["Location"] == "/research/"
     assert client.get("/admin/").status_code == 200
     assert client.get("/admin/users").status_code == 200
 

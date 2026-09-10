@@ -343,32 +343,7 @@ def card(card_id: str):
 
 @bp.get("/compare")
 def compare():
-    window_days = _window_arg()
-    choices = _research().commander_choices()
-    left_id = (request.args.get("left") or "").strip()
-    right_id = (request.args.get("right") or "").strip()
-    left = (
-        _research().commander_detail(left_id, window_days=window_days)
-        if left_id
-        else None
-    )
-    right = (
-        _research().commander_detail(right_id, window_days=window_days)
-        if right_id
-        else None
-    )
-    for selected in (left, right):
-        if selected and all(item["id"] != selected["id"] for item in choices):
-            choices.append({"id": selected["id"], "name": selected["name"]})
-    return render_template(
-        "deck_lab/compare.html",
-        choices=choices,
-        left=left,
-        right=right,
-        left_id=left_id,
-        right_id=right_id,
-        window_days=window_days,
-    )
+    return redirect(url_for("research.index"))
 
 
 @bp.post("/commander/<card_id>/build")

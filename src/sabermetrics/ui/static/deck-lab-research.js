@@ -55,16 +55,68 @@
   }
 
   function bindBoundRanges(root) {
-    (root || document).querySelectorAll(".dl-bound-inputs input[type='range']").forEach(function (input) {
-      function sync() {
-        input.setAttribute("aria-valuetext", boundLabel(input.value));
-        var output = input.parentElement.querySelector("[data-bound-value]");
-        if (output) output.textContent = boundLabel(input.value);
+    (root || document).querySelectorAll(".dl-bound-range").forEach(function (range) {
+      if (range.getAttribute("data-bound-ready")) return;
+      var minInput = range.querySelector("[data-bound-min]");
+      var maxInput = range.querySelector("[data-bound-max]");
+      var selection = range.querySelector("[data-bound-selection]");
+      var clearBtn = range.querySelector("[data-bound-clear]");
+      if (!minInput || !maxInput) return;
+      range.setAttribute("data-bound-ready", "1");
+
+      function apply(source) {
+        var lo = Number(minInput.value);
+        var hi = Number(maxInput.value);
+        if (lo > hi) {
+          if (source === minInput) {
+            minInput.value = String(hi);
+            lo = hi;
+          } else {
+            maxInput.value = String(lo);
+            hi = lo;
+          }
+        }
+        minInput.setAttribute("aria-valuetext", boundLabel(lo));
+        maxInput.setAttribute("aria-valuetext", boundLabel(hi));
+        if (selection) selection.textContent = boundLabel(lo) + "–" + boundLabel(hi);
+        range.style.setProperty("--bound-lo", String(lo));
+        range.style.setProperty("--bound-hi", String(hi));
       }
-      input.addEventListener("input", sync);
-      sync();
+
+      minInput.addEventListener("input", function () { apply(minInput); });
+      maxInput.addEventListener("input", function () { apply(maxInput); });
+      if (clearBtn) {
+        clearBtn.addEventListener("click", function () {
+          minInput.value = "0";
+          maxInput.value = "10";
+          apply(null);
+        });
+      }
+      apply(null);
     });
   }
+
+  function boundDraggingTarget(node) {
+    if (!node || typeof node.closest !== "function") return null;
+    return node.closest(".dl-bound-range input[type='range']");
+  }
+
+  document.addEventListener("pointerdown", function (event) {
+    var input = boundDraggingTarget(event.target);
+    if (!input) return;
+    var range = input.closest(".dl-bound-range");
+    if (!range) return;
+    range.setAttribute("data-bound-dragging", input.hasAttribute("data-bound-max") ? "max" : "min");
+  }, true);
+
+  function clearBoundDragging() {
+    document.querySelectorAll(".dl-bound-range[data-bound-dragging]").forEach(function (range) {
+      range.removeAttribute("data-bound-dragging");
+    });
+  }
+
+  document.addEventListener("pointerup", clearBoundDragging);
+  document.addEventListener("pointercancel", clearBoundDragging);
 
   function syncSearch(url) {
     var form = searchForm();
