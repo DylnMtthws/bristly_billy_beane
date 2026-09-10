@@ -109,6 +109,25 @@ def index():
     }
     if tab == "cards":
         data = _research().cards(query, page=page, **card_filters)
+    elif (
+        not query
+        and page == 1
+        and window_days == 90
+        and not request.args.getlist("color")
+        and request.args.get("favorites") != "1"
+        and request.args.get("sort", "meta") == "meta"
+        and all(
+            commander_filters[key] is None
+            for key in ("mana_min", "mana_max", "meta_min", "meta_max")
+        )
+    ):
+        # The default Commanders view loads the same cohort Meta will need.
+        # Reuse its data rather than repeat the expensive query on selection.
+        data = current_app.extensions["research_landing_cache"].get(
+            Path(current_app.config["DB_PATH"]), _research().commanders
+        )
+        for row in data["results"]:
+            row["favorited"] = row["id"] in fav_ids
     else:
         data = _research().commanders(
             query=query,

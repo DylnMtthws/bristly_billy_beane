@@ -488,3 +488,5 @@ a.dl-card-name:hover{color:var(--brand-text)}
 .dl-commander-art { display: flex; gap: 10px; max-width: 100%; align-items: start; }
 .dl-commander-art .dl-card-art { min-width: 0; width: 120px; height: auto; }
 .dl-commander-results button { display: block; width: 100%; padding: 10px; text-align: left; }
+
+.dl-navigation-status:not([hidden]) { position:fixed; z-index:1000; bottom:24px; left:50%; transform:translateX(-50%); max-width:calc(100vw - 32px); padding:12px 18px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--body); box-shadow:0 4px 24px #0006; font-size:14px; }
