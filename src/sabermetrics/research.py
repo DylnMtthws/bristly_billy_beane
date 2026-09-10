@@ -22,6 +22,19 @@ def _colors(value: Any) -> list[str]:
         return []
 
 
+# Same membership/representative-printing rules as research_commanders. Materialize
+# identity sets once instead of scanning tournament identities for every candidate.
+# Keep this equivalent to research_identities.ensure_schema's public view.
+_COMMANDER_CATALOG = """fast_commanders AS MATERIALIZED (
+ SELECT c.id,c.oracle_id,c.name,c.type_line,c.mana_cost,c.cmc,c.oracle_text,c.color_identity,c.image_uri,json_array(c.id) AS card_ids
+ FROM commander_candidates c
+ WHERE c.id NOT IN (SELECT m.value FROM research_commander_pairs p,json_each(p.card_ids) m WHERE m.value IS NOT NULL)
+ OR c.id IN (SELECT COALESCE(commander_identity_id,commander_id) FROM tournament_results)
+ UNION ALL SELECT p.id,NULL,p.name,'Commander pair',NULL,p.cmc,NULL,p.color_identity,NULL,p.card_ids
+ FROM research_commander_pairs p WHERE p.id IN (SELECT commander_identity_id FROM tournament_results)
+),"""
+
+
 class ResearchRepo:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
@@ -152,11 +165,11 @@ class ResearchRepo:
             having_sql = f" HAVING {' AND '.join(having)}" if having else ""
             count = int(
                 conn.execute(
-                    f"""WITH cohort_results AS MATERIALIZED (SELECT * FROM research_results)
+                    f"""WITH {_COMMANDER_CATALOG} cohort_results AS MATERIALIZED (SELECT * FROM research_results)
                     SELECT COUNT(*) FROM (
                         SELECT cc.id,
                           COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) * 1.0 / NULLIF(?,0) AS meta_share
-                        FROM research_commanders cc
+                        FROM fast_commanders cc
                         LEFT JOIN cohort_results tr ON tr.commander_id=cc.id
                         WHERE {' AND '.join(where)} GROUP BY cc.id{having_sql}
                     )""",
@@ -164,7 +177,7 @@ class ResearchRepo:
                 ).fetchone()[0]
             )
             rows = conn.execute(
-                f"""WITH cohort_results AS MATERIALIZED (SELECT * FROM research_results)
+                f"""WITH {_COMMANDER_CATALOG} cohort_results AS MATERIALIZED (SELECT * FROM research_results)
                     SELECT cc.id, cc.oracle_id, cc.name, cc.type_line,
                     cc.color_identity, cc.mana_cost, cc.cmc, cc.image_uri, cc.card_ids,
                     COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) AS entries,
@@ -176,7 +189,7 @@ class ResearchRepo:
                         NULLIF(COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? AND tr.standing IS NOT NULL THEN 1 END),0) AS top16_rate,
                     (COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) * 1.0 / NULLIF(?,0)) -
                     (COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) * 1.0 / NULLIF(?,0)) AS trend
-                    FROM research_commanders cc
+                    FROM fast_commanders cc
                     LEFT JOIN cohort_results tr ON tr.commander_id=cc.id
                     WHERE {' AND '.join(where)} GROUP BY cc.id{having_sql}
                     ORDER BY {order} LIMIT ? OFFSET ?""",

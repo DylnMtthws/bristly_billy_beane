@@ -50,6 +50,10 @@ def create_app(db_path: Path | None = None) -> Flask:
     )
     app.jinja_env.filters["short_date"] = _short_date
 
+    from sabermetrics.ui.navigation import configure_navigation
+
+    configure_navigation(app, os.environ.get("SABER_BUILD_SHA", ""))
+
     db_path = resolve_db_path(db_path)
     app.config["DB_PATH"] = db_path
     app.config["DECK_LAB_ASSET_DIR"] = Path(
@@ -230,6 +234,10 @@ def create_app(db_path: Path | None = None) -> Flask:
             "version": version("sabermetrics"),
             "build_sha": os.environ.get("SABER_BUILD_SHA", "unknown"),
         }
+
+    from sabermetrics.research_cache import configure_research_cache
+
+    configure_research_cache(app)
 
     @app.after_request
     def _security_headers(response):

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+from urllib.parse import urlencode
 
 from flask import (
     Blueprint,
+    Response,
     abort,
     current_app,
+    make_response,
     redirect,
     render_template,
     request,
@@ -19,6 +22,11 @@ from flask_login import current_user
 from sabermetrics import db
 from sabermetrics.deck_documents import DeckDocumentRepo, InvalidCommand
 from sabermetrics.research import ResearchRepo
+from sabermetrics.research_cache import (
+    DEFAULT_WINDOW_DAYS,
+    ResearchDefaultCache,
+    apply_favorites,
+)
 
 bp = Blueprint("research", __name__, url_prefix="/research")
 
@@ -30,12 +38,22 @@ def _source_context():
     return {"research_source": source_state(Path(current_app.config["DB_PATH"]))}
 
 
+@bp.after_request
+def _private_research(response: Response) -> Response:
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
 def _research() -> ResearchRepo:
     return ResearchRepo(Path(current_app.config["DB_PATH"]))
 
 
 def _documents() -> DeckDocumentRepo:
     return DeckDocumentRepo(Path(current_app.config["DB_PATH"]))
+
+
+def _cache() -> ResearchDefaultCache:
+    return cast(ResearchDefaultCache, current_app.extensions["research_default_cache"])
 
 
 @bp.before_request
@@ -45,6 +63,8 @@ def _gate():
     if not current_user.is_authenticated:
         from sabermetrics.ui.auth import login_manager
 
+        if request.headers.get("X-Research-Fragment") == "1":
+            return {"error": "authentication required"}, 401
         return login_manager.unauthorized()
     return None
 
@@ -74,9 +94,57 @@ def _window_arg(default: int = 90) -> int:
         return default
 
 
-@bp.get("")
-@bp.get("/")
-def index():
+def _wants_fragment() -> bool:
+    return request.headers.get("X-Research-Fragment") == "1"
+
+
+def _force_full_results() -> bool:
+    return request.args.get("results") == "full"
+
+
+def _pending_data(window_days: int, page: int) -> dict[str, Any]:
+    return {
+        "results": [],
+        "total": 0,
+        "recorded_entries": 0,
+        "window_days": window_days,
+        "page": page,
+        "has_next": False,
+    }
+
+
+def _is_default_cohort(
+    tab: str,
+    query: str,
+    page: int,
+    window_days: int,
+    commander_filters: dict[str, Any],
+) -> bool:
+    return (
+        tab in {"commanders", "metagame"}
+        and not query
+        and page == 1
+        and window_days == DEFAULT_WINDOW_DAYS
+        and not request.args.getlist("color")
+        and request.args.get("favorites") != "1"
+        and request.args.get("sort", "meta") == "meta"
+        and request.args.get("color_mode", "all") == "all"
+        and all(
+            commander_filters[key] is None
+            for key in ("mana_min", "mana_max", "meta_min", "meta_max")
+        )
+    )
+
+
+def _full_results_href() -> str:
+    args = request.args.to_dict(flat=False)
+    args["results"] = ["full"]
+    query = urlencode(args, doseq=True)
+    path = url_for("research.index")
+    return f"{path}?{query}" if query else f"{path}?results=full"
+
+
+def _load_index_state() -> dict[str, Any]:
     tab = request.args.get("tab", "commanders")
     if tab not in {"cards", "commanders", "metagame"}:
         tab = "commanders"
@@ -107,8 +175,36 @@ def index():
         "meta_min": meta_min_percent / 100 if meta_min_percent is not None else None,
         "meta_max": meta_max_percent / 100 if meta_max_percent is not None else None,
     }
+    freshness = "fresh"
+    computed_at = ""
+    status_text = ""
+    data: dict[str, Any]
     if tab == "cards":
         data = _research().cards(query, page=page, **card_filters)
+    elif _is_default_cohort(tab, query, page, window_days, commander_filters):
+        cache = _cache()
+        view = cache.try_serve()
+        if view is None and _force_full_results() and not _wants_fragment():
+            try:
+                view = cache.compute_blocking()
+            except RuntimeError:
+                view = None
+        if view is None:
+            cache.request_refresh()
+            data = _pending_data(window_days, page)
+            freshness = "pending"
+            status_text = (
+                "Results could not be updated."
+                if _force_full_results()
+                else "Preparing commander results."
+            )
+        else:
+            data = apply_favorites(view.data, fav_ids)
+            freshness = view.freshness
+            computed_at = view.computed_at
+            if freshness == "stale":
+                status_text = "Updating results. Previous field is still shown."
+                cache.request_refresh()
     else:
         data = _research().commanders(
             query=query,
@@ -121,20 +217,43 @@ def index():
             page=page,
             **commander_filters,
         )
-    return render_template(
-        "deck_lab/research.html",
-        tab=tab,
-        data=data,
-        query=query,
-        window_days=window_days,
-        colors=[c for c in request.args.getlist("color") if c in list("WUBRG")],
-        favorite_only=request.args.get("favorites") == "1",
-        plays_card="",
-        sort=request.args.get("sort", "meta"),
-        card_filters=card_filters,
-        raw_syntax=(request.args.get("syntax") or "").strip()[:160],
-        commander_filters=commander_filters,
-    )
+    return {
+        "tab": tab,
+        "data": data,
+        "query": query,
+        "window_days": window_days,
+        "colors": [c for c in request.args.getlist("color") if c in list("WUBRG")],
+        "favorite_only": request.args.get("favorites") == "1",
+        "plays_card": "",
+        "sort": request.args.get("sort", "meta"),
+        "card_filters": card_filters,
+        "raw_syntax": (request.args.get("syntax") or "").strip()[:160],
+        "commander_filters": commander_filters,
+        "freshness": freshness,
+        "computed_at": computed_at,
+        "status_text": status_text,
+        "full_results_href": _full_results_href(),
+    }
+
+
+def _render_index(state: dict[str, Any]) -> Response:
+    if _wants_fragment():
+        status = 202 if state["freshness"] == "pending" else 200
+        response = make_response(
+            render_template("deck_lab/research_fragment.html", **state),
+            status,
+        )
+    else:
+        response = make_response(render_template("deck_lab/research.html", **state))
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Research-Freshness"] = state["freshness"]
+    return response
+
+
+@bp.get("")
+@bp.get("/")
+def index():
+    return _render_index(_load_index_state())
 
 
 @bp.get("/commander/<card_id>")

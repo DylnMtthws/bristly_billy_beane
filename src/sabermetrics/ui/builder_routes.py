@@ -71,37 +71,9 @@ def library():
         sort=sort,
     )
     library_stats = repo.library_stats(current_user.id)
-    generated = db.DecksRepo(current_app.config["DB_PATH"]).list_for_owner(
-        current_user.id, limit=50
-    )
-    candidates = db.CedhCandidatesRepo(current_app.config["DB_PATH"]).list_for_owner(
-        current_user.id, limit=50
-    )
-    with db.connect(current_app.config["DB_PATH"]) as conn:
-        jobs = [
-            dict(row)
-            for row in conn.execute(
-                "SELECT id,status,created_at FROM build_jobs "
-                "WHERE user_id=? AND status IN ('queued','running','simulating','explaining','failed') "
-                "ORDER BY created_at DESC LIMIT 10",
-                (current_user.id,),
-            ).fetchall()
-        ]
-    converted = {
-        (str(item.get("source_kind")), str(item.get("source_id")))
-        for item in documents
-        if item.get("source_kind") and item.get("source_id")
-    }
-    generated = [d for d in generated if ("generated", str(d["id"])) not in converted]
-    candidates = [
-        c for c in candidates if ("candidate", str(c["candidate_id"])) not in converted
-    ]
     return render_template(
         "deck_lab/library.html",
         documents=documents,
-        generated=generated,
-        candidates=candidates,
-        jobs=jobs,
         query=query,
         active_filter=active_filter,
         sort=sort,
