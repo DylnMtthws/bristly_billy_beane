@@ -85,6 +85,8 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     response = client.get("/research?q=Kinnan")
     assert response.status_code == 200
     assert b"Kinnan Test" in response.data
+    assert b"Tournament evidence:" not in response.data
+    assert b"Plays this card" not in response.data
     assert b"data-research-sort-menu" in response.data
     assert b'id="research-sort"' not in response.data
     card_results = client.get("/research?tab=cards").data
@@ -171,6 +173,8 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     assert b"99 + 1" not in builder
     assert b"11 + 1" not in builder
     assert b"data-tags-open" in builder
+    assert b'aria-label="Deck options"' in builder
+    assert b"Choose commanders / partner" in builder
     assert b"Find or create a tag" in builder
     tag_results = client.get("/api/deck-tags?q=tur").get_json()["results"]
     assert tag_results[0]["name"] == "Turbo"
@@ -197,6 +201,8 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     assert b"Copy share link" in library
     assert b"Export decklist" in library
     assert b"Delete deck" in library
+    assert b"Strategy pack builds" not in library
+    assert b"Ready to edit" not in library
     assert b"mana-U" in library
     assert b"mana-G" in library
     assert b"Turbo" in library
