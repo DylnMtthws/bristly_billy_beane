@@ -1,0 +1,2 @@
+# 2. Commander color modes
+Commanders search must show Include, Exclude, Exactly, matching Cards. Keep query parameter color and color_mode, map legacy all/exact links correctly. Include means all selected colors present; Exclude means none present; Exactly means no additional colors. Use existing card_discovery.apply_colors through commander_catalog. Do not relabel Meta modes without implementing corresponding semantics. Validate exclusions and exact matches on multicolor commanders and preserve pagination/Back.

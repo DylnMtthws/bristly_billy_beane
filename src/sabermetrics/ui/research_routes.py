@@ -11,6 +11,7 @@ from flask import (
     Response,
     abort,
     current_app,
+    jsonify,
     make_response,
     redirect,
     render_template,
@@ -148,6 +149,22 @@ def _is_default_cohort(
     )
 
 
+def _deck_filter_args() -> dict[str, Any]:
+    colors: list[str] = []
+    for color in request.args.getlist("deck_color"):
+        if color in list("WUBRGC") and color not in colors:
+            colors.append(color)
+    color_mode = request.args.get("deck_color_mode", "include")
+    if color_mode not in {"include", "exclude", "exactly"}:
+        color_mode = "include"
+    return {
+        "colors": colors,
+        "color_mode": color_mode,
+        "commander": (request.args.get("commander") or "").strip()[:120],
+        "partner": (request.args.get("partner") or "").strip()[:120],
+    }
+
+
 def _full_results_href() -> str:
     args = request.args.to_dict(flat=False)
     args["results"] = ["full"]
@@ -213,11 +230,25 @@ def _load_index_state() -> dict[str, Any]:
     freshness = "fresh"
     computed_at = ""
     status_text = ""
+    deck_filters = _deck_filter_args()
     data: dict[str, Any]
     if tab == "cards":
         data = _research().cards(query, page=page, **card_filters)
     elif tab == "decks":
-        data = _documents().list_public(query=query, page=page)
+        requested_partner = deck_filters["partner"]
+        deck_filters.update(
+            _documents().public_deck_commander_state(
+                deck_filters["commander"], deck_filters["partner"]
+            )
+        )
+        data = _documents().list_public(
+            query=query,
+            page=page,
+            colors=deck_filters["colors"],
+            color_mode=deck_filters["color_mode"],
+            commander=deck_filters["commander"],
+            partner=requested_partner,
+        )
     elif tab == "commanders":
         catalog_filters = {
             "query": query,
@@ -277,8 +308,8 @@ def _load_index_state() -> dict[str, Any]:
         "plays_card": "",
         "sort": request.args.get("sort", "meta" if tab == "metagame" else "name"),
         "card_filters": card_filters,
-        "raw_syntax": (request.args.get("syntax") or "").strip()[:160],
         "commander_filters": commander_filters,
+        "deck_filters": deck_filters,
         "freshness": freshness,
         "computed_at": computed_at,
         "status_text": status_text,
@@ -322,6 +353,16 @@ def commander(card_id: str):
     return render_template(
         "deck_lab/commander.html", commander=commander_data, favorite=favorite
     )
+
+
+@bp.get("/deck-commanders")
+def deck_commanders():
+    query = (request.args.get("q") or "").strip()[:120]
+    partner_of = (
+        request.args.get("partner_of") or request.args.get("primary") or ""
+    ).strip()
+    results = _documents().suggest_deck_commanders(query=query, partner_of=partner_of)
+    return jsonify({"results": results})
 
 
 @bp.get("/deck/<deck_id>")

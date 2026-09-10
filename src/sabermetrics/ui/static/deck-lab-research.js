@@ -210,6 +210,7 @@
       setStatus("Results could not be updated. Showing previous results.", true);
       markPrevious(false); return false;
     }
+    cancelDeckSuggest();
     liveNode.replaceChildren(fragment);
     bindImages(liveNode);
     bindBoundRanges(liveNode);
@@ -403,6 +404,251 @@
 
   bindImages(page);
   bindBoundRanges(page);
+
+  var DECK_SUGGEST_MS = 250;
+  var deckSuggestTimer = 0;
+  var deckSuggestSeq = 0;
+  var deckSuggestController = null;
+
+  function cancelDeckSuggest() {
+    window.clearTimeout(deckSuggestTimer);
+    deckSuggestSeq += 1;
+    if (deckSuggestController) deckSuggestController.abort();
+    deckSuggestController = null;
+  }
+
+  function deckSuggestInput(node) {
+    if (!node || typeof node.closest !== "function") return null;
+    return node.closest("[data-deck-commander]");
+  }
+
+  function deckSuggestList(input) {
+    if (!input) return null;
+    var wrap = input.closest(".dl-deck-suggest");
+    return wrap ? wrap.querySelector("[role='listbox']") : null;
+  }
+
+  function closeDeckSuggest(input) {
+    var list = deckSuggestList(input);
+    if (!list) return;
+    list.hidden = true;
+    list.innerHTML = "";
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+  }
+
+  function closeAllDeckSuggest() {
+    document.querySelectorAll("[data-deck-commander]").forEach(closeDeckSuggest);
+  }
+
+  function setDeckPartnerVisible(show, primaryId) {
+    var wrap = document.querySelector("[data-deck-partner-wrap]");
+    var primary = document.querySelector("[data-deck-commander='primary']");
+    if (primary) {
+      if (primaryId) primary.setAttribute("data-commander-id", primaryId);
+      else primary.removeAttribute("data-commander-id");
+    }
+    if (!wrap) return;
+    var partner = wrap.querySelector("[data-deck-commander='partner']");
+    wrap.hidden = !show;
+    if (!partner) return;
+    partner.disabled = !show;
+    if (!show) {
+      partner.value = "";
+      partner.removeAttribute("data-commander-id");
+      closeDeckSuggest(partner);
+    }
+  }
+
+  function deckSuggestItems(list) {
+    return list ? Array.prototype.slice.call(list.querySelectorAll("[role='option']")) : [];
+  }
+
+  function activateDeckSuggest(list, index) {
+    var items = deckSuggestItems(list);
+    if (!items.length) return;
+    var next = (index + items.length) % items.length;
+    items.forEach(function (item, itemIndex) {
+      item.setAttribute("aria-selected", itemIndex === next ? "true" : "false");
+    });
+    items[next].scrollIntoView({ block: "nearest" });
+    var input = list.parentElement && list.parentElement.querySelector("[data-deck-commander]");
+    if (input) input.setAttribute("aria-activedescendant", items[next].id);
+  }
+
+  function selectDeckSuggest(input, item) {
+    if (!input || !item) return;
+    input.value = item.getAttribute("data-name") || item.textContent || "";
+    var id = item.getAttribute("data-id") || "";
+    if (id) input.setAttribute("data-commander-id", id);
+    else input.removeAttribute("data-commander-id");
+    if (input.getAttribute("data-deck-commander") === "primary") {
+      setDeckPartnerVisible(false);
+      setDeckPartnerVisible(item.getAttribute("data-can-pair") === "1", id);
+    }
+    closeDeckSuggest(input);
+  }
+
+  function renderDeckSuggest(input, results) {
+    var list = deckSuggestList(input);
+    if (!list) return;
+    list.innerHTML = "";
+    if (!results.length) {
+      closeDeckSuggest(input);
+      return;
+    }
+    results.forEach(function (card, index) {
+      var option = document.createElement("li");
+      option.id = list.id + "-" + index;
+      option.setAttribute("role", "option");
+      option.setAttribute("aria-selected", "false");
+      option.setAttribute("data-id", card.id || "");
+      option.setAttribute("data-name", card.name || "");
+      option.setAttribute("data-can-pair", card.can_pair ? "1" : "0");
+      var button = document.createElement("button");
+      button.type = "button";
+      button.textContent = card.name || "";
+      option.appendChild(button);
+      list.appendChild(option);
+    });
+    list.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    activateDeckSuggest(list, 0);
+  }
+
+  function syncDeckPrimaryResolution(input, results) {
+    if (input.getAttribute("data-deck-commander") !== "primary") return;
+    var value = input.value.trim().toLowerCase();
+    var exact = (results || []).filter(function (card) {
+      return String(card.name || "").toLowerCase() === value;
+    });
+    if (exact.length === 1) {
+      setDeckPartnerVisible(!!exact[0].can_pair, exact[0].id);
+    } else {
+      setDeckPartnerVisible(false);
+    }
+  }
+
+  function requestDeckSuggest(input) {
+    var query = input.value.trim();
+    var role = input.getAttribute("data-deck-commander");
+    var url = new URL("/research/deck-commanders", location.href);
+    if (role === "partner") {
+      var primary = document.querySelector("[data-deck-commander='primary']");
+      var partnerOf = primary && primary.getAttribute("data-commander-id");
+      if (!partnerOf) {
+        closeDeckSuggest(input);
+        return;
+      }
+      url.searchParams.set("partner_of", partnerOf);
+      url.searchParams.set("q", query);
+    } else if (!query) {
+      closeDeckSuggest(input);
+      setDeckPartnerVisible(false);
+      return;
+    } else {
+      url.searchParams.set("q", query);
+    }
+    var seq = ++deckSuggestSeq;
+    if (deckSuggestController) deckSuggestController.abort();
+    deckSuggestController = typeof AbortController === "function" ? new AbortController() : null;
+    var init = {
+      credentials: "same-origin",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json"
+      },
+      cache: "no-store"
+    };
+    if (deckSuggestController) init.signal = deckSuggestController.signal;
+    fetch(url.toString(), init).then(function (response) {
+      if (seq !== deckSuggestSeq) return null;
+      if (response.status === 401 || (response.redirected && new URL(response.url, location.href).pathname === "/login")) {
+        window.location.assign(loginNext(new URL(location.href)));
+        return null;
+      }
+      if (!response.ok) throw new Error();
+      return response.json();
+    }).then(function (payload) {
+      if (seq !== deckSuggestSeq || !payload || !input.isConnected || input.value.trim() !== query) return;
+      if (role === "partner" && (!primary || primary.getAttribute("data-commander-id") !== partnerOf)) return;
+      var results = Array.isArray(payload.results) ? payload.results.slice(0, 20) : [];
+      renderDeckSuggest(input, results);
+      syncDeckPrimaryResolution(input, results);
+    }).catch(function (error) {
+      if (seq !== deckSuggestSeq) return;
+      if (error && error.name === "AbortError") return;
+      closeDeckSuggest(input);
+    });
+  }
+
+  page.addEventListener("input", function (event) {
+    var input = deckSuggestInput(event.target);
+    if (!input || !page.contains(input)) return;
+    cancelDeckSuggest();
+    closeDeckSuggest(input);
+    input.removeAttribute("data-commander-id");
+    if (input.getAttribute("data-deck-commander") === "primary") setDeckPartnerVisible(false);
+    deckSuggestTimer = window.setTimeout(function () { requestDeckSuggest(input); }, DECK_SUGGEST_MS);
+  });
+
+  page.addEventListener("keydown", function (event) {
+    var input = deckSuggestInput(event.target);
+    if (!input || !page.contains(input)) return;
+    var list = deckSuggestList(input);
+    var items = deckSuggestItems(list);
+    var open = list && !list.hidden && items.length;
+    if (event.key === "Escape") {
+      if (open) {
+        event.preventDefault();
+        closeDeckSuggest(input);
+      }
+      return;
+    }
+    if (!open) return;
+    var selected = items.findIndex(function (item) {
+      return item.getAttribute("aria-selected") === "true";
+    });
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      activateDeckSuggest(list, selected + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      activateDeckSuggest(list, selected - 1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      activateDeckSuggest(list, 0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      activateDeckSuggest(list, items.length - 1);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      selectDeckSuggest(input, items[Math.max(0, selected)]);
+    }
+  });
+
+  page.addEventListener("mousedown", function (event) {
+    var option = event.target && event.target.closest && event.target.closest(".dl-deck-suggest-list [role='option']");
+    if (!option) return;
+    var input = option.closest(".dl-deck-suggest").querySelector("[data-deck-commander]");
+    event.preventDefault();
+    selectDeckSuggest(input, option);
+  });
+
+  page.addEventListener("click", function (event) {
+    var option = event.target && event.target.closest && event.target.closest(".dl-deck-suggest-list [role='option']");
+    if (!option) return;
+    var wrap = option.closest(".dl-deck-suggest");
+    if (!wrap) return;
+    event.preventDefault();
+    selectDeckSuggest(wrap.querySelector("[data-deck-commander]"), option);
+  });
+
+  document.addEventListener("click", function (event) {
+    if (event.target && event.target.closest && event.target.closest(".dl-deck-suggest")) return;
+    closeAllDeckSuggest();
+  });
+
   var initial = results();
   if (initial && initial.getAttribute("data-research-freshness") === "pending") {
     setStatus("Preparing commander results.");

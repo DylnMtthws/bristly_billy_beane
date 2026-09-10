@@ -1,0 +1,2 @@
+# 1. Commander catalog heart action
+Replace visible Favorite text in Commanders search with the existing heart icon-button style. Keep Build and heart on one row, with a flexible Build button and a fixed >=44px heart hit area. Keep an accessible 'Favorite <name>' label, aria-pressed and selected state, CSRF and exactly one request per click. Do not change the commander detail action unless necessary. No Compare restoration.

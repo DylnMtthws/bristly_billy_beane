@@ -22,6 +22,31 @@ def _abilities(card: dict[str, Any]) -> set[str]:
     }
 
 
+def can_participate_in_pair(card: dict[str, Any]) -> bool:
+    """True when this card can take part in a recognized legal pair.
+
+    Uses the same ability-line and type checks as ``compatible_pair``; it does
+    not substring-match reminder text that merely mentions partner.
+    """
+    abilities = _abilities(card)
+    types = str(card.get("type_line") or "").casefold()
+    if "partner" in abilities:
+        return True
+    if any(line.startswith(("partner—", "partner with ")) for line in abilities):
+        return True
+    if "friends forever" in abilities:
+        return True
+    if "choose a background" in abilities or "doctor's companion" in abilities:
+        return True
+    if all(token in types for token in ("legendary", "enchantment", "background")):
+        return True
+    if "legendary" in types and "creature" in types:
+        subtypes = types.split("—", 1)[-1].strip()
+        if subtypes == "time lord doctor":
+            return True
+    return False
+
+
 def compatible_pair(first: dict[str, Any], second: dict[str, Any]) -> bool:
     if (first.get("oracle_id") or first.get("name")) == (
         second.get("oracle_id") or second.get("name")
