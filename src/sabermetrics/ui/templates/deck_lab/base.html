@@ -14,7 +14,7 @@
     {% block head %}{% endblock %}
 </head>
 <body class="dl-body {% block body_class %}{% endblock %}">
-<div class="dl-navigation-status" data-navigation-status role="status" hidden></div>
+<div class="dl-navigation-status" data-navigation-status role="status" aria-live="polite" hidden></div>
 {% block shell %}
 <header class="dl-nav" data-app-shell>
     <a class="dl-wordmark" href="{{ url_for('main.index') }}" aria-label="Deck Lab home">

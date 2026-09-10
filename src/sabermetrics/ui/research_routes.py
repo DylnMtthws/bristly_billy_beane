@@ -116,15 +116,18 @@ def index():
         and not request.args.getlist("color")
         and request.args.get("favorites") != "1"
         and request.args.get("sort", "meta") == "meta"
+        and request.args.get("color_mode", "all") == "all"
         and all(
             commander_filters[key] is None
             for key in ("mana_min", "mana_max", "meta_min", "meta_max")
         )
     ):
-        # The default Commanders view loads the same cohort Meta will need.
-        # Reuse its data rather than repeat the expensive query on selection.
+        # Public cohort only — favorites are applied to a copy after reuse.
+        def public_cohort() -> dict[str, Any]:
+            return _research().commanders()
+
         data = current_app.extensions["research_landing_cache"].get(
-            Path(current_app.config["DB_PATH"]), _research().commanders
+            Path(current_app.config["DB_PATH"]), public_cohort
         )
         for row in data["results"]:
             row["favorited"] = row["id"] in fav_ids
