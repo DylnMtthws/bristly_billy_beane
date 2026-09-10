@@ -20,7 +20,15 @@ from flask import (
 from flask_login import current_user
 
 from sabermetrics import db
-from sabermetrics.deck_documents import DeckDocumentRepo, InvalidCommand
+from sabermetrics.card_discovery import (
+    CARD_TYPES,
+    RANGE_MAX,
+    RARITIES,
+    SUPERTYPES,
+    full_range,
+    normalize_bound,
+)
+from sabermetrics.deck_documents import DeckDocumentRepo, DeckNotFound, InvalidCommand
 from sabermetrics.research import ResearchRepo
 from sabermetrics.research_cache import (
     DEFAULT_WINDOW_DAYS,
@@ -113,6 +121,10 @@ def _pending_data(window_days: int, page: int) -> dict[str, Any]:
     }
 
 
+def _bound_arg(name: str) -> int | None:
+    return normalize_bound(request.args.get(name))
+
+
 def _is_default_cohort(
     tab: str,
     query: str,
@@ -121,7 +133,7 @@ def _is_default_cohort(
     commander_filters: dict[str, Any],
 ) -> bool:
     return (
-        tab in {"commanders", "metagame"}
+        tab == "metagame"
         and not query
         and page == 1
         and window_days == DEFAULT_WINDOW_DAYS
@@ -146,7 +158,7 @@ def _full_results_href() -> str:
 
 def _load_index_state() -> dict[str, Any]:
     tab = request.args.get("tab", "commanders")
-    if tab not in {"cards", "commanders", "metagame"}:
+    if tab not in {"cards", "commanders", "metagame", "decks"}:
         tab = "commanders"
     query = (request.args.get("q") or "").strip()[:120]
     page = max(1, _int_arg("page", 1))
@@ -157,21 +169,44 @@ def _load_index_state() -> dict[str, Any]:
     card_colors = [
         color for color in request.args.getlist("card_color") if color in list("WUBRGC")
     ]
+    card_color_mode = request.args.get("color_mode", "include")
+    if card_color_mode not in {"include", "exclude", "exactly", "all", "any", "exact"}:
+        card_color_mode = "include"
     card_filters: dict[str, Any] = {
         "oracle_text": (request.args.get("oracle_text") or "").strip()[:120],
         "type_line": (request.args.get("type_line") or "").strip()[:120],
+        "super_type": (request.args.get("super_type") or "").strip(),
+        "super_op": request.args.get("super_op", "is"),
+        "card_type": (request.args.get("card_type") or "").strip(),
+        "type_op": request.args.get("type_op", "is"),
+        "sub_type": (request.args.get("sub_type") or "").strip()[:40],
+        "sub_op": request.args.get("sub_op", "is"),
         "colors": card_colors,
-        "color_mode": request.args.get("color_mode", "all"),
+        "color_mode": card_color_mode,
         "mana_operator": request.args.get("mana_operator", "lte"),
         "mana_value": _optional_float_arg("mana_value"),
+        "mana_min_bound": _bound_arg("mana_min"),
+        "mana_max_bound": _bound_arg("mana_max"),
+        "power_min_bound": _bound_arg("power_min"),
+        "power_max_bound": _bound_arg("power_max"),
+        "toughness_min_bound": _bound_arg("toughness_min"),
+        "toughness_max_bound": _bound_arg("toughness_max"),
         "rarity": request.args.get("rarity", ""),
     }
     meta_min_percent = _optional_float_arg("meta_min")
     meta_max_percent = _optional_float_arg("meta_max")
+    mana_lo, mana_hi = _bound_arg("mana_min"), _bound_arg("mana_max")
+    if full_range(mana_lo, mana_hi):
+        commander_mana_min = commander_mana_max = None
+    else:
+        commander_mana_min = float(mana_lo) if mana_lo else None
+        commander_mana_max = (
+            None if mana_hi is None or mana_hi >= RANGE_MAX else float(mana_hi)
+        )
     commander_filters: dict[str, Any] = {
         "color_mode": request.args.get("color_mode", "all"),
-        "mana_min": _optional_float_arg("mana_min"),
-        "mana_max": _optional_float_arg("mana_max"),
+        "mana_min": commander_mana_min,
+        "mana_max": commander_mana_max,
         "meta_min": meta_min_percent / 100 if meta_min_percent is not None else None,
         "meta_max": meta_max_percent / 100 if meta_max_percent is not None else None,
     }
@@ -181,6 +216,20 @@ def _load_index_state() -> dict[str, Any]:
     data: dict[str, Any]
     if tab == "cards":
         data = _research().cards(query, page=page, **card_filters)
+    elif tab == "decks":
+        data = _documents().list_public(query=query, page=page)
+    elif tab == "commanders":
+        catalog_filters = {
+            "query": query,
+            "colors": [c for c in request.args.getlist("color") if c in list("WUBRG")],
+            "color_mode": commander_filters["color_mode"],
+            "mana_min_bound": _bound_arg("mana_min"),
+            "mana_max_bound": _bound_arg("mana_max"),
+            "favorites": fav_ids,
+            "favorite_only": request.args.get("favorites") == "1",
+            "page": page,
+        }
+        data = _research().commander_catalog(**catalog_filters)
     elif _is_default_cohort(tab, query, page, window_days, commander_filters):
         cache = _cache()
         view = cache.try_serve()
@@ -215,6 +264,7 @@ def _load_index_state() -> dict[str, Any]:
             window_days=window_days,
             sort=request.args.get("sort", "meta"),
             page=page,
+            observed_only=True,
             **commander_filters,
         )
     return {
@@ -225,7 +275,7 @@ def _load_index_state() -> dict[str, Any]:
         "colors": [c for c in request.args.getlist("color") if c in list("WUBRG")],
         "favorite_only": request.args.get("favorites") == "1",
         "plays_card": "",
-        "sort": request.args.get("sort", "meta"),
+        "sort": request.args.get("sort", "meta" if tab == "metagame" else "name"),
         "card_filters": card_filters,
         "raw_syntax": (request.args.get("syntax") or "").strip()[:160],
         "commander_filters": commander_filters,
@@ -233,6 +283,10 @@ def _load_index_state() -> dict[str, Any]:
         "computed_at": computed_at,
         "status_text": status_text,
         "full_results_href": _full_results_href(),
+        "type_options": CARD_TYPES,
+        "super_options": SUPERTYPES,
+        "rarity_options": RARITIES,
+        "range_max": RANGE_MAX,
     }
 
 
@@ -268,6 +322,15 @@ def commander(card_id: str):
     return render_template(
         "deck_lab/commander.html", commander=commander_data, favorite=favorite
     )
+
+
+@bp.get("/deck/<deck_id>")
+def public_deck(deck_id: str):
+    try:
+        document = _documents().get_public(deck_id)
+    except DeckNotFound:
+        abort(404)
+    return render_template("deck_lab/public_deck.html", deck=document)
 
 
 @bp.get("/card/<card_id>")
@@ -335,16 +398,7 @@ def build_commander(card_id: str):
             }
         )
     elif request.form.get("top") == "40":
-        commands = [
-            {
-                "type": "add_card",
-                "card_id": item["id"],
-                "quantity": 1,
-                "zone_id": unsorted["id"],
-            }
-            for item in commander_data["inclusions"][:40]
-            if item.get("id") != card_id
-        ]
+        commands = []
     if commands:
         _documents().apply_commands(
             current_user.id,

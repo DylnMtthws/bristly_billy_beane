@@ -208,7 +208,10 @@ def test_build_and_profile_avoid_retired_repositories(client, monkeypatch):
     profile = client.get("/profile")
     assert b"navigation@example.test" in profile.data
     assert b'name="display_name"' in profile.data
-    assert b'name="new_password"' in profile.data
+    assert b'name="new_password"' not in profile.data
+    security = client.get("/profile/password")
+    assert security.status_code == 200
+    assert b'name="new_password"' in security.data
     assert b'name="csrf_token"' in profile.data
 
 

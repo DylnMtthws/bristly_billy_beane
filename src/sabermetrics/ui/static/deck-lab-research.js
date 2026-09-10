@@ -50,6 +50,22 @@
     });
   }
 
+  function boundLabel(value) {
+    return String(value) === "10" ? "10+" : String(value);
+  }
+
+  function bindBoundRanges(root) {
+    (root || document).querySelectorAll(".dl-bound-inputs input[type='range']").forEach(function (input) {
+      function sync() {
+        input.setAttribute("aria-valuetext", boundLabel(input.value));
+        var output = input.parentElement.querySelector("[data-bound-value]");
+        if (output) output.textContent = boundLabel(input.value);
+      }
+      input.addEventListener("input", sync);
+      sync();
+    });
+  }
+
   function syncSearch(url) {
     var form = searchForm();
     if (!form) return;
@@ -144,6 +160,7 @@
     }
     liveNode.replaceChildren(fragment);
     bindImages(liveNode);
+    bindBoundRanges(liveNode);
     markPrevious(false);
     syncSearch(result.url);
     var freshness = (liveNode.querySelector("[data-research-freshness]") || {}).getAttribute
@@ -333,6 +350,7 @@
   });
 
   bindImages(page);
+  bindBoundRanges(page);
   var initial = results();
   if (initial && initial.getAttribute("data-research-freshness") === "pending") {
     setStatus("Preparing commander results.");

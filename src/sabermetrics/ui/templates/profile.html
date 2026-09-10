@@ -34,24 +34,11 @@
             <button type="submit" class="rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover">Save</button>
         </form>
 
-        <form method="post" action="{{ url_for('main.change_password') }}" class="space-y-4 rounded-2xl border border-line bg-panel p-5 shadow-panel">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-muted">Change password</h2>
-            {% set pw_cls = "w-full rounded-lg border border-line bg-field px-3 py-2 text-sm focus:border-brand focus:outline-none" %}
-            <label class="block">
-                <span class="mb-1 block text-xs font-medium text-muted">Current password</span>
-                <input type="password" name="current_password" class="{{ pw_cls }}">
-            </label>
-            <label class="block">
-                <span class="mb-1 block text-xs font-medium text-muted">New password</span>
-                <input type="password" name="new_password" class="{{ pw_cls }}">
-            </label>
-            <label class="block">
-                <span class="mb-1 block text-xs font-medium text-muted">Confirm new password</span>
-                <input type="password" name="confirm_password" class="{{ pw_cls }}">
-            </label>
-            <button type="submit" class="rounded-xl border border-line px-5 py-2.5 text-sm font-semibold text-body transition-colors hover:border-brand hover:bg-brand hover:text-white">Update password</button>
-        </form>
+        <div class="rounded-2xl border border-line bg-panel p-5 shadow-panel">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-muted">Account security</h2>
+            <p class="mt-2 text-sm text-muted">Change your password on a dedicated screen. You will sign in again afterward.</p>
+            <a href="{{ url_for('main.change_password') }}" class="mt-4 inline-flex rounded-xl border border-line px-5 py-2.5 text-sm font-semibold text-body hover:border-brand hover:bg-brand hover:text-white">Change password</a>
+        </div>
     </div>
 </div>
 {% endblock %}

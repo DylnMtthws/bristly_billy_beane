@@ -1,0 +1,10 @@
+{% set lo = (low if low is not none else 0) %}
+{% set hi = (high if high is not none else 10) %}
+<div class="dl-bound-range">
+    <div class="dl-bound-inputs">
+        <label><span>{{ legend }} min: <output data-bound-value>{{ '10+' if lo == 10 else lo }}</output></span><input class="dl-field" type="range" name="{{ min_name }}" min="0" max="10" step="1" value="{{ lo }}" aria-valuemin="0" aria-valuemax="10" aria-valuetext="{{ '10+' if lo == 10 else lo }}" aria-label="Minimum {{ legend|lower }}"></label>
+        <label><span>{{ legend }} max: <output data-bound-value>{{ '10+' if hi == 10 else hi }}</output></span><input class="dl-field" type="range" name="{{ max_name }}" min="0" max="10" step="1" value="{{ hi }}" aria-valuemin="0" aria-valuemax="10" aria-valuetext="{{ '10+' if hi == 10 else hi }}" aria-label="Maximum {{ legend|lower }}"></label>
+    </div>
+    <div class="dl-bound-labels" aria-hidden="true">{% for n in range(10) %}<span>{{ n }}</span>{% endfor %}<span>10+</span></div>
+    <p class="dl-filter-hint">Leave the full range to include all values. 10+ means 10 or more.</p>
+</div>

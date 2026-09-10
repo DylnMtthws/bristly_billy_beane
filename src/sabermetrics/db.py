@@ -41,9 +41,22 @@ from sabermetrics.models.card import Card
 _PASSWORD_HASHER = PasswordHasher()
 
 
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 200
+
+
 def hash_password(password: str) -> str:
     """Return an argon2id hash for ``password``."""
     return _PASSWORD_HASHER.hash(password)
+
+
+def password_policy_error(password: str) -> str | None:
+    """Return a user-facing policy error, or None if ``password`` is acceptable."""
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return "New password must be at least 8 characters."
+    if len(password) > PASSWORD_MAX_LENGTH:
+        return "New password is too long."
+    return None
 
 
 def verify_password(password_hash: str | None, password: str) -> bool:
@@ -414,6 +427,35 @@ class UsersRepo:
             )
             conn.commit()
 
+    def change_password_if_current(
+        self,
+        user_id: str,
+        *,
+        expected_hash: str,
+        expected_session_version: int,
+        new_hash: str,
+    ) -> bool:
+        """Atomically replace a password only if hash and session still match.
+
+        Returns True when this request won the update. A concurrent success that
+        already moved the hash or session version leaves this row unchanged.
+        """
+        with connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "UPDATE users SET password_hash = ?, "
+                "session_version = COALESCE(session_version, 0) + 1 "
+                "WHERE id = ? AND password_hash = ? "
+                "AND COALESCE(session_version, 0) = ?",
+                (
+                    new_hash,
+                    user_id,
+                    expected_hash,
+                    expected_session_version,
+                ),
+            )
+            conn.commit()
+        return cursor.rowcount == 1
+
     def update_profile(
         self, user_id: str, display_name: str, avatar_emoji: str | None
     ) -> None:
@@ -575,6 +617,15 @@ class PasswordResetRepo:
             )
             conn.commit()
             return str(row["email"])
+
+    def revoke_all_for_user(self, user_id: str) -> None:
+        """Invalidate outstanding reset tokens for one account."""
+        with connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE password_reset_tokens SET revoked = 1 WHERE user_id = ?",
+                (user_id,),
+            )
+            conn.commit()
 
 
 class InviteRepo:

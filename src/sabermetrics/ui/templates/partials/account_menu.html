@@ -4,6 +4,7 @@
     <div class="dl-account-popover">
         <strong>{{ current_user.display_name }}</strong><span>{{ current_user.email or '' }}</span>
         <a href="{{ url_for('main.profile') }}">Profile</a>
+        {% if config.AUTH_MODE in ['password', 'hybrid'] %}<a href="{{ url_for('main.change_password') }}">Account security</a>{% endif %}
         {% if current_user.is_admin %}<a href="{{ url_for('admin.overview') }}">Admin</a>{% endif %}
         <a href="{{ url_for('auth.logout') }}">Sign out</a>
     </div>

@@ -60,7 +60,12 @@ def test_refresh_partners_repeatability_and_atomic_failure(tmp_path):
         assert data["results"][0]["meta_share"] == 0.5
         detail = ResearchRepo(path).commander_detail(pair_id(["Thrasios", "Tymna"]))
         assert detail["inclusion_denominator"] == 1
-        assert detail["inclusions"][0]["name"] == "Sol Ring"
+        recorded = [
+            card["name"]
+            for group in (detail["representative_list"] or {}).get("groups", [])
+            for card in group["cards"]
+        ]
+        assert recorded == ["Sol Ring"]
         assert db.UsersRepo(path).get(user_id) is not None
 
     previous = source_state(path)
@@ -180,9 +185,18 @@ def test_exact_pair_cohorts_migration_colors_favorites_and_build(tmp_path, monke
     assert a["metrics"]["entries"] == 2
     assert a["metrics"]["top16_rate"] == 0.5
     assert b["metrics"]["top16_rate"] is None
-    assert [c["name"] for c in a["inclusions"]] == ["White spell"]
+    assert [
+        card["name"]
+        for group in (a["representative_list"] or {}).get("groups", [])
+        for card in group["cards"]
+    ] == ["White spell"]
+    assert a["inclusions"] == []
+    assert b["representative_list"] is None
     assert b["inclusions"] == []
-    assert repo.commander_detail("Rograkh") is None
+    solo = repo.commander_detail("Rograkh")
+    assert solo is not None
+    assert solo["metrics"]["entries"] == 0
+    assert solo["representative_list"] is None
     assert [
         r["id"]
         for r in repo.commanders(colors=["W", "B", "R"], color_mode="exact")["results"]
@@ -214,7 +228,12 @@ def test_exact_pair_cohorts_migration_colors_favorites_and_build(tmp_path, monke
         "Tymna",
     }
     assert deck["validation"]["library_target"] == 98
-    assert deck["validation"]["library_count"] == 1
+    assert deck["validation"]["library_count"] == 0  # retired top-40 shortcut
+    single = client.post(
+        f"/research/commander/{tymna}/build", data={"card_id": "white"}
+    )
+    added = DeckDocumentRepo(path).get(user, single.location.rsplit("/", 1)[-1])
+    assert added["validation"]["library_count"] == 1
     assert (
         client.get("/api/commanders/partners?commander_id=Rograkh&q=Tymna").json[
             "results"

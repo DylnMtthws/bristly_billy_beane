@@ -16,6 +16,7 @@
                     <a href="{{ url_for('builder.deck', deck_id=d.id, panel='tags') }}" role="menuitem">Manage tags</a>
                     {% if config.DECK_LAB_RESEARCH_ENABLED %}<a href="{{ url_for('research.index', tab='cards') }}" role="menuitem">Research cards</a>{% if d.commander_identity_id %}<a href="{{ url_for('research.commander', card_id=d.commander_identity_id) }}" role="menuitem">Research commander</a>{% endif %}{% endif %}
                     <button type="button" role="menuitem" data-share-deck data-deck-id="{{ d.id }}">Copy share link</button>
+                    <form method="post" action="{{ url_for('builder.set_visibility', deck_id=d.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="visibility" value="{{ 'private' if d.visibility=='public' else 'public' }}"><button type="submit" role="menuitem">{{ 'Make private' if d.visibility=='public' else 'Make public' }}</button></form>
                     <a href="{{ url_for('builder.export', deck_id=d.id) }}" role="menuitem" download>Export decklist</a>
                     <form class="dl-deck-delete-form" method="post" action="{{ url_for('builder.delete_deck', deck_id=d.id) }}" data-deck-title="{{ d.title }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger" type="submit" role="menuitem">Delete deck</button></form>
                 </div>

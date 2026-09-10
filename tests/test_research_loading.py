@@ -35,6 +35,10 @@ def _database(tmp_path):
             (id,oracle_id,name,cmc,type_line,color_identity,is_legal_commander,is_legal_in_99)
             VALUES('commander','oracle','Loading Commander',2,'Legendary Creature','[]',1,1)"""
         )
+        conn.execute(
+            "INSERT INTO tournament_results(commander_id,tournament_id,tournament_date,standing) "
+            "VALUES('commander','loading-event',date('now'),1)"
+        )
         conn.commit()
     return path, user
 
@@ -66,7 +70,7 @@ def _wait_fragment(client, timeout=5.0):
     last = None
     while time.time() < deadline:
         last = client.get(
-            "/research/",
+            "/research/?tab=metagame",
             headers={
                 "X-Research-Fragment": "1",
                 "X-Requested-With": "XMLHttpRequest",
@@ -95,7 +99,7 @@ def test_initial_html_does_not_call_slow_loader_inline(tmp_path, monkeypatch):
     _app, client = _app_client(path, user, monkeypatch)
     assert started.wait(2)
     start = time.perf_counter()
-    response = client.get("/research/")
+    response = client.get("/research/?tab=metagame")
     elapsed_ms = (time.perf_counter() - start) * 1000
     assert response.status_code == 200
     assert elapsed_ms < 1500
@@ -106,7 +110,7 @@ def test_initial_html_does_not_call_slow_loader_inline(tmp_path, monkeypatch):
     assert b"results=full" in response.data
     assert b"Loading Commander" not in response.data
     fragment = client.get(
-        "/research/",
+        "/research/?tab=metagame",
         headers={
             "X-Research-Fragment": "1",
             "X-Requested-With": "XMLHttpRequest",
@@ -169,7 +173,7 @@ def test_two_users_cannot_inherit_favorites_or_fragment_html(tmp_path, monkeypat
     )
     db.FavoritesRepo(path).toggle_commander(alice, "commander")
     bob_client = _login(app, bob)
-    alice_page = alice_client.get("/research/")
+    alice_page = alice_client.get("/research/?tab=metagame")
     bob_page = bob_client.get("/research/?tab=metagame")
     assert alice_page.status_code == bob_page.status_code == 200
     assert b"loading@example.test" in alice_page.data
@@ -184,7 +188,7 @@ def test_two_users_cannot_inherit_favorites_or_fragment_html(tmp_path, monkeypat
     assert alice_csrf and bob_csrf
     assert alice_csrf.group(1) != bob_csrf.group(1)
     alice_frag = alice_client.get(
-        "/research/",
+        "/research/?tab=metagame",
         headers={"X-Research-Fragment": "1", "X-Requested-With": "XMLHttpRequest"},
     )
     bob_frag = bob_client.get(
@@ -207,7 +211,7 @@ def test_anonymous_fragment_is_auth_not_results(tmp_path, monkeypatch):
     app, _client = _app_client(path, user, monkeypatch)
     anon = app.test_client()
     response = anon.get(
-        "/research/",
+        "/research/?tab=metagame",
         headers={
             "X-Research-Fragment": "1",
             "X-Requested-With": "XMLHttpRequest",
@@ -231,10 +235,10 @@ def test_full_results_computes_when_snapshot_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(ResearchRepo, "commanders", blocked)
     _app, client = _app_client(path, user, monkeypatch)
     assert started.wait(2)
-    pending = client.get("/research/")
+    pending = client.get("/research/?tab=metagame")
     assert b'data-research-freshness="pending"' in pending.data
     release.set()
-    full = client.get("/research/?results=full")
+    full = client.get("/research/?tab=metagame&results=full")
     assert full.status_code == 200
     assert b"Loading Commander" in full.data
     assert b"research-filters" in full.data

@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Any, cast
 
 from sabermetrics import db
+from sabermetrics.card_discovery import (
+    format_legal_sql,
+    primary_type,
+)
 from sabermetrics.commander_pairs import compatible_pair, pair_id
 
 
@@ -34,6 +38,17 @@ class RevisionConflict(DeckDocumentError):
 
 class InvalidCommand(DeckDocumentError):
     pass
+
+
+# Public discovery shows commanders plus the main library. Zone names in this
+# set stay owner-private and are omitted from the public projection.
+_PRIVATE_PUBLIC_ZONES = frozenset(
+    {"sideboard", "notes", "note", "maybeboard", "maybe", "draft", "considering"}
+)
+
+
+def _is_public_library_zone(name: str | None) -> bool:
+    return str(name or "Unsorted").strip().casefold() not in _PRIVATE_PUBLIC_ZONES
 
 
 def _clean_tag_name(value: object) -> tuple[str, str]:
@@ -174,7 +189,11 @@ class DeckDocumentRepo:
         cards = []
         for key in ids:
             card = self._card_row(conn, key)
-            if not card or not card.get("is_legal_commander"):
+            if (
+                not card
+                or not card.get("is_legal_commander")
+                or not card.get("is_legal_in_99")
+            ):
                 raise InvalidCommand("Choose a legal commander.")
             cards.append(card)
         if len(cards) == 2 and not compatible_pair(*cards):
@@ -264,20 +283,19 @@ class DeckDocumentRepo:
                 "SELECT id FROM deck_zones WHERE deck_id=? AND name='Unsorted'",
                 (deck_id,),
             ).fetchone()["id"]
-            commander = {
-                "id": source["commander_card_id"],
-                "oracle_id": source["oracle_id"],
-                "name": source["commander_name"],
-                "type_line": source["type_line"],
-                "mana_cost": source["mana_cost"],
-                "cmc": source["cmc"],
-                "oracle_text": source["oracle_text"],
-                "color_identity": source["color_identity"],
-                "image_uri": source["image_uri"],
-            }
-            self._insert_card(
-                conn, deck_id=deck_id, zone_id=None, card=commander, is_commander=True
-            )
+            commander_row = self._card_row(conn, str(source["commander_card_id"]))
+            if (
+                commander_row
+                and commander_row.get("is_legal_commander")
+                and commander_row.get("is_legal_in_99")
+            ):
+                self._insert_card(
+                    conn,
+                    deck_id=deck_id,
+                    zone_id=None,
+                    card=commander_row,
+                    is_commander=True,
+                )
             cards = _json(source["cards_json"], [])
             grouped: dict[tuple[str, str], list[Any]] = {}
             for item in cards:
@@ -289,7 +307,9 @@ class DeckDocumentRepo:
                     grouped[key] = [item, 0]
                 grouped[key][1] += int(item.get("quantity") or 1)
             for order, (item, quantity) in enumerate(grouped.values()):
-                card = self._card_row(conn, str(item.get("card_id") or "")) or item
+                card = self._card_row(conn, str(item.get("card_id") or ""))
+                if not card or not card.get("is_legal_in_99"):
+                    continue
                 self._insert_card(
                     conn,
                     deck_id=deck_id,
@@ -340,10 +360,13 @@ class DeckDocumentRepo:
             for order, oracle_id in enumerate(
                 candidate.get("commander_oracle_ids", [])
             ):
-                card = self._oracle_row(conn, oracle_id) or {
-                    "oracle_id": oracle_id,
-                    "name": source["commander_name"],
-                }
+                card = self._oracle_row(conn, oracle_id)
+                if (
+                    not card
+                    or not card.get("is_legal_commander")
+                    or not card.get("is_legal_in_99")
+                ):
+                    continue
                 self._insert_card(
                     conn,
                     deck_id=deck_id,
@@ -354,10 +377,9 @@ class DeckDocumentRepo:
                 )
             for order, item in enumerate(candidate.get("library", [])):
                 oracle_id = str(item.get("oracle_id") or "")
-                card = self._oracle_row(conn, oracle_id) or {
-                    "oracle_id": oracle_id,
-                    "name": f"Card {oracle_id[:8]}",
-                }
+                card = self._oracle_row(conn, oracle_id)
+                if not card or not card.get("is_legal_in_99"):
+                    continue
                 self._insert_card(
                     conn,
                     deck_id=deck_id,
@@ -421,6 +443,9 @@ class DeckDocumentRepo:
                 params,
             ).fetchall()
             out = [dict(row) for row in rows]
+            for item in out:
+                if item.get("visibility") not in {"private", "public"}:
+                    item["visibility"] = "private"
             commander_colors_by_deck: dict[str, set[str]] = {}
             commander_decks: set[str] = set()
             commander_oracles: dict[str, list[str]] = {}
@@ -579,7 +604,8 @@ class DeckDocumentRepo:
                     """SELECT e.id,e.deck_id,e.zone_id,e.card_id,e.oracle_id,
                               e.name,e.quantity,e.is_commander,e.sort_order,e.role,
                               e.type_line,e.mana_cost,e.mana_value,e.oracle_text,
-                              e.color_identity,COALESCE(e.image_uri,c.image_uri) AS image_uri
+                              e.color_identity,COALESCE(e.image_uri,c.image_uri) AS image_uri,
+                              c.is_legal_in_99, c.is_legal_commander
                        FROM deck_entries e LEFT JOIN cards c ON c.id=e.card_id
                        WHERE e.deck_id=? """
                     "ORDER BY e.is_commander DESC, e.sort_order, e.name",
@@ -608,6 +634,14 @@ class DeckDocumentRepo:
             ]
         for entry in entries:
             entry["color_identity"] = _json(entry.get("color_identity"), [])
+            format_legal = entry.pop("is_legal_in_99", None)
+            commander_flag = entry.pop("is_legal_commander", None)
+            entry["format_legal"] = format_legal in (1, True)
+            entry["commander_legal"] = (
+                commander_flag in (1, True) and entry["format_legal"]
+            )
+        if document.get("visibility") not in {"private", "public"}:
+            document["visibility"] = "private"
         document["zones"] = zones
         document["entries"] = entries
         presentation = dict(presentation_row) if presentation_row else {}
@@ -676,6 +710,16 @@ class DeckDocumentRepo:
             for entry in library_entries
         ):
             issues.append("A card is outside the commander's color identity.")
+        if any(entry.get("format_legal") is False for entry in library_entries):
+            issues.append(
+                "This deck contains cards that are not Commander-legal. "
+                "They were kept so you can inspect and remove them."
+            )
+        if any(entry.get("commander_legal") is False for entry in commander_entries):
+            issues.append(
+                "A commander in this deck is no longer Commander-legal. "
+                "It was kept so you can inspect and replace it."
+            )
         return {
             "commander_count": commanders,
             "library_count": library,
@@ -690,10 +734,15 @@ class DeckDocumentRepo:
     ) -> list[dict[str, Any]]:
         with self._connect() as conn:
             first = self._card_row(conn, commander_id)
-            if not first or not first.get("is_legal_commander"):
+            if (
+                not first
+                or not first.get("is_legal_commander")
+                or not first.get("is_legal_in_99")
+            ):
                 return []
             candidates = conn.execute(
-                "SELECT * FROM cards WHERE is_legal_commander=1 AND name LIKE ? ORDER BY name,id",
+                "SELECT * FROM cards WHERE is_legal_in_99=1 AND is_legal_commander=1 "
+                "AND name LIKE ? ORDER BY name,id",
                 (f"%{query}%",),
             ).fetchall()
         matches: dict[str, dict[str, Any]] = {}
@@ -720,8 +769,9 @@ class DeckDocumentRepo:
         params: list[Any] = [f"%{query}%"]
         if commander_only:
             where.append("c.is_legal_commander=1")
-        else:
             where.append("c.is_legal_in_99=1")
+        else:
+            where.append(format_legal_sql("c"))
         if oracle_text:
             where.append("c.oracle_text LIKE ?")
             params.append(f"%{oracle_text}%")
@@ -1006,7 +1056,9 @@ class DeckDocumentRepo:
             if not card:
                 raise InvalidCommand("Card not found.")
             is_commander = bool(command.get("is_commander"))
-            if is_commander and not card.get("is_legal_commander"):
+            if is_commander and (
+                not card.get("is_legal_commander") or not card.get("is_legal_in_99")
+            ):
                 raise InvalidCommand("That card is not a legal commander.")
             if is_commander:
                 current = [
@@ -1247,6 +1299,146 @@ class DeckDocumentRepo:
             )
         else:
             raise InvalidCommand(f"Unsupported command: {kind or 'missing type'}")
+
+    def set_visibility(self, owner_id: str, deck_id: str, visibility: str) -> str:
+        """Owner-only private/public switch. Share links do not change this.
+
+        Visibility is stored independently of content revisions so undo/redo of
+        card edits cannot republish or unpublish a deck.
+        """
+        if visibility not in {"private", "public"}:
+            raise InvalidCommand("Choose private or public.")
+        with self._connect() as conn:
+            self._owned_revision(conn, owner_id, deck_id)
+            conn.execute(
+                "UPDATE deck_documents SET visibility=?, updated_at=? WHERE id=?",
+                (visibility, _now(), deck_id),
+            )
+        return visibility
+
+    def list_public(
+        self, *, query: str = "", page: int = 1, per_page: int = 24
+    ) -> dict[str, Any]:
+        """Paginated discovery of currently public decks for signed-in users."""
+        page = max(1, page)
+        per_page = max(1, min(per_page, 48))
+        where = ["d.visibility='public'"]
+        params: list[Any] = []
+        if query:
+            where.append(
+                "(d.title LIKE ? OR EXISTS (SELECT 1 FROM deck_entries ec "
+                "WHERE ec.deck_id=d.id AND ec.is_commander=1 AND ec.name LIKE ?))"
+            )
+            term = f"%{query}%"
+            params.extend([term, term])
+        with self._connect() as conn:
+            count = int(
+                conn.execute(
+                    f"SELECT COUNT(*) FROM deck_documents d WHERE {' AND '.join(where)}",
+                    params,
+                ).fetchone()[0]
+            )
+            rows = conn.execute(
+                f"""SELECT d.id, d.title, d.updated_at,
+                           COALESCE(NULLIF(u.display_name, ''), 'Deck Lab player') AS display_name
+                    FROM deck_documents d
+                    JOIN users u ON u.id=d.owner_id
+                    WHERE {' AND '.join(where)}
+                    ORDER BY d.updated_at DESC, d.id DESC LIMIT ? OFFSET ?""",
+                [*params, per_page, (page - 1) * per_page],
+            ).fetchall()
+            results = [dict(row) for row in rows]
+            if results:
+                deck_ids = [str(item["id"]) for item in results]
+                placeholders = ",".join("?" for _ in deck_ids)
+                commander_rows = conn.execute(
+                    "SELECT e.deck_id,e.name,COALESCE(e.image_uri,c.image_uri) AS image_uri "
+                    "FROM deck_entries e LEFT JOIN cards c ON c.id=e.card_id "
+                    f"WHERE e.is_commander=1 AND e.deck_id IN ({placeholders}) "
+                    "ORDER BY e.deck_id,e.sort_order",
+                    deck_ids,
+                ).fetchall()
+                by_deck: dict[str, list[dict[str, Any]]] = {}
+                for row in commander_rows:
+                    by_deck.setdefault(str(row["deck_id"]), []).append(
+                        {"name": row["name"], "image_uri": row["image_uri"]}
+                    )
+                for item in results:
+                    commanders = by_deck.get(str(item["id"]), [])
+                    item["commanders"] = commanders
+                    item["commander_names"] = " / ".join(c["name"] for c in commanders)
+                    item["commander_image_uri"] = (
+                        commanders[0]["image_uri"] if commanders else None
+                    )
+        return {
+            "results": results,
+            "total": count,
+            "page": page,
+            "has_next": page * per_page < count,
+        }
+
+    def get_public(self, deck_id: str) -> dict[str, Any]:
+        """Read-only public projection. Re-checks visibility on every call."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT d.id, d.title, d.updated_at,
+                          COALESCE(NULLIF(u.display_name, ''), 'Deck Lab player') AS display_name
+                   FROM deck_documents d JOIN users u ON u.id=d.owner_id
+                   WHERE d.id=? AND d.visibility='public'""",
+                (deck_id,),
+            ).fetchone()
+            if row is None:
+                raise DeckNotFound()
+            entries = conn.execute(
+                """SELECT e.card_id,e.name,e.quantity,e.is_commander,e.type_line,
+                          COALESCE(e.image_uri,c.image_uri) AS image_uri,
+                          z.name AS zone_name
+                   FROM deck_entries e LEFT JOIN cards c ON c.id=e.card_id
+                   LEFT JOIN deck_zones z ON z.id=e.zone_id
+                   WHERE e.deck_id=? ORDER BY e.is_commander DESC, e.name COLLATE NOCASE""",
+                (deck_id,),
+            ).fetchall()
+        commanders = []
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for entry in entries:
+            if not entry["is_commander"] and not _is_public_library_zone(
+                entry["zone_name"]
+            ):
+                continue
+            item = {
+                "id": entry["card_id"],
+                "name": entry["name"] or "Unknown card",
+                "quantity": int(entry["quantity"] or 1),
+                "type_line": entry["type_line"] or "",
+                "image_uri": entry["image_uri"],
+            }
+            if entry["is_commander"]:
+                commanders.append(item)
+                continue
+            groups.setdefault(primary_type(item["type_line"]), []).append(item)
+        grouped = [
+            {"type": kind, "cards": groups[kind]}
+            for kind in (
+                "Creature",
+                "Planeswalker",
+                "Battle",
+                "Instant",
+                "Sorcery",
+                "Artifact",
+                "Enchantment",
+                "Land",
+                "Other",
+            )
+            if kind in groups
+        ]
+        return {
+            "id": row["id"],
+            "title": row["title"],
+            "display_name": row["display_name"],
+            "updated_at": row["updated_at"],
+            "commanders": commanders,
+            "groups": grouped,
+        }
 
     def create_share(self, owner_id: str, deck_id: str) -> str:
         with self._connect() as conn:
