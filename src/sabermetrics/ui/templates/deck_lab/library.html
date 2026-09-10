@@ -64,7 +64,6 @@
         <label>Deck name<input class="dl-field" name="title" value="Untitled deck" maxlength="160" required></label>
         {% include 'deck_lab/_commander_picker.html' %}
         <button class="dl-button dl-button-primary" type="submit">Create deck</button>
-        <p class="dl-disclosure"><a href="{{ url_for('cedh.index',generator='1') }}">Start from a cEDH strategy pack</a>; completed candidates appear in this library.</p>
     </form>
 </dialog>
 <div class="dl-bottom-action"><button class="dl-button dl-button-primary" type="button" data-new-deck>New deck</button></div>
