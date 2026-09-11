@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlencode
@@ -16,6 +17,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     url_for,
 )
 from flask_login import current_user
@@ -126,6 +128,21 @@ def _bound_arg(name: str) -> int | None:
     return normalize_bound(request.args.get(name))
 
 
+_COMMANDER_COLOR_MODES = frozenset(
+    {"include", "exclude", "exactly", "all", "any", "exact"}
+)
+_USER_ID = frozenset("0123456789abcdef")
+
+
+def _commander_color_mode(default: str = "all") -> str:
+    mode = request.args.get("color_mode", default)
+    return mode if mode in _COMMANDER_COLOR_MODES else default
+
+
+def _selected_commander_colors() -> list[str]:
+    return [c for c in request.args.getlist("color") if c in list("WUBRG")]
+
+
 def _is_default_cohort(
     tab: str,
     query: str,
@@ -133,15 +150,16 @@ def _is_default_cohort(
     window_days: int,
     commander_filters: dict[str, Any],
 ) -> bool:
+    # Empty color selection is unrestricted for every mode, including the
+    # canonical include default and bookmarked all/any/exact URLs.
     return (
         tab == "metagame"
         and not query
         and page == 1
         and window_days == DEFAULT_WINDOW_DAYS
-        and not request.args.getlist("color")
+        and not _selected_commander_colors()
         and request.args.get("favorites") != "1"
         and request.args.get("sort", "meta") == "meta"
-        and request.args.get("color_mode", "all") == "all"
         and all(
             commander_filters[key] is None
             for key in ("mana_min", "mana_max", "meta_min", "meta_max")
@@ -221,7 +239,7 @@ def _load_index_state() -> dict[str, Any]:
             None if mana_hi is None or mana_hi >= RANGE_MAX else float(mana_hi)
         )
     commander_filters: dict[str, Any] = {
-        "color_mode": request.args.get("color_mode", "all"),
+        "color_mode": _commander_color_mode(),
         "mana_min": commander_mana_min,
         "mana_max": commander_mana_max,
         "meta_min": meta_min_percent / 100 if meta_min_percent is not None else None,
@@ -253,7 +271,7 @@ def _load_index_state() -> dict[str, Any]:
     elif tab == "commanders":
         catalog_filters = {
             "query": query,
-            "colors": [c for c in request.args.getlist("color") if c in list("WUBRG")],
+            "colors": _selected_commander_colors(),
             "color_mode": commander_filters["color_mode"],
             "mana_min_bound": _bound_arg("mana_min"),
             "mana_max_bound": _bound_arg("mana_max"),
@@ -291,7 +309,7 @@ def _load_index_state() -> dict[str, Any]:
     else:
         data = _research().commanders(
             query=query,
-            colors=[c for c in request.args.getlist("color") if c in list("WUBRG")],
+            colors=_selected_commander_colors(),
             favorites=fav_ids,
             favorite_only=request.args.get("favorites") == "1",
             plays_card="",
@@ -306,7 +324,7 @@ def _load_index_state() -> dict[str, Any]:
         "data": data,
         "query": query,
         "window_days": window_days,
-        "colors": [c for c in request.args.getlist("color") if c in list("WUBRG")],
+        "colors": _selected_commander_colors(),
         "favorite_only": request.args.get("favorites") == "1",
         "plays_card": "",
         "sort": request.args.get("sort", "meta" if tab == "metagame" else "name"),
@@ -357,6 +375,21 @@ def commander(card_id: str):
     return render_template(
         "deck_lab/commander.html", commander=commander_data, favorite=favorite
     )
+
+
+@bp.get("/avatars/<user_id>")
+def public_avatar(user_id: str):
+    """Serve a public-deck author's image without private account fields."""
+    from sabermetrics.avatars import public_image_for_deck_author
+
+    if len(user_id) != 32 or any(char not in _USER_ID for char in user_id):
+        abort(404)
+    image = public_image_for_deck_author(current_app.config["DB_PATH"], user_id)
+    if image is None:
+        abort(404)
+    response = send_file(BytesIO(image), mimetype="image/png")
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @bp.get("/deck-commanders")

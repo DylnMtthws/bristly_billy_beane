@@ -52,6 +52,42 @@ def avatar_for(db_path: str | Path, user_id: str, emoji: str | None) -> dict[str
     return dict(row) if row else {"kind": "emoji", "value": emoji or DEFAULT_EMOJI}
 
 
+def public_selection(
+    kind: str | None,
+    value: str | None,
+    emoji: str | None,
+    *,
+    has_author: bool,
+) -> dict[str, str]:
+    """Return public-safe avatar fields only: kind plus a display value."""
+    if not has_author:
+        return {"kind": "icon", "value": "person"}
+    if kind == "image" and value:
+        return {"kind": "image", "value": value}
+    if kind == "icon" and value in ICONS:
+        return {"kind": "icon", "value": value}
+    if kind == "emoji" and value:
+        return {"kind": "emoji", "value": value}
+    return {"kind": "emoji", "value": emoji or DEFAULT_EMOJI}
+
+
+def public_image_for_deck_author(db_path: str | Path, user_id: str) -> bytes | None:
+    """Return image bytes only for authors of currently public decks."""
+    with db.connect(db_path) as conn:
+        row = conn.execute(
+            """SELECT a.image FROM user_avatars a
+               WHERE a.user_id=? AND a.kind='image'
+                 AND EXISTS (
+                   SELECT 1 FROM deck_documents d
+                   WHERE d.owner_id=a.user_id AND d.visibility='public'
+                 )""",
+            (user_id,),
+        ).fetchone()
+    if row is None or row["image"] is None:
+        return None
+    return bytes(row["image"])
+
+
 def image_bytes(upload: FileStorage) -> bytes:
     """Validate a still raster image, strip metadata, and center-crop to 256px."""
     sanitized = sanitize_image(upload)

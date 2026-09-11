@@ -21,9 +21,11 @@ def _rule_body(css: str, selector: str) -> str:
 def test_choose_commanders_button_is_in_deck_options_not_card_search() -> None:
     """Commander selection is a deck action, not an add-card search action."""
     html = BUILDER_TEMPLATE.read_text()
-    panel = re.search(r'<aside class="dl-add-panel"[^>]*>([\s\S]*?)</aside>', html)
-    assert panel is not None
-    assert "data-commanders-open" not in panel.group(1)
+    assert "dl-card-combobox" in html
+    assert "dl-add-panel" not in html
+    combobox_start = html.index("dl-card-combobox")
+    more_start = html.index('class="dl-decklist-more"')
+    assert "data-commanders-open" not in html[combobox_start:more_start]
     assert re.search(
         r'<details class="dl-decklist-more">[\s\S]*?'
         r'<summary aria-label="Deck options">•••</summary>[\s\S]*?'

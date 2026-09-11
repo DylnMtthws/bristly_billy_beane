@@ -208,8 +208,11 @@ def apply_colors(
     params: list[Any],
     colors: list[str],
     color_mode: str,
+    *,
+    alias: str = "c",
 ) -> None:
     """Apply Include / Exclude / Exactly against stored color identity JSON."""
+    ident = f"{alias}.color_identity"
     selected: list[str] = []
     for color in colors:
         if color in set("WUBRGC") and color not in selected:
@@ -228,28 +231,28 @@ def apply_colors(
     wants_colorless = "C" in selected
     if mode == "exclude":
         for color in colored:
-            where.append("c.color_identity NOT LIKE ?")
+            where.append(f"{ident} NOT LIKE ?")
             params.append(f'%"{color}"%')
         if wants_colorless:
-            where.append("json_array_length(c.color_identity)>0")
+            where.append(f"json_array_length({ident})>0")
         return
     if mode == "any":
-        tests = ["c.color_identity LIKE ?" for _ in colored]
+        tests = [f"{ident} LIKE ?" for _ in colored]
         values = [f'%"{color}"%' for color in colored]
         if wants_colorless:
-            tests.append("json_array_length(c.color_identity)=0")
+            tests.append(f"json_array_length({ident})=0")
         if tests:
             where.append(f"({' OR '.join(tests)})")
             params.extend(values)
         return
     if wants_colorless and not colored:
-        where.append("json_array_length(c.color_identity)=0")
+        where.append(f"json_array_length({ident})=0")
         return
     for color in colored:
-        where.append("c.color_identity LIKE ?")
+        where.append(f"{ident} LIKE ?")
         params.append(f'%"{color}"%')
     if mode == "exactly":
-        where.append("json_array_length(c.color_identity)=?")
+        where.append(f"json_array_length({ident})=?")
         params.append(len(colored))
         if wants_colorless and colored:
             # Include+colorless together is not a real identity; exact empty only.

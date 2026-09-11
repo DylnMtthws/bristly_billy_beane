@@ -50,6 +50,11 @@ function El(tag) {
       for (var i = 0; i < arguments.length; i++) parts.add(arguments[i]);
       el.className = Array.from(parts).join(" ");
     },
+    remove: function () {
+      var parts = new Set(String(el.className || "").split(/\s+/).filter(Boolean));
+      for (var i = 0; i < arguments.length; i++) parts.delete(arguments[i]);
+      el.className = Array.from(parts).join(" ");
+    },
     toggle: function (name, force) {
       var parts = new Set(String(el.className || "").split(/\s+/).filter(Boolean));
       var on = force === undefined ? !parts.has(name) : !!force;

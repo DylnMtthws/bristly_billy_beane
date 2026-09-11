@@ -2,13 +2,24 @@
 {% set hi = (high if high is not none else 10) %}
 {% set lo_text = '10+' if lo == 10 else lo %}
 {% set hi_text = '10+' if hi == 10 else hi %}
+{% set lo_is_tick = lo in [0, 5, 10] %}
+{% set hi_is_tick = hi in [0, 5, 10] %}
+{% set coincident = lo == hi %}
+{% set close = (not coincident) and (not lo_is_tick) and (not hi_is_tick) and ((hi - lo) <= 1) %}
+{% set show_combined = (coincident and not lo_is_tick) or close %}
+{% set show_min = (not lo_is_tick) and (not show_combined) %}
+{% set show_max = (not hi_is_tick) and (not show_combined) and (not coincident) %}
 <div class="dl-bound-range" style="--bound-lo: {{ lo }}; --bound-hi: {{ hi }};">
     <div class="dl-bound-head">
-        <p class="dl-bound-selection"><output data-bound-selection>{{ lo_text }}–{{ hi_text }}</output></p>
         <button type="button" class="dl-bound-clear" data-bound-clear aria-label="Clear {{ legend|lower }} range">Clear</button>
     </div>
     <div class="dl-bound-slider">
         <div class="dl-bound-track" aria-hidden="true"><span class="dl-bound-fill"></span></div>
+        <div class="dl-bound-live" aria-hidden="true">
+            <span class="dl-bound-live-value" data-bound-live="min" style="--bound-live: {{ lo }};"{% if not show_min %} hidden{% endif %}>{{ lo_text }}</span>
+            <span class="dl-bound-live-value" data-bound-live="max" style="--bound-live: {{ hi }};"{% if not show_max %} hidden{% endif %}>{{ hi_text }}</span>
+            <span class="dl-bound-live-value" data-bound-live="combined" style="--bound-live: {{ (lo + hi) / 2 }};"{% if not show_combined %} hidden{% endif %}>{% if coincident %}{{ lo_text }}{% else %}{{ lo_text }}–{{ hi_text }}{% endif %}</span>
+        </div>
         <input class="dl-bound-min" data-bound-min type="range" name="{{ min_name }}" min="0" max="10" step="1" value="{{ lo }}" aria-valuemin="0" aria-valuemax="10" aria-valuetext="{{ lo_text }}" aria-label="Minimum {{ legend|lower }}">
         <input class="dl-bound-max" data-bound-max type="range" name="{{ max_name }}" min="0" max="10" step="1" value="{{ hi }}" aria-valuemin="0" aria-valuemax="10" aria-valuetext="{{ hi_text }}" aria-label="Maximum {{ legend|lower }}">
     </div>

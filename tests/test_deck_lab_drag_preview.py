@@ -99,6 +99,7 @@ class Element {
     if (name === "class") return this.className || null;
     return this.attributes[name] ?? null;
   }
+  removeAttribute(name) { delete this.attributes[name]; }
   hasAttribute(name) { return this.getAttribute(name) != null; }
   appendChild(child) { child.parentNode = this; this.children.push(child); return child; }
   append(...nodes) { nodes.forEach((n) => this.appendChild(typeof n === "string" ? Object.assign(this.ownerDocument.createElement("#text"), { textContent: n }) : n)); }
@@ -251,9 +252,9 @@ function tileByName(name) {
 }
 
 await (async function boot() {
-  const windowObj = { matchMedia() { return { matches: false, addEventListener() {} }; }, crypto: { randomUUID: () => "uuid-1" }, DeckLabSelects: { refresh() {} } };
+  const windowObj = { matchMedia() { return { matches: false, addEventListener() {} }; }, setTimeout, clearTimeout, crypto: { randomUUID: () => "uuid-1" }, DeckLabSelects: { refresh() {} } };
   vm.runInContext(source, vm.createContext({
-    console, document, window: windowObj,
+    console, document, window: windowObj, setTimeout, clearTimeout,
     localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } },
     fetch(url, opts = {}) {
       fetches.push({ url: String(url), opts });
@@ -273,6 +274,12 @@ await (async function boot() {
   }), { filename: builderPath });
   await flush();
 })();
+
+const searchField = document.querySelector("[data-card-search]");
+searchField.value = "Bolt";
+searchField.dispatchEvent(makeEvent("input", { target: searchField }));
+await new Promise((r) => setTimeout(r, 250));
+await flush();
 
 async function runDrag(source, start, move, dropTarget) {
   const dt = new DataTransferMock();

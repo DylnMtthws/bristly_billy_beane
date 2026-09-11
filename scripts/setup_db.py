@@ -628,6 +628,7 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
             name TEXT NOT NULL,
             sort_order INTEGER NOT NULL,
             layout_mode TEXT NOT NULL DEFAULT 'spread',
+            layer INTEGER NOT NULL DEFAULT 0,
             x REAL,
             y REAL,
             width REAL,
@@ -793,6 +794,13 @@ def ensure_deck_document_schema(conn: sqlite3.Connection) -> None:
         "INSERT OR IGNORE INTO _schema_version(version, description) "
         "VALUES ('deck-tags-v1', 'Global deck tags and per-deck assignments')"
     )
+    zone_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(deck_zones)")
+    }
+    if zone_columns and "layer" not in zone_columns:
+        conn.execute(
+            "ALTER TABLE deck_zones ADD COLUMN layer INTEGER NOT NULL DEFAULT 0"
+        )
     ensure_schema(conn)
     from sabermetrics.account_playmats import ensure_account_playmat_schema
 

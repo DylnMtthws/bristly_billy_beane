@@ -1,0 +1,111 @@
+/* DYL-44/47/49: Meta table density and public Decks author cards. */
+
+[data-tab="metagame"] .dl-research-table {
+  table-layout: fixed;
+  width: 100%;
+}
+[data-tab="metagame"] .dl-meta-col-commander {
+  width: auto;
+  min-width: 0;
+}
+[data-tab="metagame"] .dl-meta-col-identity {
+  width: 150px;
+  white-space: nowrap;
+}
+[data-tab="metagame"] .dl-meta-col-share,
+[data-tab="metagame"] .dl-meta-col-top16 { width: 160px; }
+[data-tab="metagame"] .dl-meta-col-entries { width: 90px; }
+[data-tab="metagame"] .dl-meta-col-trend { width: 135px; }
+[data-tab="metagame"] .dl-meta-commander-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+[data-tab="metagame"] .dl-meta-identity {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+[data-tab="metagame"] .dl-meta-identity .mana {
+  flex: none;
+}
+[data-tab="metagame"] .dl-result-card-head {
+  align-items: flex-start;
+}
+[data-tab="metagame"] .dl-result-card-head .dl-meta-col-commander {
+  min-width: 0;
+  flex: 1;
+}
+[data-tab="metagame"] .dl-result-card-head .dl-icon-button {
+  flex: none;
+}
+
+@media (max-width: 1280px) {
+  [data-tab="metagame"] .dl-meta-col-trend {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  [data-tab="metagame"] .dl-meta-col-trend,
+  [data-tab="metagame"] .dl-meta-col-top16 {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  [data-tab="metagame"] .dl-meta-col-trend,
+  [data-tab="metagame"] .dl-meta-col-top16,
+  [data-tab="metagame"] .dl-meta-col-share {
+    display: none;
+  }
+}
+
+[data-tab="decks"] .dl-public-deck-card {
+  align-content: start;
+}
+[data-tab="decks"] .dl-public-deck-title {
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-tab="decks"] .dl-public-deck-commanders {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+[data-tab="decks"] .dl-public-deck-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+}
+[data-tab="decks"] .dl-public-deck-author .account-avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+}
+[data-tab="decks"] .dl-public-deck-author small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 430px) {
+  [data-tab="decks"] .dl-public-deck-commanders {
+    font-size: 11px;
+  }
+}

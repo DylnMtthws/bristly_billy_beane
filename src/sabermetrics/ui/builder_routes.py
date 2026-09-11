@@ -356,6 +356,10 @@ def cards():
             allowed_colors = {
                 color for entry in commanders for color in entry["color_identity"]
             }
+    try:
+        limit = int(request.args.get("limit") or 40)
+    except ValueError:
+        limit = 40
     return jsonify(
         results=_repo().search_cards(
             query=(request.args.get("q") or "").strip()[:120],
@@ -365,6 +369,7 @@ def cards():
             mana_max=mana_max,
             rarity=(request.args.get("rarity") or "").strip()[:30],
             allowed_colors=allowed_colors,
+            limit=limit,
         ),
         scope=(
             "Commander identity" if allowed_colors is not None else "Unrestricted draft"

@@ -23,6 +23,7 @@ from sabermetrics.account_playmats import (
     owner_presentation,
     public_presentation,
 )
+from sabermetrics.avatars import public_selection
 from sabermetrics.card_discovery import (
     format_legal_sql,
     primary_type,
@@ -64,6 +65,29 @@ class InvalidCommand(DeckDocumentError):
 _PRIVATE_PUBLIC_ZONES = frozenset(
     {"sideboard", "notes", "note", "maybeboard", "maybe", "draft", "considering"}
 )
+
+# Card-name search ignores this punctuation on both the query and stored names.
+_APOS_CHARS = "'\u2019\u2018"
+_SPACE_PUNCT = ',.-–—.:;!?"()[]/\\&+'
+_NAME_PUNCT = _APOS_CHARS + _SPACE_PUNCT
+_NEEDLE_TABLE = str.maketrans(
+    {char: "" for char in _APOS_CHARS} | {char: " " for char in _SPACE_PUNCT}
+)
+
+
+def _search_needle(query: str) -> str:
+    return " ".join(str(query).translate(_NEEDLE_TABLE).split())
+
+
+def _strip_punct_sql(expr: str) -> str:
+    sql = expr
+    for char in _APOS_CHARS:
+        sql = f"REPLACE({sql}, char({ord(char)}), '')"
+    for char in _SPACE_PUNCT:
+        sql = f"REPLACE({sql}, char({ord(char)}), ' ')"
+    for _ in range(3):
+        sql = f"REPLACE({sql}, '  ', ' ')"
+    return f"TRIM({sql})"
 
 
 def _is_public_library_zone(name: str | None) -> bool:
@@ -1203,8 +1227,18 @@ class DeckDocumentRepo:
         allowed_colors: set[str] | None = None,
         limit: int = 40,
     ) -> list[dict[str, Any]]:
-        where = ["c.name LIKE ?"]
-        params: list[Any] = [f"%{query}%"]
+        needle = _search_needle(query)
+        if str(query).strip() and not needle:
+            return []
+        name_sql = _strip_punct_sql("c.name")
+        if needle:
+            where = [f"{name_sql} LIKE ?"]
+            params: list[Any] = [f"%{needle}%"]
+            prefix = f"{needle}%"
+        else:
+            where = ["c.name LIKE ?"]
+            params = [f"%{query}%"]
+            prefix = f"{query}%"
         if commander_only:
             where.append("c.is_legal_commander=1")
             where.append("c.is_legal_in_99=1")
@@ -1241,9 +1275,10 @@ class DeckDocumentRepo:
                     FROM cards c WHERE {' AND '.join(where)}
                       AND c.id=(SELECT c2.id FROM cards c2 WHERE c2.name=c.name
                                 ORDER BY c2.image_uri IS NULL, c2.id LIMIT 1)
-                    ORDER BY CASE WHEN c.name LIKE ? THEN 0 ELSE 1 END,
+                    ORDER BY CASE WHEN {name_sql} LIKE ? THEN 0 ELSE 1 END,
+                             CASE WHEN c.name LIKE ? THEN 0 ELSE 1 END,
                              c.name COLLATE NOCASE LIMIT ?""",
-                [*params[:-1], f"{query}%", params[-1]],
+                [*params[:-1], prefix, f"{query}%", params[-1]],
             ).fetchall()
         results = [dict(row) for row in rows]
         for card in results:
@@ -1458,7 +1493,7 @@ class DeckDocumentRepo:
         elif kind == "set_zone_layout":
             zone_id = str(command.get("zone_id") or "")
             layout = str(command.get("layout") or "")
-            if layout not in {"spread", "fan"} or not self._zone_exists(
+            if layout not in {"spread", "fan", "grid"} or not self._zone_exists(
                 conn, deck_id, zone_id
             ):
                 raise InvalidCommand("Choose a valid zone layout.")
@@ -1737,13 +1772,21 @@ class DeckDocumentRepo:
             max_y = max(
                 0.0, float(presentation["canvas_height"] if presentation else 900) - 100
             )
+            position_values: list[Any] = [
+                max(0.0, min(max_x, float(command.get("x") or 0))),
+                max(0.0, min(max_y, float(command.get("y") or 0))),
+            ]
+            assignments = "x=?,y=?"
+            if "layer" in command:
+                layer = int(command.get("layer") or 0)
+                if layer < 0 or layer > 100000:
+                    raise InvalidCommand("Zone layer is out of range.")
+                assignments += ",layer=?"
+                position_values.append(layer)
+            position_values.append(zone_id)
             conn.execute(
-                "UPDATE deck_zones SET x=?,y=? WHERE id=?",
-                (
-                    max(0.0, min(max_x, float(command.get("x") or 0))),
-                    max(0.0, min(max_y, float(command.get("y") or 0))),
-                    zone_id,
-                ),
+                f"UPDATE deck_zones SET {assignments} WHERE id=?",
+                position_values,
             )
         else:
             raise InvalidCommand(f"Unsupported command: {kind or 'missing type'}")
@@ -1804,16 +1847,45 @@ class DeckDocumentRepo:
                     params,
                 ).fetchone()[0]
             )
+            has_avatars = (
+                conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_avatars'"
+                ).fetchone()
+                is not None
+            )
+            avatar_join = (
+                "LEFT JOIN user_avatars a ON a.user_id=u.id" if has_avatars else ""
+            )
+            avatar_cols = (
+                "a.kind AS avatar_kind, a.value AS avatar_value"
+                if has_avatars
+                else "NULL AS avatar_kind, NULL AS avatar_value"
+            )
             rows = conn.execute(
                 f"""SELECT d.id, d.title, d.updated_at,
-                           COALESCE(NULLIF(u.display_name, ''), 'Deck Lab player') AS display_name
+                           COALESCE(NULLIF(u.display_name, ''), 'Deck Lab player') AS display_name,
+                           u.id AS author_id,
+                           u.avatar_emoji AS author_emoji,
+                           {avatar_cols}
                     FROM deck_documents d
-                    JOIN users u ON u.id=d.owner_id
+                    LEFT JOIN users u ON u.id=d.owner_id
+                    {avatar_join}
                     WHERE {' AND '.join(where)}
                     ORDER BY d.updated_at DESC, d.id DESC LIMIT ? OFFSET ?""",
                 [*params, per_page, (page - 1) * per_page],
             ).fetchall()
             results = [dict(row) for row in rows]
+            for item in results:
+                author_id = item.pop("author_id", None)
+                selection = public_selection(
+                    item.pop("avatar_kind", None),
+                    item.pop("avatar_value", None),
+                    item.pop("author_emoji", None),
+                    has_author=bool(author_id),
+                )
+                item["avatar"] = selection
+                if selection["kind"] == "image" and author_id:
+                    item["avatar_user_id"] = author_id
             if results:
                 deck_ids = [str(item["id"]) for item in results]
                 placeholders = ",".join("?" for _ in deck_ids)
