@@ -451,58 +451,69 @@ class ResearchRepo:
                 ).fetchone()
             if card is None:
                 return None
-            current_total = int(
-                conn.execute(
-                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM research_results WHERE tournament_date>=? AND tournament_date<?",
-                    (start, end),
-                ).fetchone()[0]
-            )
-            prior_total = int(
-                conn.execute(
-                    "SELECT COUNT(DISTINCT COALESCE(source_entry_id,id)) FROM research_results WHERE tournament_date>=? AND tournament_date<?",
-                    (prior, start),
-                ).fetchone()[0]
-            )
-            metrics = conn.execute(
-                """SELECT COUNT(*) AS entries,
-                    COUNT(CASE WHEN standing IS NOT NULL THEN 1 END) AS finish_coverage,
-                    COUNT(CASE WHEN standing BETWEEN 1 AND 16 THEN 1 END) AS top16,
-                    COUNT(DISTINCT tournament_id) AS events
-                   FROM research_results WHERE commander_id=?
-                   AND tournament_date>=? AND tournament_date<?""",
-                (card_id, start, end),
+            result = dict(card)
+            attach_members(conn, result)
+            totals = conn.execute(
+                """SELECT
+                    COUNT(DISTINCT CASE WHEN tournament_date>=? AND tournament_date<?
+                                        THEN COALESCE(source_entry_id,id) END) AS current_total,
+                    COUNT(DISTINCT CASE WHEN tournament_date>=? AND tournament_date<?
+                                        THEN COALESCE(source_entry_id,id) END) AS prior_total
+                   FROM research_results
+                   WHERE tournament_date>=? AND tournament_date<?""",
+                (start, end, prior, start, prior, end),
             ).fetchone()
-            previous = int(
-                conn.execute(
-                    "SELECT COUNT(*) FROM research_results WHERE commander_id=? "
-                    "AND tournament_date>=? AND tournament_date<?",
-                    (card_id, prior, start),
-                ).fetchone()[0]
-            )
-            denominator = int(
-                conn.execute(
-                    """SELECT COUNT(DISTINCT tr.deck_id)
-                       FROM research_results tr
-                       WHERE tr.commander_id=? AND tr.deck_id IS NOT NULL
-                         AND tr.tournament_date>=? AND tr.tournament_date<?
-                         AND EXISTS (SELECT 1 FROM deck_cards dc WHERE dc.deck_id=tr.deck_id)""",
-                    (card_id, start, end),
-                ).fetchone()[0]
-            )
-            mana_value = conn.execute(
-                """SELECT AVG(deck_mv) AS average_mv, COUNT(*) AS list_count
-                   FROM (
-                     SELECT tr.deck_id,
-                       SUM(c.cmc * dc.quantity) * 1.0 / NULLIF(SUM(dc.quantity),0) AS deck_mv
-                     FROM research_results tr
-                     JOIN deck_cards dc ON dc.deck_id=tr.deck_id AND dc.is_commander=0
-                     JOIN cards c ON c.id=dc.card_id
-                     WHERE tr.commander_id=? AND tr.tournament_date>=? AND tr.tournament_date<?
-                       AND c.type_line NOT LIKE '%Land%'
-                     GROUP BY tr.deck_id
-                   )""",
-                (card_id, start, end),
+            stats = conn.execute(
+                """SELECT
+                    COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) AS entries,
+                    COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<?
+                               AND tr.standing IS NOT NULL THEN 1 END) AS finish_coverage,
+                    COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<?
+                               AND tr.standing BETWEEN 1 AND 16 THEN 1 END) AS top16,
+                    COUNT(DISTINCT CASE WHEN tr.tournament_date>=? AND tr.tournament_date<?
+                                        THEN tr.tournament_id END) AS events,
+                    COUNT(CASE WHEN tr.tournament_date>=? AND tr.tournament_date<? THEN 1 END) AS previous,
+                    COUNT(DISTINCT CASE WHEN tr.tournament_date>=? AND tr.tournament_date<?
+                                        AND tr.deck_id IS NOT NULL
+                                        AND EXISTS (SELECT 1 FROM deck_cards dc WHERE dc.deck_id=tr.deck_id)
+                                        THEN tr.deck_id END) AS inclusion_denominator
+                   FROM research_results tr
+                   WHERE tr.commander_id=? AND tr.tournament_date>=? AND tr.tournament_date<?""",
+                (
+                    start,
+                    end,
+                    start,
+                    end,
+                    start,
+                    end,
+                    start,
+                    end,
+                    prior,
+                    start,
+                    start,
+                    end,
+                    card_id,
+                    prior,
+                    end,
+                ),
             ).fetchone()
+            recent_decks = self._recent_recorded_deck_ids(conn, card_id, start, end)
+            if recent_decks:
+                slots = ",".join("?" for _ in recent_decks)
+                mana_value = conn.execute(
+                    f"""SELECT AVG(deck_mv) AS average_mv, COUNT(*) AS list_count
+                       FROM (
+                         SELECT dc.deck_id,
+                           SUM(c.cmc * dc.quantity) * 1.0 / NULLIF(SUM(dc.quantity),0) AS deck_mv
+                         FROM deck_cards dc JOIN cards c ON c.id=dc.card_id
+                         WHERE dc.deck_id IN ({slots}) AND dc.is_commander=0
+                           AND c.type_line NOT LIKE '%Land%'
+                         GROUP BY dc.deck_id
+                       )""",
+                    recent_decks,
+                ).fetchone()
+            else:
+                mana_value = {"average_mv": None, "list_count": 0}
             representative = self._representative_recorded_list(
                 conn, card_id, start, end
             )
@@ -519,22 +530,25 @@ class ResearchRepo:
                    ORDER BY tournament_date DESC,standing IS NULL,standing LIMIT 12""",
                 (card_id, start, end),
             ).fetchall()
-        result = dict(card)
-        with self._connect() as conn:
-            attach_members(conn, result)
+        current_total = int(totals["current_total"] or 0)
+        prior_total = int(totals["prior_total"] or 0)
+        previous = int(stats["previous"] or 0)
         result["color_identity"] = _colors(result.get("color_identity"))
         result["metrics"] = {
-            **dict(metrics),
+            "entries": stats["entries"],
+            "finish_coverage": stats["finish_coverage"],
+            "top16": stats["top16"],
+            "events": stats["events"],
             "meta_share": (
-                (metrics["entries"] / current_total) if current_total else None
+                (stats["entries"] / current_total) if current_total else None
             ),
             "top16_rate": (
-                (metrics["top16"] / metrics["finish_coverage"])
-                if metrics["finish_coverage"]
+                (stats["top16"] / stats["finish_coverage"])
+                if stats["finish_coverage"]
                 else None
             ),
             "trend": (
-                (metrics["entries"] / current_total - previous / prior_total)
+                (stats["entries"] / current_total - previous / prior_total)
                 if current_total and prior_total
                 else None
             ),
@@ -542,12 +556,29 @@ class ResearchRepo:
             "average_nonland_mv": mana_value["average_mv"],
             "mv_list_count": int(mana_value["list_count"]),
         }
-        result["inclusion_denominator"] = denominator
+        result["inclusion_denominator"] = int(stats["inclusion_denominator"] or 0)
         result["inclusions"] = []
         result["representative_list"] = representative
         result["rulings"] = [dict(row) for row in rulings]
         result["recent_lists"] = [dict(row) for row in recent_lists]
         return result
+
+    @staticmethod
+    def _recent_recorded_deck_ids(
+        conn: sqlite3.Connection, commander_id: str, start: str, end: str
+    ) -> list[str]:
+        """Return a bounded recent sample for profile-only deck-derived metrics."""
+        rows = conn.execute(
+            """SELECT tr.deck_id
+               FROM research_results tr
+               WHERE tr.commander_id=? AND tr.deck_id IS NOT NULL
+                 AND tr.tournament_date>=? AND tr.tournament_date<?
+               GROUP BY tr.deck_id
+               ORDER BY MAX(tr.tournament_date) DESC,tr.deck_id
+               LIMIT 24""",
+            (commander_id, start, end),
+        ).fetchall()
+        return [str(row["deck_id"]) for row in rows]
 
     @staticmethod
     def _merge_recorded_printings(
@@ -588,74 +619,61 @@ class ResearchRepo:
     def _representative_recorded_list(
         conn: sqlite3.Connection, commander_id: str, start: str, end: str
     ) -> dict[str, Any] | None:
-        """Pick one recorded list by completeness, then overlap, then deck id."""
+        """Pick one recorded list by completeness, then deck id."""
+        window = (commander_id, start, end)
         chosen = conn.execute(
-            """WITH cohort AS (
-                 SELECT DISTINCT tr.deck_id
+            """WITH candidates AS MATERIALIZED (
+                 SELECT tr.deck_id,MAX(tr.tournament_date) AS last_seen
                  FROM research_results tr
                  WHERE tr.commander_id=? AND tr.deck_id IS NOT NULL
                    AND tr.tournament_date>=? AND tr.tournament_date<?
-                   AND EXISTS (SELECT 1 FROM deck_cards dc WHERE dc.deck_id=tr.deck_id)
-               ),
-               freq AS (
-                 SELECT COALESCE(NULLIF(c.oracle_id,''), dc.card_id) AS oracle_key,
-                        COUNT(DISTINCT dc.deck_id) AS decks_including
-                 FROM cohort
-                 JOIN deck_cards dc
-                   ON dc.deck_id=cohort.deck_id AND dc.is_commander=0
-                 JOIN cards c ON c.id=dc.card_id
-                 GROUP BY COALESCE(NULLIF(c.oracle_id,''), dc.card_id)
-               ),
-               scored AS (
-                 SELECT cohort.deck_id,
-                   COALESCE(SUM(freq.decks_including),0) AS overlap,
-                   COALESCE(SUM(CASE WHEN dc.is_commander=0 THEN dc.quantity ELSE 0 END),0)
-                     AS library_count,
+                 GROUP BY tr.deck_id
+                 ORDER BY last_seen DESC,tr.deck_id
+                 LIMIT 24
+               ), counts AS (
+                 SELECT c.deck_id,c.last_seen,
+                   COALESCE(SUM(dc.quantity),0) AS total_count,
                    COALESCE(SUM(CASE WHEN dc.is_commander=1 THEN dc.quantity ELSE 0 END),0)
                      AS commander_count
-                 FROM cohort
-                 LEFT JOIN deck_cards dc ON dc.deck_id=cohort.deck_id
-                 LEFT JOIN cards c ON c.id=dc.card_id
-                 LEFT JOIN freq
-                   ON freq.oracle_key=COALESCE(NULLIF(c.oracle_id,''), dc.card_id)
-                  AND dc.is_commander=0
-                 GROUP BY cohort.deck_id
+                 FROM candidates c LEFT JOIN deck_cards dc ON dc.deck_id=c.deck_id
+                 GROUP BY c.deck_id
                )
-               SELECT s.deck_id, s.overlap, s.library_count, s.commander_count,
-                      r.player_name, r.standing, r.tournament_date
-               FROM scored s
-               JOIN research_results r
-                 ON r.deck_id=s.deck_id AND r.commander_id=?
-                AND r.tournament_date>=? AND r.tournament_date<?
-               WHERE r.id=(
-                 SELECT r2.id FROM research_results r2
-                 WHERE r2.deck_id=s.deck_id AND r2.commander_id=?
-                   AND r2.tournament_date>=? AND r2.tournament_date<?
-                 ORDER BY r2.tournament_date DESC, r2.id
-                 LIMIT 1
-               )
-               ORDER BY CASE
-                          WHEN s.library_count + s.commander_count = 100
-                           AND s.commander_count IN (1, 2) THEN 1
-                          ELSE 0
-                        END DESC,
-                        s.overlap DESC, s.deck_id
+               SELECT deck_id FROM counts
+               WHERE total_count=100 AND commander_count IN (1,2)
+               ORDER BY last_seen DESC,deck_id
                LIMIT 1""",
-            (
-                commander_id,
-                start,
-                end,
-                commander_id,
-                start,
-                end,
-                commander_id,
-                start,
-                end,
-            ),
+            window,
         ).fetchone()
+        if chosen is None:
+            chosen = conn.execute(
+                """SELECT tr.deck_id
+                   FROM research_results tr
+                   WHERE tr.commander_id=? AND tr.deck_id IS NOT NULL
+                     AND tr.tournament_date>=? AND tr.tournament_date<?
+                     AND EXISTS (SELECT 1 FROM deck_cards d WHERE d.deck_id=tr.deck_id)
+                   GROUP BY tr.deck_id
+                   ORDER BY MAX(tr.tournament_date) DESC,tr.deck_id
+                   LIMIT 1""",
+                window,
+            ).fetchone()
         if chosen is None:
             return None
         deck_id = str(chosen["deck_id"])
+        chosen = conn.execute(
+            """SELECT r.player_name, r.standing, r.tournament_date,
+                      COALESCE((SELECT SUM(CASE WHEN d.is_commander=0 THEN d.quantity ELSE 0 END)
+                                FROM deck_cards d WHERE d.deck_id=?),0) AS library_count,
+                      COALESCE((SELECT SUM(CASE WHEN d.is_commander=1 THEN d.quantity ELSE 0 END)
+                                FROM deck_cards d WHERE d.deck_id=?),0) AS commander_count
+               FROM research_results r
+               WHERE r.deck_id=? AND r.commander_id=?
+                 AND r.tournament_date>=? AND r.tournament_date<?
+               ORDER BY r.tournament_date DESC, r.id
+               LIMIT 1""",
+            (deck_id, deck_id, deck_id, commander_id, start, end),
+        ).fetchone()
+        if chosen is None:
+            return None
         rows = conn.execute(
             """SELECT c.id,c.oracle_id,c.name,c.type_line,c.image_uri,
                       dc.quantity,dc.is_commander
@@ -681,7 +699,7 @@ class ResearchRepo:
             "library_count": library_count,
             "commander_count": commander_count,
             "complete": complete,
-            "overlap": int(chosen["overlap"] or 0),
+            "overlap": 0,
             "provenance": (
                 "Recorded example from the local corpus. A representative sample "
                 "for this commander and window, not a guaranteed optimal list."
