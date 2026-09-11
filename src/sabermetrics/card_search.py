@@ -13,6 +13,8 @@ import sqlite3
 import threading
 import uuid
 from collections import OrderedDict
+from contextlib import closing
+from pathlib import Path
 from typing import Any
 
 from sabermetrics.card_discovery import format_legal_sql
@@ -143,6 +145,15 @@ def catalog_plan(conn: sqlite3.Connection) -> str:
     ensure_card_search_schema(conn)
     rows = conn.execute("EXPLAIN QUERY PLAN " + catalog_load_sql()).fetchall()
     return " | ".join(str(row[-1]) for row in rows)
+
+
+def warm_search_catalog(db_path: str | Path) -> None:
+    """Prepare public catalog data before the HTTP server accepts requests."""
+    key = str(Path(db_path).resolve())
+    with closing(sqlite3.connect(key)) as conn:
+        conn.execute("PRAGMA busy_timeout=5000")
+        with conn:
+            _catalog_faces(conn, key)
 
 
 def reset_search_catalog_cache(db_key: str | None = None) -> None:

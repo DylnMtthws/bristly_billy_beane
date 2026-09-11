@@ -108,3 +108,33 @@ def test_unknown_identity_symbols_do_not_become_colorless(tmp_path):
     assert (
         DeckDocumentRepo(path).search_cards(query="Alpha", allowed_colors={"U"}) == []
     )
+
+
+def test_server_warms_catalog_before_accepting_requests(tmp_path, monkeypatch):
+    from sabermetrics import card_search
+    from sabermetrics.ui.app import run_server
+
+    path = tmp_path / "startup.db"
+    setup_database(path)
+    insert_card(path, "a", "Alpha")
+    monkeypatch.setenv("SABER_DECK_LAB_REDESIGN", "1")
+    monkeypatch.setenv("SABER_RESEARCH_SYNC", "0")
+    loads = []
+    original = card_search._load_catalog
+
+    def counted(conn):
+        loads.append(True)
+        return original(conn)
+
+    monkeypatch.setattr(card_search, "_load_catalog", counted)
+    served = []
+
+    def accept(app, **kwargs):
+        assert len(loads) == 1
+        assert len(DeckDocumentRepo(path).search_cards(query="Alpha")) == 1
+        assert len(loads) == 1
+        served.append(True)
+
+    monkeypatch.setattr("waitress.serve", accept)
+    run_server(db_path=path)
+    assert served == [True]

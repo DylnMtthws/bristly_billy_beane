@@ -293,6 +293,12 @@ def run_server(
         raise ValueError("SABER_DECK_LAB_DEV previews must bind to localhost.")
 
     app = create_app(db_path)
+    if app.config.get("DECK_LAB_BUILDER_ENABLED") or app.config.get(
+        "DECK_LAB_RESEARCH_ENABLED"
+    ):
+        from sabermetrics.card_search import warm_search_catalog
+
+        warm_search_catalog(Path(app.config["DB_PATH"]))
     if _env_bool("SABER_RESEARCH_SYNC", False):
         if app.config["DECK_LAB_DEV_MODE"] or not os.environ.get("MTG_V1_DSN"):
             raise ValueError("Research sync requires MTG_V1_DSN and dev mode disabled")
