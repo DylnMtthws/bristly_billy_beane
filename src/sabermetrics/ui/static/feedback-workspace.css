@@ -277,3 +277,27 @@
 
 .dl-workspace-body .dl-search-result-art { width: 26px; height: 36px; }
 .dl-workspace-body .dl-search-result-art img { width: 26px; height: 36px; object-fit: cover; }
+
+/* Autocomplete must escape the toolbar's former horizontal scroll container. */
+.dl-workspace-body .dl-builder-toolbar { overflow: visible; }
+
+@media (max-width: 767px) {
+  .dl-workspace-body .dl-builder .dl-deck-row {
+    grid-template-columns: 28px 62px minmax(0, 1fr) 58px;
+  }
+  .dl-workspace-body .dl-builder .dl-deck-row > .dl-row-select,
+  .dl-workspace-body .dl-builder .dl-deck-row > .dl-row-select-space {
+    display: block;
+    grid-column: 1;
+    grid-row: 1 / 3;
+    align-self: center;
+  }
+  .dl-workspace-body .dl-builder .dl-deck-row > .dl-qty { display: flex; grid-column: 2; min-width: 0; }
+  .dl-workspace-body .dl-builder .dl-deck-row > .dl-card-name,
+  .dl-workspace-body .dl-builder .dl-deck-row > .dl-mana-cost { display: flex; grid-column: 3; }
+  .dl-workspace-body .dl-builder .dl-deck-row > .dl-row-actions { grid-column: 4; }
+}
+
+@media (max-width: 767px) {
+  .dl-workspace-body .dl-card-suggest { width: min(360px, calc(100vw - 20px)); right: auto; }
+}
