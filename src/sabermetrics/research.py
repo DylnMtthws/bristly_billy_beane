@@ -187,18 +187,8 @@ class ResearchRepo:
         where = ["cc.name LIKE ?"]
         params: list[Any] = [f"%{query}%"]
         selected_colors = [color for color in colors or [] if color in set("WUBRG")]
-        if selected_colors and color_mode == "any":
-            where.append(
-                f"({' OR '.join('cc.color_identity LIKE ?' for _ in selected_colors)})"
-            )
-            params.extend(f'%"{color}"%' for color in selected_colors)
-        else:
-            for color in selected_colors:
-                where.append("cc.color_identity LIKE ?")
-                params.append(f'%"{color}"%')
-            if selected_colors and color_mode == "exact":
-                where.append("json_array_length(cc.color_identity)=?")
-                params.append(len(selected_colors))
+        if selected_colors:
+            apply_colors(where, params, selected_colors, color_mode, alias="cc")
         if mana_min is not None:
             where.append("cc.cmc>=?")
             params.append(mana_min)

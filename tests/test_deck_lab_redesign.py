@@ -117,7 +117,7 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     assert b"Last 180 days" in meta_results
     assert b"All time" in meta_results
     all_time_meta = client.get("/research?tab=metagame&window=0").data
-    assert "Field view · all time".encode() in all_time_meta
+    assert b"Field view" not in all_time_meta
     assert b'<option value="0" selected>All time</option>' in all_time_meta
     retired = client.get("/research/compare?left=kinnan&right=kinnan")
     assert retired.status_code == 302
@@ -159,14 +159,16 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     assert tagged.get_json()["tags"][0]["name"] == "Turbo"
     builder = client.get(f"/build/deck/{deck_id}").data
     assert b"deck-document-data" in builder
-    assert b"Search all cards" in builder
+    assert b"data-card-search" in builder
     assert b">Decklist</button>" in builder
     assert b'placeholder="Add or find a card"' in builder
     assert b'aria-label="Decklist display"' in builder
     assert b'data-density="compact"' in builder
-    assert b"data-bulk-controls hidden" in builder
-    assert b'data-toggle-rail="left"' in builder
+    assert b"data-bulk-controls" in builder
+    assert b'data-toggle-rail="left"' not in builder
     assert b'data-toggle-rail="right"' in builder
+    assert b"dl-add-panel" not in builder
+    assert b'aria-label="Add zone"' in builder
     assert b"Workspace size" in builder
     assert b"Space + drag to pan" not in builder
     assert b"deck-validation" not in builder

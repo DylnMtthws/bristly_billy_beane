@@ -16,28 +16,27 @@
 {% block main_class %}dl-main-wide{% endblock %}
 {% block content %}
 <div class="dl-builder" data-shared="{{ 'true' if shared else 'false' }}" data-playmat-enabled="{{ 'true' if config.DECK_LAB_PLAYMAT_ENABLED else 'false' }}">
-    {% if not shared %}
-    <aside class="dl-add-panel" id="add-panel" aria-label="Add cards">
-        <div class="dl-builder-rail-head"><div><div class="dl-eyebrow">Add cards</div><span class="dl-mono" data-card-total></span></div><button class="dl-rail-toggle" type="button" data-toggle-rail="left" aria-label="Collapse Add cards sidebar" aria-expanded="true" title="Toggle Add cards sidebar"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="2"/><path d="M7 3v14"/></svg></button></div>
-        <div class="dl-add-search"><label class="dl-search-field"><span aria-hidden="true">⌕</span><input class="dl-field" data-card-search placeholder="Search all cards" autocomplete="off"></label>
-            <div class="dl-add-types" aria-label="Card type"><button type="button" data-card-type="" aria-pressed="true">All</button><button type="button" data-card-type="Artifact">Artifact</button><button type="button" data-card-type="Instant">Instant</button><button type="button" data-card-type="Creature">Creature</button><button type="button" data-card-type="Land">Land</button></div>
-            <details class="dl-add-more"><summary>More filters</summary><div class="dl-advanced"><input class="dl-field" data-oracle-search placeholder="Oracle text"><input class="dl-field" data-type-search placeholder="Type line"><div><input class="dl-field" data-mana-search type="number" min="0" placeholder="Max mana value"><select class="dl-field" data-rarity-search><option value="">Any rarity</option><option>common</option><option>uncommon</option><option>rare</option><option>mythic</option></select></div></div></details>
-        </div>
-        <div class="dl-add-destination"><label>Add to <select class="dl-zone-select" data-add-zone></select></label><span class="dl-muted" data-search-scope></span></div>
-        <div class="dl-add-results" data-card-results><p class="dl-muted">Search by card name, text, or type.</p></div>
-        <p class="dl-add-help">Drag onto the mat, or double-click to add to the selected zone.</p>
-    </aside>
-    {% endif %}
     <section class="dl-builder-main">
-        <div class="dl-builder-toolbar" data-table-only>
-            {% if not shared %}<label class="dl-decklist-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="4.75"/><path d="m12 12 4 4"/></svg><span class="dl-visually-hidden">Add or find a card</span><input type="search" data-decklist-search placeholder="Add or find a card" autocomplete="off"></label>{% endif %}
-            <label class="desktop-only dl-toolbar-select"><span class="dl-visually-hidden">Group cards</span><select class="dl-zone-select" data-group aria-label="Group cards"><option value="zone">Group: Zone</option><option value="type">Group: Type</option></select></label>
-            <label class="desktop-only dl-toolbar-select"><span class="dl-visually-hidden">Sort cards</span><select class="dl-zone-select" data-sort aria-label="Sort cards"><option value="manual">Sort: Manual</option><option value="name">Sort: Name</option><option value="mana_value">Sort: Mana value</option></select></label>
-            <span class="dl-toolbar-divider desktop-only" aria-hidden="true"></span>
-            <div class="dl-segments dl-decklist-display" aria-label="Decklist display"><button data-display="text" aria-pressed="true">List</button><button data-display="grid" aria-pressed="false">Grid</button><button data-display="spoiler" aria-pressed="false">Spoiler</button></div>
-            {% if not shared %}<div class="dl-bulk-controls desktop-only" data-bulk-controls hidden><strong class="dl-mono" data-selected-count>0 selected</strong><select class="dl-zone-select" data-bulk-zone aria-label="Move selected cards to"></select><button class="dl-button dl-button-primary" type="button" data-bulk-move disabled>Move</button><button class="dl-icon-button" type="button" data-clear-selection aria-label="Clear selection">×</button></div>{% endif %}
+        <div class="dl-builder-toolbar">
+            {% if not shared %}
+            <div class="dl-card-combobox" data-card-combobox>
+                <label class="dl-decklist-search">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="4.75"/><path d="m12 12 4 4"/></svg>
+                    <span class="dl-visually-hidden">Add or find a card</span>
+                    <input type="search" id="card-search" data-card-search placeholder="Add or find a card" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="card-search-list" aria-haspopup="listbox">
+                </label>
+                <label class="desktop-only dl-toolbar-select dl-add-destination-control"><span class="dl-visually-hidden">Add to zone</span><select class="dl-zone-select" data-add-zone aria-label="Add to zone"></select></label>
+                <ul class="dl-card-suggest" id="card-search-list" role="listbox" data-card-results hidden></ul>
+                <div class="dl-visually-hidden" data-search-status aria-live="polite"></div>
+            </div>
+            {% endif %}
+            <label class="desktop-only dl-toolbar-select" data-table-only><span class="dl-visually-hidden">Group cards</span><select class="dl-zone-select" data-group aria-label="Group cards"><option value="zone">Group: Zone</option><option value="type">Group: Type</option></select></label>
+            <label class="desktop-only dl-toolbar-select" data-table-only><span class="dl-visually-hidden">Sort cards</span><select class="dl-zone-select" data-sort aria-label="Sort cards"><option value="manual">Sort: Manual</option><option value="name">Sort: Name</option><option value="mana_value">Sort: Mana value</option></select></label>
+            <span class="dl-toolbar-divider desktop-only" data-table-only aria-hidden="true"></span>
+            <div class="dl-segments dl-decklist-display" data-table-only aria-label="Decklist display"><button data-display="text" aria-pressed="true">List</button><button data-display="grid" aria-pressed="false">Grid</button><button data-display="spoiler" aria-pressed="false">Spoiler</button></div>
+            {% if not shared %}<div class="dl-bulk-controls desktop-only" data-bulk-controls data-table-only hidden><strong class="dl-mono" data-selected-count>0 selected</strong><select class="dl-zone-select" data-bulk-zone aria-label="Move selected cards to"></select><button class="dl-button dl-button-primary" type="button" data-bulk-move disabled>Move</button><button class="dl-icon-button" type="button" data-clear-selection aria-label="Clear selection">×</button></div>{% endif %}
             <span class="push"></span>
-            <div class="dl-density desktop-only"><span>Rows</span><div class="dl-segments" aria-label="Row density"><button type="button" data-density="compact" aria-pressed="true">Compact</button><button type="button" data-density="comfortable" aria-pressed="false">Comfortable</button></div></div>
+            <div class="dl-density desktop-only" data-table-only><span>Rows</span><div class="dl-segments" aria-label="Row density"><button type="button" data-density="compact" aria-pressed="true">Compact</button><button type="button" data-density="comfortable" aria-pressed="false">Comfortable</button></div></div>
             {% if not shared %}<button class="dl-button dl-toolbar-action" type="button" data-tags-open aria-haspopup="dialog" aria-controls="deck-tags-dialog">Tags <span data-tag-count>{{ document.tags|length }}</span></button><button class="dl-button dl-toolbar-action" type="button" data-new-zone aria-label="Create a new zone"><span aria-hidden="true">＋</span> New zone</button><details class="dl-decklist-more"><summary aria-label="Deck options">•••</summary><div><span class="dl-decklist-more-label">Deck options</span><button type="button" data-commanders-open>Choose commanders / partner</button><span class="dl-decklist-more-rule"></span><span class="dl-decklist-more-label">Discovery</span><form method="post" action="{{ url_for('builder.set_visibility', deck_id=document.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="visibility" value="{{ 'private' if document.visibility=='public' else 'public' }}"><button type="submit">{{ 'Make private' if document.visibility=='public' else 'Make public' }}</button></form><span class="dl-decklist-more-rule"></span><span class="dl-decklist-more-label">Row density</span><button type="button" data-density="compact" aria-pressed="true">Compact</button><button type="button" data-density="comfortable" aria-pressed="false">Comfortable</button><span class="dl-decklist-more-rule"></span><button type="button" data-tags-open>Manage tags <span data-tag-count>{{ document.tags|length }}</span></button><button type="button" data-new-zone>New zone</button></div></details>{% endif %}
         </div>
         <div class="dl-builder-content" id="table-view" aria-live="polite"></div>
@@ -47,7 +46,13 @@
         <div class="dl-builder-rail-head"><button class="dl-rail-toggle" type="button" data-toggle-rail="right" aria-label="Collapse Deck sidebar" aria-expanded="true" title="Toggle Deck sidebar"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="2"/><path d="M13 3v14"/></svg></button><div class="dl-eyebrow">Deck</div></div>
         <section><h2>Mana curve</h2><div class="dl-mana-curve" id="mana-curve"></div></section>
         <section><h2>Color</h2><div class="dl-color-stats" id="color-stats"></div></section>
-        <section><h2>Zones</h2><div class="dl-stat-list" id="zone-stats"></div></section>
+        <section>
+            <div class="dl-zones-head">
+                <h2>Zones</h2>
+                {% if not shared %}<button class="dl-icon-button dl-add-zone" type="button" data-new-zone aria-label="Add zone" title="Add zone">+</button>{% endif %}
+            </div>
+            <div class="dl-stat-list" id="zone-stats"></div>
+        </section>
         <section><h2>Tags</h2><div class="dl-builder-tag-summary" data-tag-summary></div>{% if not shared %}<button class="dl-text-button" type="button" data-tags-open>Manage tags</button>{% endif %}</section>
     </aside>
 </div>

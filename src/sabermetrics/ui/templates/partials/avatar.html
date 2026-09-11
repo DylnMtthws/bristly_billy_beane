@@ -1,7 +1,7 @@
-{% macro avatar(selection, icons, large=false) -%}
+{% macro avatar(selection, icons, large=false, image_url=none) -%}
 <span class="account-avatar{% if large %} account-avatar-large{% endif %}" aria-hidden="true">
-{% if selection.kind == 'image' %}<img src="{{ url_for('main.profile_avatar', v=selection.value) }}" alt="" width="256" height="256">
-{% elif selection.kind == 'icon' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ icons[selection.value][1] }}"></path></svg>
+{% if selection.kind == 'image' %}<img src="{{ image_url or url_for('main.profile_avatar', v=selection.value) }}" alt="" width="256" height="256">
+{% elif selection.kind == 'icon' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="{{ icons[selection.value][1] if selection.value in icons else icons['person'][1] }}"></path></svg>
 {% else %}<span>{{ selection.value }}</span>{% endif %}
 </span>
 {%- endmacro %}

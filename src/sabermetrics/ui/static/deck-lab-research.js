@@ -27,6 +27,7 @@
     options = options || {};
     var retry = !!options.retry;
     var quiet = !!options.quiet && !retry;
+    if (retry) restoreDisplayedTab();
     node.textContent = text || "";
     node.hidden = !text;
     node.classList.toggle("dl-visually-hidden", quiet);
@@ -59,6 +60,46 @@
     return String(value) === "10" ? "10+" : String(value);
   }
 
+  function boundIsTick(value) {
+    return value === 0 || value === 5 || value === 10;
+  }
+
+  function hideBoundLive(node) {
+    if (node) node.hidden = true;
+  }
+
+  function placeBoundLive(node, value) {
+    if (!node) return;
+    node.textContent = boundLabel(value);
+    node.style.setProperty("--bound-live", String(value));
+    node.hidden = false;
+  }
+
+  function syncBoundLiveLabels(range, lo, hi) {
+    var minLive = range.querySelector("[data-bound-live='min']");
+    var maxLive = range.querySelector("[data-bound-live='max']");
+    var combined = range.querySelector("[data-bound-live='combined']");
+    hideBoundLive(minLive);
+    hideBoundLive(maxLive);
+    hideBoundLive(combined);
+    var loTick = boundIsTick(lo);
+    var hiTick = boundIsTick(hi);
+    if (lo === hi) {
+      if (!loTick) placeBoundLive(combined || minLive, lo);
+      return;
+    }
+    if (!loTick && !hiTick && hi - lo <= 1) {
+      if (combined) {
+        combined.textContent = boundLabel(lo) + "–" + boundLabel(hi);
+        combined.style.setProperty("--bound-live", String((lo + hi) / 2));
+        combined.hidden = false;
+      }
+      return;
+    }
+    if (!loTick) placeBoundLive(minLive, lo);
+    if (!hiTick) placeBoundLive(maxLive, hi);
+  }
+
   function bindBoundRanges(root) {
     (root || document).querySelectorAll(".dl-bound-range").forEach(function (range) {
       if (range.getAttribute("data-bound-ready")) return;
@@ -83,9 +124,13 @@
         }
         minInput.setAttribute("aria-valuetext", boundLabel(lo));
         maxInput.setAttribute("aria-valuetext", boundLabel(hi));
-        if (selection) selection.textContent = boundLabel(lo) + "–" + boundLabel(hi);
+        if (selection) {
+          selection.hidden = true;
+          selection.textContent = boundLabel(lo) + "–" + boundLabel(hi);
+        }
         range.style.setProperty("--bound-lo", String(lo));
         range.style.setProperty("--bound-hi", String(hi));
+        syncBoundLiveLabels(range, lo, hi);
       }
 
       minInput.addEventListener("input", function () { apply(minInput); });
@@ -122,6 +167,121 @@
 
   document.addEventListener("pointerup", clearBoundDragging);
   document.addEventListener("pointercancel", clearBoundDragging);
+
+  var TAB_KEYS = ["cards", "commanders", "metagame", "decks"];
+  var tabAnimTimer = 0;
+
+  function prefersReducedMotion() {
+    return typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function tabKeyFromUrl(url) {
+    var tab = url.searchParams.get("tab") || "commanders";
+    return TAB_KEYS.indexOf(tab) === -1 ? "commanders" : tab;
+  }
+
+  function tabIndexFromTabs(tabs) {
+    var links = tabs.querySelectorAll("a[href]");
+    for (var i = 0; i < links.length; i++) {
+      if (links[i].getAttribute("aria-current") === "page") return i;
+    }
+    return 0;
+  }
+
+  function ensureTabIndicator(tabs) {
+    var indicator = tabs.querySelector("[data-research-tab-indicator]");
+    if (indicator) return indicator;
+    indicator = document.createElement("span");
+    indicator.className = "dl-research-tab-indicator";
+    indicator.setAttribute("data-research-tab-indicator", "");
+    indicator.setAttribute("aria-hidden", "true");
+    if (tabs.firstChild) tabs.insertBefore(indicator, tabs.firstChild);
+    else tabs.appendChild(indicator);
+    return indicator;
+  }
+
+  function syncTabIndicator(tabs, options) {
+    if (!tabs) return;
+    options = options || {};
+    var index = options.index != null ? options.index : tabIndexFromTabs(tabs);
+    var animate = !!options.animate && !prefersReducedMotion();
+    ensureTabIndicator(tabs);
+    tabs.style.setProperty("--research-tab-index", String(index));
+    tabs.setAttribute("data-research-tab-index", String(index));
+    window.clearTimeout(tabAnimTimer);
+    if (animate) {
+      tabs.removeAttribute("data-research-tab-static");
+      tabs.classList.add("is-tab-animating");
+      tabAnimTimer = window.setTimeout(function () {
+        tabs.classList.remove("is-tab-animating");
+        tabAnimTimer = 0;
+      }, 220);
+    } else {
+      tabs.setAttribute("data-research-tab-static", "1");
+      tabs.classList.remove("is-tab-animating");
+    }
+  }
+
+  function selectResearchTab(tabs, nextIndex, options) {
+    if (!tabs || nextIndex < 0) return;
+    options = options || {};
+    var links = Array.prototype.slice.call(tabs.querySelectorAll("a[href]"));
+    if (!links[nextIndex]) return;
+    var prev = tabIndexFromTabs(tabs);
+    links.forEach(function (link) { link.removeAttribute("aria-current"); });
+    links[nextIndex].setAttribute("aria-current", "page");
+    if (nextIndex !== prev) {
+      tabs.setAttribute("data-research-tab-dir", nextIndex > prev ? "forward" : "back");
+    }
+    syncTabIndicator(tabs, {
+      index: nextIndex,
+      animate: options.animate !== false && nextIndex !== prev
+    });
+  }
+
+  function tabIndexFromUrl(tabs, url) {
+    var key = tabKeyFromUrl(url);
+    var links = tabs.querySelectorAll("a[href]");
+    for (var i = 0; i < links.length; i++) {
+      try {
+        var href = new URL(links[i].href, location.href);
+        var tab = href.searchParams.get("tab") || "commanders";
+        if (tab === key) return i;
+      } catch (err) {}
+    }
+    return TAB_KEYS.indexOf(key);
+  }
+
+  function acknowledgeTabSelection(link, url) {
+    if (!link || typeof link.closest !== "function") return;
+    var tabs = link.closest("[data-research-tabs]");
+    if (!tabs) return;
+    var next = tabIndexFromUrl(tabs, url);
+    selectResearchTab(tabs, next, { animate: true });
+  }
+
+  function acknowledgeTabFromUrl(url, animate) {
+    var tabs = document.querySelector("[data-research-tabs]");
+    if (!tabs) return;
+    selectResearchTab(tabs, tabIndexFromUrl(tabs, url), { animate: !!animate });
+  }
+
+  function restoreDisplayedTab() {
+    var displayed = document.querySelector("[data-research-fragment][data-tab]");
+    if (!displayed) return;
+    var url = new URL(location.href);
+    url.searchParams.set("tab", displayed.getAttribute("data-tab"));
+    acknowledgeTabFromUrl(url, false);
+  }
+
+  function bindTabIndicator(root) {
+    var scope = root && root.querySelector ? root : document;
+    var tabs = scope.querySelector("[data-research-tabs]");
+    if (!tabs && root && root.matches && root.matches("[data-research-tabs]")) tabs = root;
+    if (!tabs) return;
+    syncTabIndicator(tabs, { animate: false });
+  }
 
   function syncSearch(url) {
     var form = searchForm();
@@ -219,6 +379,7 @@
     liveNode.replaceChildren(fragment);
     bindImages(liveNode);
     bindBoundRanges(liveNode);
+    bindTabIndicator(liveNode);
     markPrevious(false);
     syncSearch(result.url);
     var freshness = (liveNode.querySelector("[data-research-freshness]") || {}).getAttribute
@@ -285,6 +446,7 @@
     if (!node || typeof node.closest !== "function") return;
     if (node.closest("[data-research-retry]")) {
       event.preventDefault();
+      acknowledgeTabFromUrl(lastRequest.url, true);
       navigate(lastRequest.url, lastRequest.push, lastRequest.restore);
       return;
     }
@@ -339,6 +501,7 @@
     if (url.searchParams.get("results") === "full") return;
     if (url.hash && url.pathname === location.pathname && url.search === location.search) return;
     event.preventDefault();
+    acknowledgeTabSelection(link, url);
     navigate(url, true);
   }, true);
 
@@ -407,11 +570,14 @@
   });
 
   window.addEventListener("popstate", function () {
-    navigate(new URL(location.href), false, true);
+    var url = new URL(location.href);
+    acknowledgeTabFromUrl(url, true);
+    navigate(url, false, true);
   });
 
   bindImages(page);
   bindBoundRanges(page);
+  bindTabIndicator(page);
 
   var DECK_SUGGEST_MS = 250;
   var deckSuggestTimer = 0;
