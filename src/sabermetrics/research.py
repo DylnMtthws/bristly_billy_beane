@@ -24,6 +24,7 @@ from sabermetrics.card_discovery import (
     numeric_stat_sql,
     primary_type,
 )
+from sabermetrics.card_search import unique_legal_faces_sql
 from sabermetrics.research_identities import attach_members
 
 
@@ -385,33 +386,33 @@ class ResearchRepo:
         if rarity in RARITIES:
             where.append("c.rarity=?")
             values.append(rarity)
+        where_sql = " AND ".join(where)
+        faces_sql = unique_legal_faces_sql(where_sql)
+        coverage_sql = unique_legal_faces_sql(format_legal_sql("c"))
         with self._connect() as conn:
+            total = int(
+                conn.execute(
+                    f"SELECT COUNT(DISTINCT c.name) FROM cards c WHERE {where_sql}",
+                    values,
+                ).fetchone()[0]
+            )
             rows = conn.execute(
-                f"""SELECT c.id,c.oracle_id,c.name,c.type_line,c.mana_cost,c.cmc,
-                          c.oracle_text,c.color_identity,c.image_uri,c.rarity,
-                          c.power,c.toughness
-                   FROM cards c WHERE {' AND '.join(where)}
-                     AND c.id=(SELECT c2.id FROM cards c2 WHERE c2.name=c.name
-                               ORDER BY c2.image_uri IS NULL,c2.id LIMIT 1)
-                   ORDER BY c.name COLLATE NOCASE LIMIT ? OFFSET ?""",
+                faces_sql + " ORDER BY c.name COLLATE NOCASE LIMIT ? OFFSET ?",
                 [*values, per_page + 1, (page - 1) * per_page],
             ).fetchall()
-            coverage = conn.execute(
-                f"""SELECT COUNT(*) AS total,
-                          SUM(CASE WHEN {numeric_stat_sql("power")} IS NOT NULL
+            coverage = conn.execute(f"""SELECT COUNT(*) AS total,
+                          SUM(CASE WHEN {numeric_stat_sql("c.power")} IS NOT NULL
                                    THEN 1 ELSE 0 END) AS numeric_power,
-                          SUM(CASE WHEN {numeric_stat_sql("toughness")} IS NOT NULL
+                          SUM(CASE WHEN {numeric_stat_sql("c.toughness")} IS NOT NULL
                                    THEN 1 ELSE 0 END) AS numeric_toughness
-                   FROM cards c WHERE is_legal_in_99=1
-                     AND c.id=(SELECT c2.id FROM cards c2 WHERE c2.name=c.name
-                               ORDER BY c2.image_uri IS NULL,c2.id LIMIT 1)"""
-            ).fetchone()
+                   FROM ({coverage_sql}) AS c""").fetchone()
         has_next = len(rows) > per_page
         results = [dict(row) for row in rows[:per_page]]
         for row in results:
             row["color_identity"] = _colors(row.get("color_identity"))
         return {
             "results": results,
+            "total": total,
             "page": page,
             "has_next": has_next,
             "stat_coverage": {

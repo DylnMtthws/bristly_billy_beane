@@ -13,7 +13,7 @@
   var recoveryKey = "deck-lab-pending:" + state.id;
   var railsKey = "deck-lab-builder-rails:" + state.id;
   var selectedEntries = new Set(), activeZoneId = null, activeCardType = "";
-  var dragPreview = null;
+  var dragPreview = null, lastRenderedSearchScope;
   var roleOptions = [
     ["", "Add role"], ["ramp", "Ramp"], ["draw", "Draw"],
     ["removal", "Removal"], ["protection", "Protection"],
@@ -73,6 +73,56 @@
   function activeView() { return narrow.matches || !playmatEnabled ? "table" : preference("view_mode", "playmat"); }
   function zoneEntries(zoneId) { return state.entries.filter(function (entry) { return !entry.is_commander && entry.zone_id === zoneId; }); }
   function qty(entries) { return entries.reduce(function (n, entry) { return n + Number(entry.quantity || 0); }, 0); }
+
+  var PRIVATE_ZONE_NAMES = { sideboard: 1, notes: 1, note: 1, maybeboard: 1, maybe: 1, draft: 1, considering: 1 };
+  function isLibraryZone(zoneId) {
+    var name = String(zoneName(zoneId) || "Unsorted").trim().toLowerCase();
+    return !PRIVATE_ZONE_NAMES[name];
+  }
+  function entryIssueList(entry) {
+    var items = entry && entry.validation_issues;
+    if ((!items || !items.length) && state.validation && state.validation.entry_issues && entry && entry.id) {
+      items = state.validation.entry_issues[entry.id] || [];
+    }
+    return items || [];
+  }
+  function entryIssueMessages(entry) {
+    return entryIssueList(entry).map(function (item) {
+      if (item && typeof item === "object") return String(item.message || item.code || "");
+      return String(item || "");
+    }).filter(Boolean);
+  }
+  function applyCardValidity(el, entry, label) {
+    var messages = entryIssueMessages(entry);
+    el.classList.toggle("dl-card-invalid", messages.length > 0);
+    if (!messages.length) return null;
+    var reason = messages.join(" ");
+    el.setAttribute("aria-invalid", "true");
+    var base = label || el.title || (entry && entry.name) || "Card";
+    el.title = base + ". " + reason;
+    var current = el.getAttribute("aria-label");
+    if (current) el.setAttribute("aria-label", current + ". " + reason);
+    else if (String(el.tagName || "").toUpperCase() === "BUTTON") el.setAttribute("aria-label", el.title);
+    var mark = node("span", "dl-card-issue");
+    mark.setAttribute("title", reason);
+    mark.appendChild(node("span", "dl-card-issue-mark", "!"));
+    mark.appendChild(node("span", "dl-visually-hidden", reason));
+    return mark;
+  }
+  function renderDeckCount() {
+    var counted = state.entries.filter(function (entry) {
+      return entry.is_commander || isLibraryZone(entry.zone_id);
+    });
+    var total = state.validation && state.validation.total_count != null
+      ? Number(state.validation.total_count)
+      : qty(counted);
+    var invalid = total !== 100;
+    document.querySelectorAll("[data-deck-count]").forEach(function (el) {
+      el.textContent = total + "/100";
+      el.classList.toggle("is-invalid", invalid);
+      el.setAttribute("aria-label", total + " of 100 cards");
+    });
+  }
   function zoneName(zoneId) { var zone = state.zones.find(function (item) { return item.id === zoneId; }); return zone ? zone.name : "Unsorted"; }
   function manaToken(symbol) {
     var upper = String(symbol || "").toUpperCase(), token = node("i", "dl-mana-symbol", upper.replace("/", "⁄"));
@@ -155,11 +205,11 @@
       var actions = node("div", "dl-row-actions"), imageUrl = cardImage(entry);
       if (imageUrl) { var preview = node("a", "dl-icon-button dl-card-preview", ""); preview.href = imageUrl; preview.target = "_blank"; preview.rel = "noopener"; preview.setAttribute("aria-label", "Open card image for " + entry.name); preview.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="3" width="10" height="14" rx="1.5"/><path d="M7 6h10v11a1 1 0 0 1-1 1H7z"/></svg>'; actions.appendChild(preview); }
       if (!shared) { var remove = node("button", "dl-icon-button", "×"); remove.type = "button"; remove.setAttribute("aria-label", "Remove " + entry.name); remove.addEventListener("click", function () { command([{ type: "remove_entry", entry_id: entry.id }]); }); actions.appendChild(remove); }
-      row.appendChild(actions); rows.appendChild(row);
+      var issueMark = applyCardValidity(row, entry, entry.name); if (issueMark) actions.appendChild(issueMark); row.appendChild(actions); rows.appendChild(row);
     }); container.appendChild(rows);
   }
-  function renderGrid(group, container) { var grid = node("div", "dl-grid-display"); group.entries.forEach(function (entry) { var card = node("div", "dl-grid-card"); card.title = entry.name; var url = cardImage(entry); if (url) { var img = node("img"); img.src = url; img.alt = entry.name; img.loading = "lazy"; card.appendChild(img); } else card.appendChild(node("div", "fallback", entry.name)); card.appendChild(node("b", "", entry.quantity + "×")); grid.appendChild(card); }); container.appendChild(grid); }
-  function renderSpoiler(group, container) { var grid = node("div", "dl-spoiler-display"); group.entries.forEach(function (entry) { var card = node("article", "dl-spoiler-card"), url = cardImage(entry); if (url) { var img = node("img"); img.src = url; img.alt = ""; img.loading = "lazy"; card.appendChild(img); } else card.appendChild(node("div", "dl-card-art")); var body = node("div"), rules = node("p"); appendManaText(rules, entry.oracle_text || entry.type_line || "Card details unavailable."); body.append(node("strong", "", entry.quantity + "× " + entry.name), rules); card.appendChild(body); grid.appendChild(card); }); container.appendChild(grid); }
+  function renderGrid(group, container) { var grid = node("div", "dl-grid-display"); group.entries.forEach(function (entry) { var card = node("div", "dl-grid-card"); card.dataset.entryId = entry.id; card.title = entry.name; var url = cardImage(entry); if (url) { var img = node("img"); img.src = url; img.alt = entry.name; img.loading = "lazy"; card.appendChild(img); } else card.appendChild(node("div", "fallback", entry.name)); card.appendChild(node("b", "", entry.quantity + "×")); var mark = applyCardValidity(card, entry, entry.name); if (mark) card.appendChild(mark); grid.appendChild(card); }); container.appendChild(grid); }
+  function renderSpoiler(group, container) { var grid = node("div", "dl-spoiler-display"); group.entries.forEach(function (entry) { var card = node("article", "dl-spoiler-card"), url = cardImage(entry); card.dataset.entryId = entry.id; if (url) { var img = node("img"); img.src = url; img.alt = ""; img.loading = "lazy"; card.appendChild(img); } else card.appendChild(node("div", "dl-card-art")); var body = node("div"), rules = node("p"); appendManaText(rules, entry.oracle_text || entry.type_line || "Card details unavailable."); body.append(node("strong", "", entry.quantity + "× " + entry.name), rules); var mark = applyCardValidity(card, entry, entry.name); if (mark) card.appendChild(mark); card.appendChild(body); grid.appendChild(card); }); container.appendChild(grid); }
   function renderTable() {
     var view = document.getElementById("table-view"); if (!view) return; view.replaceChildren();
     var collapsed = []; try { collapsed = JSON.parse(preference("collapsed_json", "[]")); } catch (_) {}
@@ -240,6 +290,7 @@
     var card = node("button", "dl-mat-card"), basicQuantity = /\bBasic Land\b/i.test(entry.type_line || "") ? Number(entry.quantity || 0) : 0; card.type = "button"; card.style.setProperty("--card-index", index); card.dataset.entryId = entry.id; card.title = basicQuantity > 1 ? entry.name + " ×" + basicQuantity : entry.name; card.draggable = !shared; var url = cardImage(entry);
     if (url) { var image = node("img"); image.src = url; image.alt = entry.name; image.loading = "lazy"; card.appendChild(image); } else card.appendChild(node("span", "", entry.name));
     if (basicQuantity > 1) { card.setAttribute("aria-label", entry.name + ", " + basicQuantity + " copies"); card.appendChild(node("span", "dl-mat-card-quantity", "×" + basicQuantity)); }
+    var matMark = applyCardValidity(card, entry, card.title || entry.name); if (matMark) card.appendChild(matMark);
     card.addEventListener("click", function (event) { event.stopPropagation(); if (event.metaKey || event.ctrlKey) { if (selectedEntries.has(entry.id)) selectedEntries.delete(entry.id); else selectedEntries.add(entry.id); } else { selectedEntries.clear(); selectedEntries.add(entry.id); } document.querySelectorAll(".dl-mat-card.selected").forEach(function (el) { el.classList.toggle("selected", selectedEntries.has(el.dataset.entryId)); }); renderSelectionBar(); syncSelection(); });
     card.classList.toggle("selected", selectedEntries.has(entry.id));
     card.addEventListener("dragstart", function (event) { beginCardDrag(event, card, { effect: "move", type: "text/deck-entry", value: entry.id }); });
@@ -339,7 +390,7 @@
     document.querySelectorAll("[data-surface]").forEach(function (button) { button.classList.toggle("active", !(state.presentation || {}).playmat_id && button.dataset.surface === ((state.presentation || {}).surface || "slate-grid")); }); document.querySelectorAll("[data-playmat-id]").forEach(function (button) { button.classList.toggle("active", !!((state.presentation || {}).playmat_id) && button.dataset.playmatId === String((state.presentation || {}).playmat_id)); }); document.querySelectorAll("[data-setting]").forEach(function (input) { input.checked = !!(state.presentation || {})[input.dataset.setting]; }); var size = document.querySelector("[data-playmat-size]"); if (size) { size.value = Number((state.presentation || {}).canvas_width || 1600) + "x" + Number((state.presentation || {}).canvas_height || 900); refreshSelect(size); }
     syncRails();
   }
-  function render() { syncControls(); renderTable(); renderPlaymat(); renderStats(); renderTags(); syncSelection(); }
+  function render() { var scope = commanderScope(); if (lastRenderedSearchScope !== undefined && lastRenderedSearchScope !== scope) closeCardResults(); lastRenderedSearchScope = scope; syncControls(); renderDeckCount(); renderTable(); renderPlaymat(); renderStats(); renderTags(); syncSelection(); }
   function syncRails() {
     root.classList.remove("left-collapsed");
     root.classList.toggle("right-collapsed", !rails.right);
@@ -449,6 +500,10 @@
     results.hidden = false;
     if (input) input.setAttribute("aria-expanded", "true");
   }
+  function commanderScope() {
+    return state.entries.filter(function (entry) { return !!entry.is_commander; })
+      .map(function (entry) { return String(entry.card_id || ""); }).sort().join("|");
+  }
   function runSearch() {
     clearTimeout(searchTimer);
     var input = document.querySelector("[data-card-search]"), results = document.querySelector("[data-card-results]");
@@ -456,6 +511,7 @@
     var query = input.value.trim();
     if (!query) { closeCardResults(); searchStatus(""); return; }
     var seq = (searchSeq += 1);
+    var scope = commanderScope();
     var params = new URLSearchParams({ q: input.value, deck_id: state.id, limit: "8" });
     if (searchController) searchController.abort();
     searchController = new AbortController();
@@ -467,10 +523,10 @@
       if (!response.ok) throw new Error();
       return response.json();
     }).then(function (body) {
-      if (seq !== searchSeq) return;
+      if (seq !== searchSeq || scope !== commanderScope()) return;
       renderSearchResults(body);
     }).catch(function (error) {
-      if (error.name === "AbortError" || seq !== searchSeq) return;
+      if (error.name === "AbortError" || seq !== searchSeq || scope !== commanderScope()) return;
       results.replaceChildren(node("p", "dl-card-suggest-empty", "Search unavailable."));
       results.hidden = false;
       searchStatus("Search unavailable.");
@@ -500,7 +556,11 @@
   if (commandersDialog) commandersDialog.addEventListener("close", function () {
     if (commandersDialog.returnValue !== "save") return;
     var ids = [commandersDialog.querySelector("[data-commander-id]").value, commandersDialog.querySelector("[data-partner-id]").value].filter(Boolean);
-    command([{ type: "set_commanders", card_ids: ids }]).then(runSearch);
+    closeCardResults();
+    command([{ type: "set_commanders", card_ids: ids }]).then(function () {
+      var input = document.querySelector("[data-card-search]");
+      if (input && input.value.trim()) runSearch();
+    });
   });
 
   var tagsDialog = document.getElementById("deck-tags-dialog"), tagInput = document.querySelector("[data-tag-input]"), tagError = document.querySelector("[data-tag-error]"), tagSearchTimer, tagSearchController; function tagMessage(message) { if (tagError) tagError.textContent = message || ""; } function addTag() { if (!tagInput) return; var name = tagInput.value.normalize("NFKC").trim().replace(/\s+/g, " "); if (name.length < 2 || name.length > 32) return tagMessage("Use between 2 and 32 characters."); if ((state.tags || []).some(function (tag) { return tag.name.toLowerCase() === name.toLowerCase(); })) return tagMessage("That tag is already on this deck."); if ((state.tags || []).length >= 6) return tagMessage("A deck can have up to six tags."); tagMessage(""); tagInput.value = ""; command([{ type: "add_tag", name: name }]); }

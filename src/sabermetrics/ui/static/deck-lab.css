@@ -1,5 +1,6 @@
 @import url("feedback-controls.css");
 @import url("feedback-workspace.css");
+@import url("feedback-validation.css");
 
 :root {
   color-scheme: dark;

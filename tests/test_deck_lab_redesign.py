@@ -92,7 +92,7 @@ def test_builder_research_and_admin_vertical_slice(tmp_path, monkeypatch):
     assert b'id="research-sort"' not in response.data
     card_results = client.get("/research?tab=cards").data
     assert b'class="dl-card-result-grid"' in card_results
-    assert b"Card results" in card_results
+    assert b"commander-legal cards" in card_results
     assert b"Card corpus results" not in card_results
     assert b">Meta</a>" in card_results
     assert card_results.count(b"PAGE 1") == 1
