@@ -1,0 +1,69 @@
+/* DYL-51 deck count and per-card legality. Scoped to the builder workspace. */
+
+.dl-workspace-body .dl-deck-count {
+  flex: none;
+  margin-right: 4px;
+  color: var(--muted);
+  font: 12px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.dl-workspace-body .dl-deck-count.is-invalid {
+  color: var(--brand-text);
+}
+
+.dl-workspace-body .dl-deck-row.dl-card-invalid .dl-card-name,
+.dl-workspace-body .dl-grid-card.dl-card-invalid,
+.dl-workspace-body .dl-spoiler-card.dl-card-invalid strong,
+.dl-workspace-body .dl-mat-card.dl-card-invalid {
+  color: var(--brand-text);
+}
+.dl-workspace-body .dl-spoiler-card.dl-card-invalid {
+  position: relative;
+}
+.dl-workspace-body .dl-deck-row.dl-card-invalid {
+  box-shadow: inset 3px 0 0 var(--brand-text);
+}
+.dl-workspace-body .dl-grid-card.dl-card-invalid,
+.dl-workspace-body .dl-spoiler-card.dl-card-invalid,
+.dl-workspace-body .dl-mat-card.dl-card-invalid {
+  outline: 2px solid var(--brand-text);
+  outline-offset: -2px;
+}
+
+.dl-workspace-body .dl-card-issue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: rgba(233, 69, 96, 0.18);
+  color: var(--brand-text);
+  font: 700 10px/1 var(--mono);
+}
+.dl-workspace-body .dl-spoiler-card,
+.dl-workspace-body .dl-mat-card {
+  position: relative;
+}
+.dl-workspace-body .dl-grid-card .dl-card-issue,
+.dl-workspace-body .dl-spoiler-card .dl-card-issue,
+.dl-workspace-body .dl-mat-card .dl-card-issue {
+  position: absolute;
+  z-index: 4;
+  top: 6px;
+  left: 6px;
+  margin: 0;
+}
+.dl-workspace-body .dl-card-issue-mark {
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .dl-workspace-body .dl-builder-toolbar .dl-deck-count {
+    display: inline-flex;
+  }
+}

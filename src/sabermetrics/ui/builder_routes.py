@@ -348,14 +348,9 @@ def cards():
     deck_id = (request.args.get("deck_id") or "").strip()
     if deck_id:
         try:
-            document = _repo().get(current_user.id, deck_id)
+            allowed_colors = _repo().owned_search_scope(current_user.id, deck_id)
         except DeckNotFound:
             return jsonify(error="not_found"), 404
-        commanders = [entry for entry in document["entries"] if entry["is_commander"]]
-        if commanders:
-            allowed_colors = {
-                color for entry in commanders for color in entry["color_identity"]
-            }
     try:
         limit = int(request.args.get("limit") or 40)
     except ValueError:
@@ -374,6 +369,7 @@ def cards():
         scope=(
             "Commander identity" if allowed_colors is not None else "Unrestricted draft"
         ),
+        identity=None if allowed_colors is None else sorted(allowed_colors),
     )
 
 

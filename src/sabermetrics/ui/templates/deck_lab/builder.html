@@ -30,6 +30,8 @@
                 <div class="dl-visually-hidden" data-search-status aria-live="polite"></div>
             </div>
             {% endif %}
+            {% set deck_total = document.validation.total_count if document.validation else 0 %}
+            <span class="dl-deck-count dl-mono{% if deck_total != 100 %} is-invalid{% endif %}" data-deck-count aria-live="polite" aria-label="{{ deck_total }} of 100 cards">{{ deck_total }}/100</span>
             <label class="desktop-only dl-toolbar-select" data-table-only><span class="dl-visually-hidden">Group cards</span><select class="dl-zone-select" data-group aria-label="Group cards"><option value="zone">Group: Zone</option><option value="type">Group: Type</option></select></label>
             <label class="desktop-only dl-toolbar-select" data-table-only><span class="dl-visually-hidden">Sort cards</span><select class="dl-zone-select" data-sort aria-label="Sort cards"><option value="manual">Sort: Manual</option><option value="name">Sort: Name</option><option value="mana_value">Sort: Mana value</option></select></label>
             <span class="dl-toolbar-divider desktop-only" data-table-only aria-hidden="true"></span>

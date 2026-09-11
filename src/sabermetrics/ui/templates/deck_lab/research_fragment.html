@@ -19,7 +19,7 @@
         <div class="dl-filter-actions"><button class="dl-button dl-button-primary" type="submit">Apply</button><a class="dl-button" href="{{ url_for('research.index',tab='cards') }}">Clear</a></div>
     </form>
     <section>
-        <div class="dl-research-summary"><span>Card results</span><button class="dl-button" type="button" data-filter-open>Filters</button></div>
+        <div class="dl-research-summary"><span>{{ data.total }} commander-legal cards</span><button class="dl-button" type="button" data-filter-open>Filters</button></div>
         <div class="dl-card-result-grid" data-research-results data-research-freshness="fresh">
         {% for card in data.results %}
             <a class="dl-card-result" href="{{ url_for('research.card', card_id=card.id) }}" aria-label="Open {{ card.name }}"><span class="dl-card-result-fallback" aria-hidden="true"><span class="dl-card-result-fallback-head"><strong>{{ card.name }}</strong><span class="dl-mono">{{ card.mana_cost or '—' }}</span></span><span>{{ card.type_line }}</span><span class="dl-card-result-fallback-art"></span><span class="dl-card-result-fallback-foot">{% for color in card.color_identity %}<i class="mana mana-{{ color }}">{{ color }}</i>{% endfor %}<small>{{ card.rarity or 'Card' }}</small></span></span><img src="{{ card.image_uri or ('https://api.scryfall.com/cards/named?fuzzy=' ~ (card.name|urlencode) ~ '&format=image&version=normal') }}" alt="{{ card.name }} card" loading="lazy" decoding="async"></a>

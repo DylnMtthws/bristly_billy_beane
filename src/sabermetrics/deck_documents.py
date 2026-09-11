@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import secrets
 import sqlite3
 import unicodedata
-from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
@@ -25,9 +25,9 @@ from sabermetrics.account_playmats import (
 )
 from sabermetrics.avatars import public_selection
 from sabermetrics.card_discovery import (
-    format_legal_sql,
     primary_type,
 )
+from sabermetrics.card_search import search_cards as _search_catalog
 from sabermetrics.commander_pairs import (
     can_participate_in_pair,
     compatible_pair,
@@ -66,29 +66,6 @@ _PRIVATE_PUBLIC_ZONES = frozenset(
     {"sideboard", "notes", "note", "maybeboard", "maybe", "draft", "considering"}
 )
 
-# Card-name search ignores this punctuation on both the query and stored names.
-_APOS_CHARS = "'\u2019\u2018"
-_SPACE_PUNCT = ',.-–—.:;!?"()[]/\\&+'
-_NAME_PUNCT = _APOS_CHARS + _SPACE_PUNCT
-_NEEDLE_TABLE = str.maketrans(
-    {char: "" for char in _APOS_CHARS} | {char: " " for char in _SPACE_PUNCT}
-)
-
-
-def _search_needle(query: str) -> str:
-    return " ".join(str(query).translate(_NEEDLE_TABLE).split())
-
-
-def _strip_punct_sql(expr: str) -> str:
-    sql = expr
-    for char in _APOS_CHARS:
-        sql = f"REPLACE({sql}, char({ord(char)}), '')"
-    for char in _SPACE_PUNCT:
-        sql = f"REPLACE({sql}, char({ord(char)}), ' ')"
-    for _ in range(3):
-        sql = f"REPLACE({sql}, '  ', ' ')"
-    return f"TRIM({sql})"
-
 
 def _is_public_library_zone(name: str | None) -> bool:
     return str(name or "Unsorted").strip().casefold() not in _PRIVATE_PUBLIC_ZONES
@@ -118,6 +95,88 @@ def _json(value: Any, fallback: Any) -> Any:
         return json.loads(value)
     except (json.JSONDecodeError, TypeError):
         return fallback
+
+
+_WORD_COPY_LIMITS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+}
+_FINITE_COPIES = re.compile(r"up to ([0-9]+|[a-z]+) cards named", re.IGNORECASE)
+_UNLIMITED_COPIES = re.compile(r"any number of cards named", re.IGNORECASE)
+
+
+def _is_basic_land(type_line: object) -> bool:
+    types = str(type_line or "").casefold().split("—", 1)[0]
+    tokens = {part.strip() for part in types.replace("/", " ").split() if part.strip()}
+    return "basic" in tokens and "land" in tokens
+
+
+def _oracle_key(entry: dict[str, Any]) -> str:
+    oracle = entry.get("oracle_id")
+    if oracle:
+        return f"oracle:{oracle}"
+    return f"name:{str(entry.get('name') or '').casefold()}"
+
+
+def _copy_limit(entry: dict[str, Any]) -> int | None:
+    if _is_basic_land(entry.get("type_line")):
+        return None
+    text = str(entry.get("oracle_text") or "")
+    if _UNLIMITED_COPIES.search(text):
+        return None
+    match = _FINITE_COPIES.search(text)
+    if not match:
+        return 1
+    token = match.group(1).casefold()
+    if token.isdigit():
+        return max(1, int(token))
+    return _WORD_COPY_LIMITS.get(token, 1)
+
+
+def _group_copy_limit(group: list[dict[str, Any]]) -> int | None:
+    limits = [_copy_limit(entry) for entry in group]
+    if any(limit is None for limit in limits):
+        return None
+    return max((limit for limit in limits if limit is not None), default=1)
+
+
+def _issue(code: str, message: str) -> dict[str, str]:
+    return {"code": code, "message": message}
+
+
+def _add_entry_issue(
+    entry: dict[str, Any],
+    bucket: dict[str, list[dict[str, str]]],
+    issue: dict[str, str],
+) -> None:
+    notes = entry.setdefault("validation_issues", [])
+    if any(
+        item.get("code") == issue["code"] and item.get("message") == issue["message"]
+        for item in notes
+    ):
+        return
+    notes.append(issue)
+    entry_id = entry.get("id")
+    if entry_id:
+        bucket.setdefault(str(entry_id), []).append(issue)
 
 
 class DeckDocumentRepo:
@@ -873,6 +932,8 @@ class DeckDocumentRepo:
 
     @staticmethod
     def validate(entries: list[dict[str, Any]]) -> dict[str, Any]:
+        for entry in entries:
+            entry["validation_issues"] = []
         entries = [
             e
             for e in entries
@@ -880,8 +941,10 @@ class DeckDocumentRepo:
         ]
         commander_entries = [e for e in entries if e["is_commander"]]
         commanders = sum(int(e["quantity"]) for e in commander_entries)
-        library = sum(int(e["quantity"]) for e in entries if not e["is_commander"])
+        library_entries = [e for e in entries if not e["is_commander"]]
+        library = sum(int(e["quantity"]) for e in library_entries)
         issues: list[str] = []
+        entry_issues: dict[str, list[dict[str, str]]] = {}
         if commanders not in (1, 2):
             issues.append("Choose one commander or a legal partner pair.")
         elif commanders == 2 and len(commander_entries) != 2:
@@ -892,40 +955,77 @@ class DeckDocumentRepo:
         library_target = 100 - commanders if commanders in (1, 2) else 99
         if library != library_target:
             issues.append(f"The library has {library} of {library_target} cards.")
-        library_entries = [e for e in entries if not e["is_commander"]]
-        counts = Counter(
-            e.get("oracle_id") or e["name"].casefold() for e in library_entries
-        )
-        if any(count > 1 for count in counts.values()):
-            issues.append("The same card appears in more than one entry.")
-        singleton_violations = []
-        for entry in library_entries:
-            text = (entry.get("oracle_text") or "").casefold()
-            basic = (entry.get("type_line") or "").casefold().startswith("basic land")
-            exception = (
-                "any number of cards named" in text or "up to seven cards named" in text
+        copies: dict[str, list[dict[str, Any]]] = {}
+        for entry in entries:
+            copies.setdefault(_oracle_key(entry), []).append(entry)
+        singleton_violations = False
+        for group in copies.values():
+            total = sum(int(item["quantity"]) for item in group)
+            limit = _group_copy_limit(group)
+            if limit is None or total <= limit:
+                continue
+            singleton_violations = True
+            name = str(group[0].get("name") or "this card")
+            issue = (
+                _issue("copies", "Commander singleton rule is exceeded.")
+                if limit == 1
+                else _issue(
+                    "copies",
+                    f"A deck can have at most {limit} cards named {name}.",
+                )
             )
-            if int(entry["quantity"]) > 1 and not (basic or exception):
-                singleton_violations.append(entry["name"])
+            for item in group:
+                _add_entry_issue(item, entry_issues, issue)
         if singleton_violations:
             issues.append("Commander singleton rule is exceeded.")
         allowed = {
             color
-            for entry in entries
-            if entry["is_commander"]
+            for entry in commander_entries
             for color in _json(entry.get("color_identity"), [])
         }
-        if commander_entries and any(
-            not set(_json(entry.get("color_identity"), [])).issubset(allowed)
-            for entry in library_entries
-        ):
+        identity_issue = _issue(
+            "color_identity",
+            "This card is outside the commander's color identity.",
+        )
+        identity_violations = False
+        if commander_entries:
+            for entry in library_entries:
+                colors = set(_json(entry.get("color_identity"), []))
+                if not colors.issubset(allowed):
+                    identity_violations = True
+                    _add_entry_issue(entry, entry_issues, identity_issue)
+        if identity_violations:
             issues.append("A card is outside the commander's color identity.")
-        if any(entry.get("format_legal") is False for entry in library_entries):
+        format_issue = _issue("format", "This card is not Commander-legal.")
+        unknown_issue = _issue("format", "Commander legality for this card is unknown.")
+        format_violations = False
+        for entry in library_entries:
+            if "format_legal" not in entry:
+                continue
+            if entry.get("format_legal") is True:
+                continue
+            format_violations = True
+            _add_entry_issue(
+                entry,
+                entry_issues,
+                unknown_issue if entry.get("format_legal") is None else format_issue,
+            )
+        if format_violations:
             issues.append(
                 "This deck contains cards that are not Commander-legal. "
                 "They were kept so you can inspect and remove them."
             )
-        if any(entry.get("commander_legal") is False for entry in commander_entries):
+        commander_issue = _issue("commander", "This commander is not Commander-legal.")
+        commander_illegal = False
+        for entry in commander_entries:
+            commander_listed = "commander_legal" in entry and not entry.get(
+                "commander_legal"
+            )
+            format_listed = "format_legal" in entry and not entry.get("format_legal")
+            if commander_listed or format_listed:
+                commander_illegal = True
+                _add_entry_issue(entry, entry_issues, commander_issue)
+        if commander_illegal:
             issues.append(
                 "A commander in this deck is no longer Commander-legal. "
                 "It was kept so you can inspect and replace it."
@@ -937,6 +1037,7 @@ class DeckDocumentRepo:
             "total_count": commanders + library,
             "legal": not issues,
             "issues": issues,
+            "entry_issues": entry_issues,
         }
 
     @staticmethod
@@ -1215,6 +1316,33 @@ class DeckDocumentRepo:
                 matches.setdefault(str(card["oracle_id"]), card)
         return list(matches.values())[:40]
 
+    def owned_search_scope(self, owner_id: str, deck_id: str) -> set[str] | None:
+        """Combined commander color identity for an owned deck.
+
+        None means no commanders, so legal search stays unscoped. An empty set
+        is colorless-only. Missing or unowned decks raise DeckNotFound.
+        """
+        with self._connect() as conn:
+            owned = conn.execute(
+                "SELECT 1 FROM deck_documents WHERE id=? AND owner_id=?",
+                (deck_id, owner_id),
+            ).fetchone()
+            if owned is None:
+                raise DeckNotFound()
+            rows = conn.execute(
+                "SELECT color_identity FROM deck_entries "
+                "WHERE deck_id=? AND is_commander=1",
+                (deck_id,),
+            ).fetchall()
+        if not rows:
+            return None
+        colors: set[str] = set()
+        for row in rows:
+            for color in _json(row["color_identity"], []):
+                if isinstance(color, str) and color in set("WUBRG"):
+                    colors.add(color)
+        return colors
+
     def search_cards(
         self,
         *,
@@ -1227,63 +1355,19 @@ class DeckDocumentRepo:
         allowed_colors: set[str] | None = None,
         limit: int = 40,
     ) -> list[dict[str, Any]]:
-        needle = _search_needle(query)
-        if str(query).strip() and not needle:
-            return []
-        name_sql = _strip_punct_sql("c.name")
-        if needle:
-            where = [f"{name_sql} LIKE ?"]
-            params: list[Any] = [f"%{needle}%"]
-            prefix = f"{needle}%"
-        else:
-            where = ["c.name LIKE ?"]
-            params = [f"%{query}%"]
-            prefix = f"{query}%"
-        if commander_only:
-            where.append("c.is_legal_commander=1")
-            where.append("c.is_legal_in_99=1")
-        else:
-            where.append(format_legal_sql("c"))
-        if oracle_text:
-            where.append("c.oracle_text LIKE ?")
-            params.append(f"%{oracle_text}%")
-        if type_line:
-            where.append("c.type_line LIKE ?")
-            params.append(f"%{type_line}%")
-        if mana_max is not None:
-            where.append("c.cmc<=?")
-            params.append(mana_max)
-        if rarity:
-            where.append("c.rarity=?")
-            params.append(rarity)
-        if allowed_colors is not None:
-            if allowed_colors:
-                placeholders = ",".join("?" for _ in allowed_colors)
-                where.append(
-                    "NOT EXISTS (SELECT 1 FROM json_each(c.color_identity) "
-                    f"WHERE value NOT IN ({placeholders}))"
-                )
-                params.extend(sorted(allowed_colors))
-            else:
-                where.append("json_array_length(c.color_identity)=0")
-        params.append(max(1, min(limit, 100)))
         with self._connect() as conn:
-            rows = conn.execute(
-                f"""SELECT c.id, c.oracle_id, c.name, c.type_line, c.mana_cost,
-                           c.cmc AS mana_value, c.oracle_text, c.color_identity,
-                           c.image_uri, c.rarity
-                    FROM cards c WHERE {' AND '.join(where)}
-                      AND c.id=(SELECT c2.id FROM cards c2 WHERE c2.name=c.name
-                                ORDER BY c2.image_uri IS NULL, c2.id LIMIT 1)
-                    ORDER BY CASE WHEN {name_sql} LIKE ? THEN 0 ELSE 1 END,
-                             CASE WHEN c.name LIKE ? THEN 0 ELSE 1 END,
-                             c.name COLLATE NOCASE LIMIT ?""",
-                [*params[:-1], prefix, f"{query}%", params[-1]],
-            ).fetchall()
-        results = [dict(row) for row in rows]
-        for card in results:
-            card["color_identity"] = _json(card.get("color_identity"), [])
-        return results
+            return _search_catalog(
+                conn,
+                db_key=str(self.db_path.resolve()),
+                query=query,
+                commander_only=commander_only,
+                oracle_text=oracle_text,
+                type_line=type_line,
+                mana_max=mana_max,
+                rarity=rarity,
+                allowed_colors=allowed_colors,
+                limit=limit,
+            )
 
     @staticmethod
     def _owned_revision(

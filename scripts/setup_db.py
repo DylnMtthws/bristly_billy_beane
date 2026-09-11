@@ -493,6 +493,9 @@ def ensure_portal_schema(conn: sqlite3.Connection) -> None:
             if col_name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
 
+    from sabermetrics.card_search import ensure_card_search_schema
+
+    ensure_card_search_schema(conn)
     conn.execute("DROP VIEW IF EXISTS commander_candidates")
     conn.execute(COMMANDER_CANDIDATE_VIEW_SQL)
     conn.execute(
