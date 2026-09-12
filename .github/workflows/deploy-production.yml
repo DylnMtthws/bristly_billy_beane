@@ -34,7 +34,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
         run: python scripts/release_control.py prepare --run-id "$CI_RUN_ID" --output prepared
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: prepared-release-${{ github.run_attempt }}
           path: prepared/
@@ -83,7 +83,7 @@ jobs:
         run: python scripts/release_control.py deploy --output prepared
       - name: Retain release and recovery metadata
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-receipt-${{ github.run_attempt }}
           path: prepared/deployment.json
