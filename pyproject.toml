@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sabermetrics"
 version = "0.1.0"
-description = "Sabermetrics for Magic — Commander/EDH deck optimization using LLM-driven reasoning"
+description = "Deck Lab — competitive Commander deck editing, tournament research, and simulation"
 requires-python = ">=3.11"
 dependencies = [
     "anthropic",

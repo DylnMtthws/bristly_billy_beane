@@ -1,3 +1,24 @@
+# Current deployment
+
+Production: **https://decklab.studio**. QA: **https://qa.decklab.studio**.
+Source: [DylnMtthws/deck-lab](https://github.com/DylnMtthws/deck-lab).
+
+Both environments run on the existing DigitalOcean host using Caddy and isolated
+Docker Compose services. Repository naming does not control either hostname.
+Production/QA containers, persistent data, DNS, and session secrets are preserved
+during the repository split. The old Fly URL redirects to production.
+
+Application releases require a tested CI artifact, verified image identity,
+QA review, and explicit owner approval before production. Operational automation
+and private credentials are maintained in the separate infrastructure workspace.
+The original generator uses its own service/database at `generate.decklab.studio`.
+It must never mount Deck Lab's writable data or reuse its session signing key.
+
+The sections below are historical Fly deployment documentation. Do not use them
+to deploy or restore today's production service.
+
+---
+
 # Deployment
 
 Run deployment commands from the canonical checkout, `~/Projects/deck_lab`.
