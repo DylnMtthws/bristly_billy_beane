@@ -1,0 +1,116 @@
+/* DYL-53 builder export menu. Scoped so library share/download stay untouched. */
+
+.dl-workspace-header {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.dl-workspace-header .dl-export-menu {
+  position: relative;
+  z-index: 60;
+  flex: none;
+}
+
+.dl-workspace-header .dl-export-menu summary {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--body);
+  font-weight: 550;
+  cursor: pointer;
+  list-style: none;
+}
+
+.dl-workspace-header .dl-export-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.dl-workspace-header .dl-export-menu summary:hover,
+.dl-workspace-header .dl-export-menu[open] summary {
+  background: var(--panel-2);
+}
+
+.dl-workspace-header .dl-export-menu > div {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(220px, calc(100vw - 16px));
+  display: grid;
+  gap: 3px;
+  padding: 7px;
+  border: 1px solid #333d61;
+  border-radius: 9px;
+  background: #161c30;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
+}
+
+.dl-workspace-header .dl-export-menu > div [role="menuitem"] {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  width: 100%;
+}
+
+.dl-workspace-header .dl-export-menu > div [role="menuitem"]:hover {
+  background: #222b45;
+  color: var(--body);
+}
+
+.dl-workspace-header .dl-export-menu > div a[role="menuitem"] {
+  text-decoration: none;
+}
+
+.dl-workspace-header .dl-export-menu > div [role="menuitem"]:disabled,
+.dl-workspace-header .dl-export-menu > div [role="menuitem"][aria-disabled="true"] {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: default;
+}
+
+.dl-export-status {
+  margin: 4px 9px 2px;
+  color: var(--muted);
+  font: 11px var(--mono);
+  min-height: 1.2em;
+}
+
+.dl-export-fallback-text {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  font: 13px / 1.45 var(--mono);
+}
+
+@media (max-width: 430px) {
+  .dl-workspace-header .dl-export-menu {
+    z-index: 70;
+  }
+  .dl-workspace-header .dl-export-menu summary {
+    padding: 0 10px;
+  }
+  .dl-workspace-header .dl-export-menu > div {
+    position: fixed;
+    right: 8px;
+    left: auto;
+    top: 60px;
+    width: min(220px, calc(100vw - 16px));
+  }
+  .dl-workspace-crumb button {
+    max-width: 28vw;
+  }
+}
+
+.dl-export-status:empty { display: none; }
