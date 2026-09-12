@@ -21,7 +21,7 @@ dependencies = [
     "mtgsdk",
     "numpy",
     "Pillow>=12.3,<13",
-    "pydantic>=2.0",
+    "pydantic>=2.13.5",
     "pyyaml",
     "waitress",
 ]
