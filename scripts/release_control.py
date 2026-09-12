@@ -19,7 +19,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-REPOSITORY = "DylnMtthws/commander-deck-engine"
+REPOSITORY = "DylnMtthws/deck-lab"
 APP = "dylnmtthws-decklab"
 CONFIG = Path("fly.production.toml")
 FLY_VERSION = "0.4.101"
