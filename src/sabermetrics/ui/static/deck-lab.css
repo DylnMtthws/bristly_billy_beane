@@ -1,6 +1,7 @@
 @import url("feedback-controls.css");
 @import url("feedback-workspace.css");
 @import url("feedback-validation.css");
+@import url("feedback-export.css");
 
 :root {
   color-scheme: dark;
@@ -584,6 +585,15 @@ a.dl-card-name:hover{color:var(--brand-text)}
   .dl-public-deck-grid { grid-template-columns: 1fr; }
   .dl-detail-actions { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; }
   .dl-detail-actions .dl-button, .dl-detail-actions form, .dl-detail-actions form .dl-button { width: 100%; min-height: 44px; }
+}
+.dl-zone-menu-popover,
+.dl-decklist-more > div,
+.dl-account-popover,
+[data-dismiss-menu] > :not(summary) {
+  max-height: min(280px, calc(100vh - 16px));
+  max-height: min(280px, calc(100dvh - 16px));
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 @media (max-width: 360px) {
   .dl-card-result-grid:has(> .dl-catalog-card) { grid-template-columns: minmax(0,1fr); }

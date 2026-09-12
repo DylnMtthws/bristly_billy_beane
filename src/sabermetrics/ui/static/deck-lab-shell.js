@@ -96,6 +96,7 @@
   }
 
   function openSelect(component, focusEdge) {
+    closeTransientMenus({ exceptNode: component.wrapper, returnFocus: false });
     if (activeSelect && activeSelect !== component) closeSelect(false);
     activeSelect = component;
     buildSelectOptions(component);
@@ -204,13 +205,7 @@
     else current = (current - 1 + items.length) % items.length;
     if (items[current]) items[current].focus();
   });
-  document.addEventListener("pointerdown", function (event) {
-    if (activeSelect && !activeSelect.wrapper.contains(event.target) && !selectPopover.contains(event.target)) closeSelect(false);
-  });
-  document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape" && activeSelect) closeSelect(true);
-  });
-  window.addEventListener("resize", function () { positionSelectPopover(activeSelect); });
+  window.addEventListener("resize", function () { positionSelectPopover(activeSelect); fitOpenMenus(); });
   window.addEventListener("scroll", function () { positionSelectPopover(activeSelect); }, true);
   new MutationObserver(function (mutations) {
     mutations.forEach(function (mutation) {
@@ -226,11 +221,158 @@
   };
   enhanceSelects(document);
 
-  document.querySelectorAll(".dl-account-menu").forEach(function (menu) {
-    var summary = menu.querySelector("summary");
-    document.addEventListener("click", function (event) { if (!menu.contains(event.target)) menu.open = false; });
-    document.addEventListener("keydown", function (event) { if (event.key === "Escape" && menu.open) { menu.open = false; summary.focus(); } });
-  });
+  var TRANSIENT_MENU_SELECTOR = [
+    "[data-dismiss-menu]",
+    ".dl-decklist-more",
+    ".dl-zone-menu",
+    ".dl-account-menu",
+    "[data-deck-actions]",
+    "[data-deck-sort-menu]",
+    "[data-research-sort-menu]"
+  ].join(",");
+
+  function eventNode(event) {
+    var node = event.target;
+    if (!node) return null;
+    if (node.nodeType && node.nodeType !== 1) node = node.parentElement || node.parentNode;
+    return node;
+  }
+
+  function nodeInside(container, node) {
+    return !!(container && node && (container === node || (container.contains && container.contains(node))));
+  }
+
+  function hasOpenDialog() {
+    var dialogs = document.querySelectorAll("dialog");
+    for (var i = 0; i < dialogs.length; i++) {
+      if (dialogs[i].open) return true;
+    }
+    return false;
+  }
+
+  function menuIsOpen(menu) {
+    if (!menu) return false;
+    if (menu.tagName === "DETAILS") return !!menu.open;
+    if (menu.classList && menu.classList.contains("open")) return true;
+    return !!(menu.hasAttribute && menu.hasAttribute("open"));
+  }
+
+  function closeDetailsMenu(menu, returnFocus) {
+    if (!menuIsOpen(menu)) return;
+    if (menu.tagName === "DETAILS") menu.open = false;
+    else {
+      if (menu.classList) menu.classList.remove("open");
+      if (menu.removeAttribute) menu.removeAttribute("open");
+    }
+    if (returnFocus) {
+      var trigger = menu.querySelector("summary");
+      if (trigger && trigger.focus) trigger.focus();
+    }
+  }
+
+  function openDetailMenus() {
+    return Array.prototype.filter.call(document.querySelectorAll(TRANSIENT_MENU_SELECTOR), menuIsOpen);
+  }
+
+  function searchIsOpen() {
+    var results = document.querySelector("[data-card-results]");
+    return !!(results && !results.hidden);
+  }
+
+  function eventInsideSelect(node) {
+    if (activeSelect && nodeInside(activeSelect.wrapper, node)) return true;
+    return nodeInside(selectPopover, node);
+  }
+
+  function eventInsideSearch(node) {
+    return nodeInside(document.querySelector("[data-card-combobox]"), node);
+  }
+
+  function popoverForMenu(menu) {
+    if (!menu || !menu.querySelector) return null;
+    return menu.querySelector(".dl-zone-menu-popover, .dl-account-popover, .dl-deck-action-menu, .dl-library-sort-menu")
+      || Array.prototype.find.call(menu.children || [], function (child) {
+        return child.tagName && child.tagName !== "SUMMARY";
+      })
+      || null;
+  }
+
+  function fitMenuPopover(menu) {
+    var popover = popoverForMenu(menu);
+    var trigger = menu && menu.querySelector ? menu.querySelector("summary") : null;
+    if (!popover || !popover.style || !trigger || !trigger.getBoundingClientRect || !window.innerHeight) return;
+    var pad = 8;
+    var triggerRect = trigger.getBoundingClientRect();
+    var below = window.innerHeight - triggerRect.bottom - pad;
+    var above = triggerRect.top - pad;
+    var maxHeight = Math.max(96, Math.min(280, Math.max(below, above)));
+    popover.style.maxHeight = maxHeight + "px";
+    popover.style.overflowY = "auto";
+  }
+
+  function fitOpenMenus() {
+    openDetailMenus().forEach(fitMenuPopover);
+  }
+
+  function closeTransientMenus(opts) {
+    opts = opts || {};
+    var exceptNode = opts.exceptNode || null;
+    var exceptMenu = opts.exceptMenu || null;
+    if (!exceptMenu && exceptNode && exceptNode.closest) exceptMenu = exceptNode.closest(TRANSIENT_MENU_SELECTOR);
+    var returnFocus = !!opts.returnFocus;
+    var keepSelect = !!(exceptNode && eventInsideSelect(exceptNode));
+    var keepSearch = !!(exceptNode && eventInsideSearch(exceptNode));
+    openDetailMenus().forEach(function (menu) {
+      if (exceptMenu && menu === exceptMenu) return;
+      if (exceptNode && nodeInside(menu, exceptNode)) return;
+      closeDetailsMenu(menu, returnFocus);
+    });
+    if (activeSelect && !keepSelect) closeSelect(returnFocus);
+    if (!keepSearch && window.DeckLabSearch && typeof window.DeckLabSearch.close === "function") {
+      window.DeckLabSearch.close();
+    }
+  }
+
+  function dismissOutsidePointer(event) {
+    if (event.button != null && event.button !== 0) return;
+    var node = eventNode(event);
+    if (!node) return;
+    closeTransientMenus({ exceptNode: node, returnFocus: false });
+  }
+
+  document.addEventListener("pointerdown", dismissOutsidePointer, true);
+  document.addEventListener("touchstart", dismissOutsidePointer, true);
+  document.addEventListener("toggle", function (event) {
+    var menu = event.target;
+    if (!menu || !menu.matches || !menu.matches(TRANSIENT_MENU_SELECTOR)) return;
+    if (!menu.open) return;
+    closeTransientMenus({ exceptMenu: menu, exceptNode: menu, returnFocus: false });
+    fitMenuPopover(menu);
+  }, true);
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") return;
+    if (hasOpenDialog() && !activeSelect) return;
+    var handled = false;
+    if (activeSelect) {
+      closeSelect(true);
+      handled = true;
+    } else if (searchIsOpen() && window.DeckLabSearch && typeof window.DeckLabSearch.close === "function") {
+      window.DeckLabSearch.close();
+      var input = document.querySelector("[data-card-search]");
+      if (input && input.focus) input.focus();
+      handled = true;
+    } else {
+      var openMenus = openDetailMenus();
+      if (openMenus.length) {
+        closeDetailsMenu(openMenus[openMenus.length - 1], true);
+        handled = true;
+      }
+    }
+    if (handled) {
+      event.preventDefault();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+    }
+  }, true);
   var trigger = document.querySelector(".dl-menu-button");
   var drawer = document.querySelector(".dl-drawer");
   var backdrop = document.querySelector(".dl-drawer-backdrop");

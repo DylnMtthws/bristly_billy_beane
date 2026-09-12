@@ -38,16 +38,18 @@
     return card.name ? "https://api.scryfall.com/cards/named?format=image&version=normal&exact=" + encodeURIComponent(card.name) : "";
   }
   function setSaving(label, error) {
-    if (!saveState) return;
-    saveState.textContent = label;
-    saveState.classList.toggle("error", !!error);
+    if (saveState) {
+      saveState.textContent = label;
+      saveState.classList.toggle("error", !!error);
+    }
+    syncExport();
   }
   function mutationId() { return window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2); }
   function command(commands, existingId, existingRevision) {
     if (shared || !commands.length) return Promise.resolve();
     var packet = { mutation_id: existingId || mutationId(), commands: commands };
     if (existingRevision !== undefined) packet.expected_revision = existingRevision;
-    pendingSaves += 1;
+    pendingSaves += 1; syncExport();
     queue = queue.then(function () {
       if (packet.expected_revision === undefined) packet.expected_revision = state.revision;
       try { localStorage.setItem(recoveryKey, JSON.stringify(packet)); } catch (_) {}
@@ -63,7 +65,7 @@
           setSaving("Saved", false); render();
         });
       }).catch(function (error) { failedSave = packet; setSaving("Retry save", true); if (saveState) saveState.title = error.message; })
-        .finally(function () { pendingSaves = Math.max(0, pendingSaves - 1); });
+        .finally(function () { pendingSaves = Math.max(0, pendingSaves - 1); syncExport(); });
     });
     return queue;
   }
@@ -390,7 +392,7 @@
     document.querySelectorAll("[data-surface]").forEach(function (button) { button.classList.toggle("active", !(state.presentation || {}).playmat_id && button.dataset.surface === ((state.presentation || {}).surface || "slate-grid")); }); document.querySelectorAll("[data-playmat-id]").forEach(function (button) { button.classList.toggle("active", !!((state.presentation || {}).playmat_id) && button.dataset.playmatId === String((state.presentation || {}).playmat_id)); }); document.querySelectorAll("[data-setting]").forEach(function (input) { input.checked = !!(state.presentation || {})[input.dataset.setting]; }); var size = document.querySelector("[data-playmat-size]"); if (size) { size.value = Number((state.presentation || {}).canvas_width || 1600) + "x" + Number((state.presentation || {}).canvas_height || 900); refreshSelect(size); }
     syncRails();
   }
-  function render() { var scope = commanderScope(); if (lastRenderedSearchScope !== undefined && lastRenderedSearchScope !== scope) closeCardResults(); lastRenderedSearchScope = scope; syncControls(); renderDeckCount(); renderTable(); renderPlaymat(); renderStats(); renderTags(); syncSelection(); }
+  function render() { var scope = commanderScope(); if (lastRenderedSearchScope !== undefined && lastRenderedSearchScope !== scope) closeCardResults(); lastRenderedSearchScope = scope; syncControls(); renderDeckCount(); renderTable(); renderPlaymat(); renderStats(); renderTags(); syncSelection(); syncExport(); }
   function syncRails() {
     root.classList.remove("left-collapsed");
     root.classList.toggle("right-collapsed", !rails.right);
@@ -445,6 +447,7 @@
     if (input) { input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); }
     activeOption = -1;
   }
+  window.DeckLabSearch = { close: closeCardResults };
   function highlightOption(index) {
     var options = searchOptions(), input = document.querySelector("[data-card-search]");
     if (!options.length) { activeOption = -1; return; }
@@ -543,10 +546,6 @@
       else if (event.key === "Escape") { event.preventDefault(); closeCardResults(); }
     });
   }
-  document.addEventListener("click", function (event) {
-    var box = document.querySelector("[data-card-combobox]");
-    if (box && event.target && !box.contains(event.target)) closeCardResults();
-  });
 
   var commandersDialog = document.getElementById("commanders-dialog");
   document.querySelectorAll("[data-commanders-open]").forEach(function (button) { button.addEventListener("click", function () {
@@ -566,9 +565,66 @@
   var tagsDialog = document.getElementById("deck-tags-dialog"), tagInput = document.querySelector("[data-tag-input]"), tagError = document.querySelector("[data-tag-error]"), tagSearchTimer, tagSearchController; function tagMessage(message) { if (tagError) tagError.textContent = message || ""; } function addTag() { if (!tagInput) return; var name = tagInput.value.normalize("NFKC").trim().replace(/\s+/g, " "); if (name.length < 2 || name.length > 32) return tagMessage("Use between 2 and 32 characters."); if ((state.tags || []).some(function (tag) { return tag.name.toLowerCase() === name.toLowerCase(); })) return tagMessage("That tag is already on this deck."); if ((state.tags || []).length >= 6) return tagMessage("A deck can have up to six tags."); tagMessage(""); tagInput.value = ""; command([{ type: "add_tag", name: name }]); }
   document.querySelectorAll("[data-tags-open]").forEach(function (button) { button.addEventListener("click", function () { tagMessage(""); tagsDialog.showModal(); if (tagInput) tagInput.focus(); }); }); var tagAdd = document.querySelector("[data-tag-add]"); if (tagAdd) tagAdd.addEventListener("click", addTag); if (tagInput) { tagInput.addEventListener("keydown", function (event) { if (event.key === "Enter") { event.preventDefault(); addTag(); } }); tagInput.addEventListener("input", function () { clearTimeout(tagSearchTimer); tagSearchTimer = setTimeout(function () { if (tagSearchController) tagSearchController.abort(); tagSearchController = new AbortController(); fetch("/api/deck-tags?q=" + encodeURIComponent(tagInput.value), { signal: tagSearchController.signal }).then(function (response) { return response.json(); }).then(function (body) { populateTagOptions(body.results || []); }); }, 180); }); }
 
-  var picker = document.getElementById("playmat-picker"), pickerOriginal = null, pickerDraft = null, pendingUpload = null, upload = document.querySelector("[data-playmat-upload]"), uploadStatus = document.querySelector("[data-playmat-upload-status]"); function previewPicker() { if (pickerDraft) { state.presentation = Object.assign({}, pickerDraft); render(); } } function renderMyPlaymats() { var grid = document.querySelector("[data-my-playmats]"), empty = document.querySelector("[data-my-playmats-empty]"), mats = state.playmats || []; if (!grid) return; grid.replaceChildren(); mats.forEach(function (mat) { var button = node("button", "dl-surface library"); button.type = "button"; button.dataset.playmatId = mat.id; button.style.backgroundImage = "url('/api/playmats/" + encodeURIComponent(mat.id) + "')"; button.appendChild(node("span", "", mat.title)); button.addEventListener("click", function () { if (!pickerDraft) return; pickerDraft.surface = "library"; pickerDraft.playmat_id = mat.id; pendingUpload = null; previewPicker(); }); grid.appendChild(button); }); if (empty) empty.hidden = mats.length > 0; } function uploadPlaymat(file) { pendingSaves += 1; queue = queue.then(function () { var form = new FormData(); form.append("playmat", file); setSaving("Uploading…", false); return fetch("/api/decks/" + encodeURIComponent(state.id) + "/playmat", { method: "POST", headers: { "X-CSRFToken": csrf ? csrf.content : "" }, body: form }).then(function (response) { if (!response.ok) throw new Error("Upload failed"); return fetch("/api/decks/" + encodeURIComponent(state.id)); }).then(function (response) { return response.json(); }).then(function (body) { state = body; setSaving("Saved", false); render(); }).catch(function (error) { setSaving(error.message, true); }).finally(function () { pendingSaves -= 1; }); }); }
+  var picker = document.getElementById("playmat-picker"), pickerOriginal = null, pickerDraft = null, pendingUpload = null, upload = document.querySelector("[data-playmat-upload]"), uploadStatus = document.querySelector("[data-playmat-upload-status]"); function previewPicker() { if (pickerDraft) { state.presentation = Object.assign({}, pickerDraft); render(); } } function renderMyPlaymats() { var grid = document.querySelector("[data-my-playmats]"), empty = document.querySelector("[data-my-playmats-empty]"), mats = state.playmats || []; if (!grid) return; grid.replaceChildren(); mats.forEach(function (mat) { var button = node("button", "dl-surface library"); button.type = "button"; button.dataset.playmatId = mat.id; button.style.backgroundImage = "url('/api/playmats/" + encodeURIComponent(mat.id) + "')"; button.appendChild(node("span", "", mat.title)); button.addEventListener("click", function () { if (!pickerDraft) return; pickerDraft.surface = "library"; pickerDraft.playmat_id = mat.id; pendingUpload = null; previewPicker(); }); grid.appendChild(button); }); if (empty) empty.hidden = mats.length > 0; } function uploadPlaymat(file) { pendingSaves += 1; syncExport(); queue = queue.then(function () { var form = new FormData(); form.append("playmat", file); setSaving("Uploading…", false); return fetch("/api/decks/" + encodeURIComponent(state.id) + "/playmat", { method: "POST", headers: { "X-CSRFToken": csrf ? csrf.content : "" }, body: form }).then(function (response) { if (!response.ok) throw new Error("Upload failed"); return fetch("/api/decks/" + encodeURIComponent(state.id)); }).then(function (response) { return response.json(); }).then(function (body) { state = body; setSaving("Saved", false); render(); }).catch(function (error) { setSaving(error.message, true); }).finally(function () { pendingSaves -= 1; syncExport(); }); }); }
   document.querySelectorAll("[data-playmat-picker]").forEach(function (button) { button.addEventListener("click", function () { pickerOriginal = Object.assign({}, state.presentation || {}); pickerDraft = Object.assign({}, pickerOriginal); pendingUpload = null; picker.returnValue = ""; if (upload) upload.value = ""; renderMyPlaymats(); picker.showModal(); syncControls(); }); }); document.querySelectorAll("[data-surface]").forEach(function (button) { button.addEventListener("click", function () { if (!pickerDraft) return; pickerDraft.surface = button.dataset.surface; pickerDraft.playmat_id = null; pendingUpload = null; previewPicker(); }); }); document.querySelectorAll("[data-setting]").forEach(function (input) { input.addEventListener("change", function () { if (!pickerDraft) return; pickerDraft[input.dataset.setting] = input.checked; previewPicker(); }); }); var sizePicker = document.querySelector("[data-playmat-size]"); if (sizePicker) sizePicker.addEventListener("change", function () { if (!pickerDraft) return; var parts = sizePicker.value.split("x"); pickerDraft.canvas_width = Number(parts[0]); pickerDraft.canvas_height = Number(parts[1]); previewPicker(); }); if (upload) upload.addEventListener("change", function () { pendingUpload = upload.files.length ? upload.files[0] : null; if (uploadStatus) uploadStatus.textContent = pendingUpload ? upload.files[0].name + " is ready to upload." : ""; }); if (picker) picker.addEventListener("close", function () { if (picker.returnValue === "done" && pickerDraft) { var change = { type: "update_presentation", canvas_width: pickerDraft.canvas_width || 1600, canvas_height: pickerDraft.canvas_height || 900 }; ["snap_to_grid", "show_zone_outlines", "dim_inactive"].forEach(function (key) { change[key] = !!pickerDraft[key]; }); if (!pendingUpload) { change.surface = pickerDraft.surface || "slate-grid"; change.playmat_id = pickerDraft.playmat_id || ""; } command([change]); if (pendingUpload) uploadPlaymat(pendingUpload); } else if (pickerOriginal) { state.presentation = pickerOriginal; render(); } pickerOriginal = pickerDraft = pendingUpload = null; });
-  var share = document.querySelector("[data-share]"); if (share) share.addEventListener("click", function () { fetch("/api/decks/" + encodeURIComponent(state.id) + "/share", { method: "POST", headers: { "X-CSRFToken": csrf ? csrf.content : "" } }).then(function (response) { return response.json(); }).then(function (body) { if (navigator.clipboard) navigator.clipboard.writeText(body.url); window.prompt("Read-only link", body.url); }); });
+  function exportBlocked() { return pendingSaves > 0 || !!failedSave; }
+  function syncExport() {
+    var menu = document.querySelector("[data-export-menu]"), api = window.DeckLabExport;
+    if (!menu || !api) return;
+    var text = api.exportText(state), empty = !text, blocked = empty || exportBlocked();
+    var copyBtn = menu.querySelector("[data-export-copy]"), buy = menu.querySelector("[data-export-buy]");
+    var status = menu.querySelector("[data-export-status]");
+    if (copyBtn) copyBtn.disabled = blocked;
+    if (buy) {
+      if (blocked) { buy.removeAttribute("href"); buy.setAttribute("aria-disabled", "true"); buy.tabIndex = -1; }
+      else { buy.setAttribute("href", api.manaPoolUrl(text)); buy.removeAttribute("aria-disabled"); buy.tabIndex = 0; }
+    }
+    if (status) {
+      if (pendingSaves > 0) { status.dataset.exportNotice = ""; status.textContent = "Saving…"; }
+      else if (failedSave) { status.dataset.exportNotice = ""; status.textContent = "Save failed. Retry to export."; }
+      else if (empty) { status.dataset.exportNotice = ""; status.textContent = "Nothing to export."; }
+      else if (status.dataset.exportNotice !== "copied") status.textContent = "";
+    }
+  }
+  function showExportFallback(text) {
+    var dialog = document.getElementById("export-fallback-dialog");
+    var area = document.querySelector("[data-export-fallback-text]");
+    if (area) { area.value = text; area.readOnly = true; }
+    if (dialog && dialog.showModal) dialog.showModal();
+    if (area && area.focus) area.focus();
+    if (area && area.select) area.select();
+  }
+  function copyExportList() {
+    var api = window.DeckLabExport, status = document.querySelector("[data-export-status]");
+    if (!api || exportBlocked()) return;
+    var text = api.exportText(state);
+    if (!text) return;
+    function succeed() { if (status) { status.dataset.exportNotice = "copied"; status.textContent = "Copied list"; } }
+    function fail() { if (status) { status.dataset.exportNotice = "error"; status.textContent = "Copy unavailable. Select the list to copy."; } showExportFallback(text); }
+    try {
+      var clip = navigator.clipboard;
+      if (!clip || typeof clip.writeText !== "function") return fail();
+      var result = clip.writeText(text);
+      if (result && typeof result.then === "function") result.then(succeed).catch(fail);
+      else succeed();
+    } catch (_) { fail(); }
+  }
+  function bindExportMenu() {
+    var menu = document.querySelector("[data-export-menu]");
+    if (!menu) return;
+    var copyBtn = menu.querySelector("[data-export-copy]"), buy = menu.querySelector("[data-export-buy]");
+    menu.addEventListener("toggle", function () { if (menu.open) syncExport(); });
+    if (copyBtn) copyBtn.addEventListener("click", function () { copyExportList(); });
+    if (buy) buy.addEventListener("click", function (event) {
+      var api = window.DeckLabExport;
+      if (!api || exportBlocked() || !api.exportText(state)) { event.preventDefault(); return; }
+      buy.setAttribute("href", api.manaPoolUrl(api.exportText(state)));
+    });
+    var fallback = document.getElementById("export-fallback-dialog");
+    if (fallback) fallback.addEventListener("close", function () { var area = document.querySelector("[data-export-fallback-text]"); if (area) area.value = ""; });
+    syncExport();
+  }
+  bindExportMenu();
   document.addEventListener("dragover", function (event) { if (dragPreview) positionDragPreview(event.clientX, event.clientY); }, true);
   document.addEventListener("dragend", clearDropState, true);
   document.addEventListener("keydown", function (event) { if (event.key === "Escape" && dragPreview) clearDropState(); });
