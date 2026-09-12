@@ -69,6 +69,7 @@ pip install -e '.[dev,postgres,legacy]'
 python scripts/setup_db.py
 export SABER_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 export SABER_AUTH_MODE=password
+export SABER_DECK_LAB_REDESIGN=1
 export SABER_COOKIE_SECURE=0
 sabermetrics create-admin --email you@example.com
 sabermetrics serve
