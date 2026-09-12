@@ -16,7 +16,7 @@ dependencies = [
     "flask-login",
     "flask-wtf",
     "httpx",
-    "jsonschema>=4.23",
+    "jsonschema>=4.26.0",
     "mtg-parser",
     "mtgsdk",
     "numpy",
